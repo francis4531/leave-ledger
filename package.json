@@ -1,0 +1,10 @@
+{
+  "name": "leave-ledger",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Leave Ledger: California leave of absence management for small employers (test build)",
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
+  }
+}
