@@ -48,7 +48,7 @@ h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:
 h2{font-size:1.25rem;font-weight:700}
 h3{font-size:1rem;font-weight:700}
 p{margin:0}
-.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.mono{font-variant-numeric:tabular-nums;white-space:nowrap}
 .muted{color:var(--muted)}
 .small{font-size:.86rem}
 .label{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
@@ -122,7 +122,7 @@ table{border-collapse:collapse;width:100%;font-size:.9rem}
 th{text-align:left;font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
 td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
 tr:last-child td{border-bottom:0}
-td.num,th.num{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 tr.click{cursor:pointer}
 tr.click:hover td{background:var(--sunk)}
 
@@ -152,7 +152,7 @@ textarea{min-height:70px;resize:vertical}
 
 /* Timeline */
 .tl{display:flex;flex-direction:column;gap:6px}
-.tl-axis{position:relative;height:18px;margin-left:110px;font-family:var(--f-mono);font-size:.7rem;color:var(--muted)}
+.tl-axis{position:relative;height:18px;margin-left:110px;font-size:.74rem;color:var(--muted)}
 .tl-axis span{position:absolute;transform:translateX(-50%);white-space:nowrap}
 .tl-axis span:first-child{transform:none}
 .lane{display:grid;grid-template-columns:100px minmax(0,1fr);gap:10px;align-items:center}
@@ -214,6 +214,76 @@ textarea{min-height:70px;resize:vertical}
 .who{display:flex;align-items:center;gap:10px;font-size:.84rem}
 .who .nm{font-weight:600}
 .loading{padding:60px 16px;text-align:center;color:var(--muted)}
+/* ---------- Friendlier pass ---------- */
+.av{width:32px;height:32px;border-radius:50%;display:inline-grid;place-items:center;font-weight:700;font-size:.74rem;flex:none;letter-spacing:.02em}
+.av.sm{width:26px;height:26px;font-size:.66rem}
+.av.lg{width:44px;height:44px;font-size:.95rem}
+.av.c0{background:color-mix(in srgb,var(--cfra) 18%,var(--surface));color:var(--cfra)}
+.av.c1{background:color-mix(in srgb,var(--pdl) 18%,var(--surface));color:var(--pdl)}
+.av.c2{background:color-mix(in srgb,var(--short) 18%,var(--surface));color:var(--short)}
+.av.c3{background:color-mix(in srgb,var(--sdi) 20%,var(--surface));color:var(--sdi)}
+.av.c4{background:color-mix(in srgb,var(--pfl) 22%,var(--surface));color:var(--pfl)}
+.person{display:flex;align-items:center;gap:10px;min-width:0}
+.person > div{min-width:0}
+.who{gap:10px}
+.who .meta{display:flex;flex-direction:column;line-height:1.25}
+.who .meta .r{font-size:.78rem;color:var(--muted)}
+.btn.sm{padding:6px 10px;font-size:.84rem}
+@media (max-width:640px){.who .meta,.who .av{display:none}.bar-in{flex-wrap:nowrap}.brand{min-width:0;flex:1 1 auto}.brand > div{min-width:0}.co{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+.who .btn{white-space:nowrap}
+.tabs .push{margin-left:auto}
+h2.greet{font-size:1.6rem;font-weight:800;letter-spacing:-.02em}
+.sumline{font-size:1rem;color:var(--ink);max-width:70ch}
+.sumline b{font-weight:700}
+.sumline .bad{color:var(--bad)}
+.qgroup{display:flex;flex-direction:column;gap:2px}
+.qgroup + .qgroup{margin-top:10px}
+.qhead{display:flex;align-items:center;gap:8px;font-size:.76rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:4px 0}
+.qhead .dot{width:8px;height:8px;border-radius:50%}
+.qrow{grid-template-columns:22px minmax(0,1fr) auto}
+.qrow.done .t{text-decoration:none;color:var(--muted);font-weight:500}
+.bylaw{display:inline-block;margin-left:6px;padding:0 6px;border-radius:4px;font-size:.68rem;font-weight:700;letter-spacing:.04em;background:var(--poppy-soft);color:var(--poppy);vertical-align:1px}
+details.more summary{cursor:pointer;color:var(--accent);font-weight:600;padding:8px 0;list-style:none}
+details.more summary::-webkit-details-marker{display:none}
+details.more[open] summary{margin-bottom:4px}
+.allclear{display:flex;gap:12px;align-items:center;padding:14px;border-radius:6px;background:var(--ok-soft);color:var(--ok);font-weight:600}
+.preview{background:var(--accent-soft);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;font-size:.9rem}
+.preview .row2{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.preview .k{color:var(--muted)}
+.sg.narrow{color:transparent}
+.tl-axis span{font-variant-numeric:tabular-nums}
+@media (max-width:640px){
+  .tl-axis .mid{display:none}
+  .tl-axis{margin-left:0}
+  .lane{grid-template-columns:minmax(0,1fr);gap:3px}
+  .lane .ln{text-align:left}
+  .seglist div{grid-template-columns:12px minmax(0,1fr)}
+  .seglist div > span:last-child{grid-column:2;color:var(--muted)}
+  .cal{min-width:0}
+  .cal .lane{grid-template-columns:minmax(0,1fr)}
+  .cal .tl-axis{margin-left:0}
+  table.cards thead{display:none}
+  table.cards, table.cards tbody{display:block}
+  table.cards tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 12px;padding:14px 0;border-bottom:1px solid var(--line)}
+  table.cards tr:last-child{border-bottom:0}
+  table.cards td{display:block;border:0;padding:0;text-align:left}
+  table.cards td.full{grid-column:1/-1}
+  table.cards td[data-l]::before{content:attr(data-l);display:block;font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;margin-bottom:2px}
+  .tw{margin:0;padding:0}
+}
+.lawlist{display:flex;flex-direction:column}
+.lawlist > div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:10px 0;border-top:1px solid var(--line);align-items:center}
+.lawlist > div:first-child{border-top:0}
+.lawlist .why{font-size:.84rem;color:var(--muted)}
+/* Sign-in */
+.login{grid-template-columns:minmax(0,360px) minmax(0,1fr)}
+.welcome h1{font-size:2rem}
+.accts{grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+.acct{flex-direction:row;align-items:center;gap:12px;padding:12px}
+.acct > div{display:flex;flex-direction:column;gap:1px;min-width:0}
+.acct b{font-size:.95rem}
+@media (max-width:820px){.login{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:640px){.accts{grid-template-columns:repeat(2,minmax(0,1fr))}.acct{flex-direction:column;align-items:flex-start;gap:8px}.acct .scn{font-size:.78rem}}
 </style>
 </head>
 <body>

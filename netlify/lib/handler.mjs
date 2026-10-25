@@ -3,16 +3,16 @@ import crypto from "node:crypto";
 import * as E from "../../public/engine.mjs";
 
 export const ACCOUNTS = [
-  { email: "grace@mesaverde.example", empId: "e7", role: "hr", label: "HR admin" },
-  { email: "dana@mesaverde.example", empId: "e9", role: "mgr", label: "Manager · Roastery" },
-  { email: "mei@mesaverde.example", empId: "e10", role: "mgr", label: "Manager · Café" },
-  { email: "priya@mesaverde.example", empId: "e1", role: "emp", label: "Employee · on pregnancy leave" },
-  { email: "marcus@mesaverde.example", empId: "e2", role: "emp", label: "Employee · family care coming up" },
-  { email: "sofia@mesaverde.example", empId: "e3", role: "emp", label: "Employee · under 12 months" },
-  { email: "jordan@mesaverde.example", empId: "e4", role: "emp", label: "Employee · medical leave" },
-  { email: "tomas@mesaverde.example", empId: "e6", role: "emp", label: "Employee · bereavement" },
-  { email: "alana@mesaverde.example", empId: "e5", role: "emp", label: "Employee · new hire" },
-  { email: "ben@mesaverde.example", empId: "e8", role: "emp", label: "Employee · no leave yet" },
+  { email: "grace@mesaverde.example", empId: "e7", name: "Grace Okafor", role: "hr", label: "HR admin" },
+  { email: "dana@mesaverde.example", empId: "e9", name: "Dana Ortiz", role: "mgr", label: "Manager · Roastery" },
+  { email: "mei@mesaverde.example", empId: "e10", name: "Mei Lin", role: "mgr", label: "Manager · Café" },
+  { email: "priya@mesaverde.example", empId: "e1", name: "Priya Raman", role: "emp", label: "Employee · on pregnancy leave" },
+  { email: "marcus@mesaverde.example", empId: "e2", name: "Marcus Bell", role: "emp", label: "Employee · family care coming up" },
+  { email: "sofia@mesaverde.example", empId: "e3", name: "Sofia Delgado", role: "emp", label: "Employee · under 12 months" },
+  { email: "jordan@mesaverde.example", empId: "e4", name: "Jordan Kim", role: "emp", label: "Employee · medical leave" },
+  { email: "tomas@mesaverde.example", empId: "e6", name: "Tomás Herrera", role: "emp", label: "Employee · bereavement" },
+  { email: "alana@mesaverde.example", empId: "e5", name: "Alana Fuentes", role: "emp", label: "Employee · new hire" },
+  { email: "ben@mesaverde.example", empId: "e8", name: "Ben Whitaker", role: "emp", label: "Employee · no leave yet" },
 ];
 const VIEWS = { hr: ["hr", "emp"], mgr: ["mgr", "emp"], emp: ["emp"] };
 const KEY = "data-v1";
@@ -174,7 +174,7 @@ export async function handle(req, store, env) {
   const today = todayPT();
 
   if (route === "accounts" && req.method === "GET")
-    return json({ accounts: ACCOUNTS.map(({ email, label, empId }) => ({ email, label, empId })), configured: !!env.LL_TEST_PASSWORD });
+    return json({ accounts: ACCOUNTS.map(({ email, label, empId, name, role }) => ({ email, label, empId, name, role })), configured: !!env.LL_TEST_PASSWORD });
 
   if (route === "login" && req.method === "POST") {
     if (!env.LL_TEST_PASSWORD) return err("This site has no test password yet. Set LL_TEST_PASSWORD in Netlify, then redeploy.", 503);
