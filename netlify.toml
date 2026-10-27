@@ -1,5 +1,6 @@
 [build]
   publish = "public"
+  command = "node scripts/build-strategy.mjs"
 
 [functions]
   directory = "netlify/functions"
@@ -11,3 +12,8 @@
     X-Robots-Tag = "noindex"
     X-Frame-Options = "DENY"
     Referrer-Policy = "same-origin"
+
+[[redirects]]
+  from = "/strategy"
+  to = "/strategy.html"
+  status = 200

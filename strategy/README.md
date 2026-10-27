@@ -3,7 +3,9 @@
 > A living strategy built across 6 weekly sessions, using the Product School AI product strategy template. Each week adds one module. By week 6, this folder is the strategy: version-controlled and ready for a board.
 
 **The bet:** California leave of absence management for employers with 5 to 200 employees.
-**Last updated:** Oct 26, 2026 (Week 1)
+**Last updated:** Oct 27, 2026 (Week 1)
+**Customer interviews:** 0 of 10 (kill criteria check on Nov 23, 2026)
+**Partner challenges done:** 0 of 6
 
 ---
 
@@ -25,7 +27,7 @@
 **What we're building, for whom, why now.**
 
 - **Product:** Leave Ledger. Works out which California and federal leaves an employee qualifies for, what the state pays, and the notices and deadlines the employer owes. Separate views for HR, employee and manager.
-- **AI Value Archetype:** Copilot (proposed). AI handles intake, plain-language answers and notice drafts; a deterministic rules engine decides eligibility; a human signs off on every notice.
+- **AI Value Archetype:** Copilot (confirmed Oct 26). AI handles intake, plain-language answers and notice drafts; a deterministic rules engine decides eligibility; a human signs off on every notice.
 - **Vulnerability Scores:** Moat 2/5 · Data 1/5 · Platform 4/5 (exposed)
 - **Top Risk:** Distribution. Small businesses buy HR through their payroll provider. If Gusto or Rippling ships California leave first, a standalone tool has no way in.
 - **Confidence:** L (until 10 customer interviews)
@@ -108,13 +110,14 @@
 
 ## Open decisions (Week 1)
 
-1. **Confirm the archetype.** Copilot with a rules engine underneath, or something else?
+1. ~~Confirm the archetype.~~ Done Oct 26: Copilot, with the rules engine deciding eligibility.
 2. **Partner challenge.** Test the three named attackers (Tilt, ChatGPT, Gusto) and the 1/5 data score with your course partner. Record what they push on in `01-the-bet/diagnostic.md`.
 3. **Prototype link.** Add the Netlify URL to `01-the-bet/prototype.md`.
-4. **Start interviews.** Kill criteria 1 and 2 need 10 conversations by Nov 23. If you add 2 to 3 a week, they also feed M2 (data) and M3 (pricing).
+4. **Start interviews.** Kill criteria 1 and 2 need 10 conversations by Nov 23, so about 3 a week. Update the interview count at the top of this file as you go.
 
 ## Changelog
 
 | Week | Date | What changed |
 |------|------|-------------|
 | 1 | Oct 26, 2026 | M1 drafted: market sizing, three-axis diagnostic, prototype bet, kill criteria |
+| 1 | Oct 27, 2026 | Copilot archetype confirmed; interview and partner challenge counters added for the progress page |

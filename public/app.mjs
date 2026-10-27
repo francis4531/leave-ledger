@@ -403,6 +403,7 @@ async function renderLogin() {
       ${L.error ? `<p class="err" role="alert">${esc(L.error)}</p>` : ""}
       ${ACCOUNTS.configured ? "" : `<p class="err">This site has no test password yet. The site owner sets LL_TEST_PASSWORD in Netlify.</p>`}
       <p class="small muted">Everyone shares one set of sample data. A request sent as an employee shows up when you switch to HR.</p>
+      <p class="small"><a href="/strategy">See the product strategy progress</a> (after signing in)</p>
     </div>
     <div class="stack">${groups.map(([g, list]) => `<div class="grp"><span class="label">${g}</span><div class="accts">${list.map((a) => { const nm = a.name || a.email.split("@")[0]; return `<button type="button" class="acct" data-pick="${esc(a.email)}">${avatar({ id: a.empId, name: nm })}<div><b>${esc(nm)}</b><span class="scn">${esc(scen(a))}</span></div></button>`; }).join("")}</div></div>`).join("")}</div>
   </section>`;
@@ -435,7 +436,7 @@ function render() {
   const focusId = document.activeElement && document.activeElement.id;
   const v = viewOf();
   const html = v === "emp" ? empView() : v === "mgr" ? mgrView() : { overview: hrOverview, cases: hrCases, plan: hrPlan, employees: hrEmployees, settings: hrSettings }[UI.tab]();
-  document.getElementById("root").innerHTML = `<main>${html}<div class="foot"><span>Test site with a made-up company. Rules checked October 2026 for California employers. Not legal advice.</span></div></main>`;
+  document.getElementById("root").innerHTML = `<main>${html}<div class="foot"><span>Test site with a made-up company. Rules checked October 2026 for California employers. Not legal advice.</span><a href="/strategy">Product strategy progress</a></div></main>`;
   if (focusId) { const el = document.getElementById(focusId); if (el) el.focus(); }
   saveUI();
 }

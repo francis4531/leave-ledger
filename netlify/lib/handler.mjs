@@ -1,6 +1,7 @@
 // Leave Ledger API logic. Storage is injected so this runs under Netlify Blobs or a local Map.
 import crypto from "node:crypto";
 import * as E from "../../public/engine.mjs";
+import STRATEGY from "./strategy-data.mjs";
 
 export const ACCOUNTS = [
   { email: "grace@mesaverde.example", empId: "e7", name: "Grace Okafor", role: "hr", label: "HR admin" },
@@ -190,6 +191,8 @@ export async function handle(req, store, env) {
 
   const acct = verify(cookieOf(req), env);
   if (!acct) return err("Signed out", 401);
+
+  if (route === "strategy" && req.method === "GET") return json({ ...STRATEGY, viewer: acct.email });
 
   if (route === "state" && req.method === "GET") return json(viewFor(await load(store, today), acct, today));
 
