@@ -3,7 +3,7 @@
 > A living strategy built across 6 weekly sessions, using the Product School AI product strategy template. Each week adds one module. By week 6, this folder is the strategy: version-controlled and ready for a board.
 
 **The bet:** California leave of absence management for employers with 5 to 200 employees.
-**Last updated:** Oct 27, 2026 (Week 1)
+**Last updated:** Oct 28, 2026 (Week 2)
 **Customer interviews:** 0 of 10 (kill criteria check on Nov 23, 2026)
 **Partner challenges done:** 0 of 6
 
@@ -13,12 +13,12 @@
 
 | Component | Module | Week of | Status | Key Artifact |
 |-----------|--------|---------|--------|-------------|
-| **The Bet** | M1 | Oct 26 | [x] Draft, needs partner challenge | `01-the-bet/` |
-| **The Moat** | M2 | Nov 2 | [ ] | `02-the-moat/` |
-| **The Margin** | M3 | Nov 9 | [ ] | `03-the-margin/` |
-| **The Contract** | M4 | Nov 16 | [ ] | `04-the-contract/` |
-| **The Guardrails** | M5 | Nov 23 | [ ] | `05-the-guardrails/` |
-| **The Pitch** | M6 | Nov 30 | [ ] | `06-the-pitch/` |
+| **The Bet** | M1 | Oct 21 | [x] Draft, needs partner challenge | `01-the-bet/` |
+| **The Moat** | M2 | Oct 28 | [x] Draft, needs partner challenge | `02-the-moat/` |
+| **The Margin** | M3 | Nov 4 | [ ] | `03-the-margin/` |
+| **The Contract** | M4 | Nov 11 | [ ] | `04-the-contract/` |
+| **The Guardrails** | M5 | Nov 18 | [ ] | `05-the-guardrails/` |
+| **The Pitch** | M6 | Nov 25 | [ ] | `06-the-pitch/` |
 
 ---
 
@@ -38,21 +38,21 @@
 
 ---
 
-## The Moat (M2) · Week of Nov 2
+## The Moat (M2) · Week of Oct 28
 
 **Why this won't get copied in 6 months.**
 
-- **Data Flywheel Score:** __/20
-- **Weakest Loop:**
-- **Competitive Position:** [describe axes + placement]
-- **Encroachment Defense:**
-- **Vendor Portability:** Ready / Partial / Locked
+- **Data Flywheel Score:** 6/20 (Correction 2 · Preference 1 · Domain Context 2 · Network 1)
+- **Weakest Loop:** Network. Gusto, Tilt and Paylocity see far more leaves than we will for years. Fix: don't compete there; build Correction (weekly golden-set review of Copilot fixes) and Preference (company policy profile) first; add de-identified California benchmarks only after 25+ companies, opt-in, never below 10 pooled companies.
+- **Competitive Position:** Axes are California depth and fit for a 5 to 49 employee business. Leave Ledger targets high on both. Paylocity+Aidora and Mitratech are deep but enterprise; Gusto fits small business but is shallow on California leave; Tilt is closest (AI phone intake, Gusto and Rippling integrations, $4 to $6 per employee per month).
+- **Encroachment Defense:** Join Gusto rather than fight it (app directory listing with two-way sync); own the dispute-ready record (notice clock, signed notices, 12-month history); publish rules-engine tests and the Copilot accuracy score; sell through bookkeepers, PEOs and employment lawyers.
+- **Vendor Portability:** Partial. One AI provider and one call site; the rules engine has no AI dependency. 48-hour fix: adapter plus a second provider scored on the golden set.
 
 → Details: [`02-the-moat/`](02-the-moat/)
 
 ---
 
-## The Margin (M3) · Week of Nov 9
+## The Margin (M3) · Week of Nov 4
 
 **Will this make money or bleed it?**
 
@@ -66,7 +66,7 @@
 
 ---
 
-## The Contract (M4) · Week of Nov 16
+## The Contract (M4) · Week of Nov 11
 
 **Why users will trust a probabilistic system.**
 
@@ -80,7 +80,7 @@
 
 ---
 
-## The Guardrails (M5) · Week of Nov 23
+## The Guardrails (M5) · Week of Nov 18
 
 **What breaks when this scales, and what compounds.**
 
@@ -94,7 +94,7 @@
 
 ---
 
-## The Pitch (M6) · Week of Nov 30
+## The Pitch (M6) · Week of Nov 25
 
 **How you get this funded, shipped, and adopted.**
 
@@ -108,12 +108,12 @@
 
 ---
 
-## Open decisions (Week 1)
+## Open decisions (Week 2)
 
-1. ~~Confirm the archetype.~~ Done Oct 26: Copilot, with the rules engine deciding eligibility.
-2. **Partner challenge.** Test the three named attackers (Tilt, ChatGPT, Gusto) and the 1/5 data score with your course partner. Record what they push on in `01-the-bet/diagnostic.md`.
-3. **Prototype link.** Add the Netlify URL to `01-the-bet/prototype.md`.
-4. **Start interviews.** Kill criteria 1 and 2 need 10 conversations by Nov 23, so about 3 a week. Update the interview count at the top of this file as you go.
+1. **Partner challenge on Tilt.** Is Tilt the real threat rather than Gusto? It already has AI intake (Tilley), Gusto and Rippling sync, and California coverage. If yes, what does Leave Ledger do that Tilt will not do for a 15-person company?
+2. **Gusto: partner or competitor?** The defense assumes a Gusto app directory listing. Is that the distribution bet, or should the first channel be bookkeepers and PEOs?
+3. **Turn on the Copilot.** Add `ANTHROPIC_API_KEY` in Netlify and run `scripts/eval-intake.mjs`. The first accuracy score goes into `02-the-moat/kill-switch.md` and feeds Week 4.
+4. **Interviews.** Kill criteria check is Nov 23. Ask each interviewee what they use for payroll; if most say Gusto, that confirms decision 2.
 
 ## Changelog
 
@@ -121,3 +121,5 @@
 |------|------|-------------|
 | 1 | Oct 26, 2026 | M1 drafted: market sizing, three-axis diagnostic, prototype bet, kill criteria |
 | 1 | Oct 27, 2026 | Copilot archetype confirmed; interview and partner challenge counters added for the progress page |
+| 1 | Oct 27, 2026 | Copilot intake built (Claude Haiku 5.5): own-words requests fill the form, corrections logged, 20-case golden set added |
+| 2 | Oct 28, 2026 | M2 drafted: flywheel 6/20, competitive map, encroachment threats (Gusto, Tilt, CalChamber), 90-day attack and defense, kill switch audit (portability Partial). Schedule moved to Wednesday sessions |

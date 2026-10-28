@@ -8,7 +8,24 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230d5d79'/%3E%3Crect x='3' y='3' width='2.5' height='10' rx='.8' fill='white'/%3E%3Crect x='6.75' y='6' width='2.5' height='7' rx='.8' fill='white' opacity='.75'/%3E%3Crect x='10.5' y='9' width='2.5' height='4' rx='.8' fill='white' opacity='.5'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Schibsted+Grotesk:wght@600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
-<style>:root{color-scheme:light}html,body{margin:0}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}[hidden]{display:none!important}img{max-width:100%}</style>
+<style>:root{color-scheme:light}html,body{margin:0}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}[hidden]{display:none!important}img{max-width:100%}
+.foot a{color:var(--accent)}
+/* Copilot */
+.copilot{border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line));background:color-mix(in srgb,var(--accent-soft) 55%,var(--surface));border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.cp-h{display:flex;align-items:center;gap:8px}
+.cp-h .pill{margin-left:auto}
+.spark{color:var(--accent);font-size:1rem}
+.copilot textarea{min-height:76px}
+.cp-note{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:10px 12px;font-size:.9rem}
+.cp-note.warn{border-color:var(--warn);background:var(--warn-soft)}
+.or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+.field.needs-check label{color:var(--warn)}
+.field.needs-check label::after{content:" · please check";font-weight:500}
+.field.needs-check select,.field.needs-check input{border-color:var(--warn);box-shadow:0 0 0 1px var(--warn)}
+.quote{margin:0;padding:10px 14px;border-left:3px solid var(--accent);background:var(--sunk);border-radius:0 6px 6px 0;font-size:.95rem}
+.err{color:var(--bad);font-size:.88rem;font-weight:600;margin:0}
+</style>
 <style>
 /* Layout: sticky app bar with role switch, tabbed workspace below; summary rail first, detail second, stacks to one column on phones. */
 :root{

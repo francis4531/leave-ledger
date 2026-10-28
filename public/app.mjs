@@ -13,6 +13,8 @@ const UI = {
   req: { reason: "own_health", relation: "parent", start: "", weeks: 4, disWeeks: 10, bondWeeks: 12, days: 3, hours: 8 },
   flag: { empId: "", heard: "", note: "" },
   login: { error: "" },
+  reqAI: { text: "", sent: "", draft: null, busy: false, error: "" },
+  conv: { caseId: null, draft: null, busy: false, error: "" },
 };
 const store = {
   get(k, s = localStorage) { try { return s.getItem(k); } catch (e) { return null; } },
@@ -46,7 +48,7 @@ async function api(path, body) {
   return j;
 }
 function accept(j) {
-  S = { me: j.me, today: j.today, data: j.data }; TODAY = j.today;
+  S = { me: j.me, today: j.today, data: j.data, ai: j.ai || { on: false } }; TODAY = j.today;
   if (!UI.tab || !TABS[S.me.role].some(([k]) => k === UI.tab)) UI.tab = TABS[S.me.role][0][0];
   if (!UI.planner.start) UI.planner.start = addDays(TODAY, 14);
   if (!UI.req.start) UI.req.start = addDays(TODAY, 14);
@@ -166,6 +168,55 @@ function lawRows() {
   ];
 }
 
+/* ---------- Copilot helpers ---------- */
+const LEN_KEYS = ["weeks", "days", "hours", "disWeeks", "bondWeeks"];
+function describeDraft(d) {
+  if (!d || d.reason === "unclear") return "Not sure what kind of leave this is";
+  const len = d.disWeeks != null ? `${d.disWeeks} weeks unable to work, then ${d.bondWeeks} bonding` : d.weeks != null ? plural(d.weeks, "week") : d.days != null ? plural(d.days, "workday") : d.hours != null ? plural(d.hours, "hour") : "length not given";
+  return [REASONS[d.reason].hr, d.relation ? relName(d.relation) : "", d.start ? `starts ${fmtS(d.start)}` : "start date not given", len].filter(Boolean).join(" · ");
+}
+const FIELD_NAMES = { reason: "type of leave", relation: "family member", start: "start date", length: "how long" };
+function applyDraft(f, d) {
+  if (!d || d.reason === "unclear") return;
+  f.reason = d.reason;
+  if (d.relation) f.relation = d.relation;
+  if (d.start) f.start = d.start;
+  LEN_KEYS.forEach((k) => { if (d[k] != null) f[k] = d[k]; });
+}
+function unsure(d) { if (!d) return []; return Object.entries(d.confidence || {}).filter(([k, v]) => v !== "high" && !(k === "relation" && !REASONS[d.reason]?.rel)).map(([k]) => k); }
+async function askCopilot(text) {
+  const r = await fetch("/api/intake", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) });
+  const j = await r.json().catch(() => ({ error: "The Copilot did not answer. Fill in the form yourself." }));
+  if (r.status === 401) { S = null; renderLogin(); throw new Error("signed out"); }
+  if (!r.ok) throw new Error(j.error || "The Copilot did not answer.");
+  return j.draft;
+}
+function copilotBox() {
+  const A = UI.reqAI, d = A.draft;
+  let note = "";
+  if (d && d.reason === "unclear") note = `<div class="cp-note warn">I could not tell what kind of time off this is. Pick it below, or add a little more detail and try again.</div>`;
+  else if (d) { const u = unsure(d); note = `<div class="cp-note"><b>Here is what I understood:</b> ${esc(d.summary || describeDraft(d))}<div class="small" style="margin-top:4px">I filled in the form below.${u.length ? ` Please check what is marked in orange (${u.map((k) => FIELD_NAMES[k]).join(", ")}).` : " Check it, then send."}</div></div>`; }
+  return `<div class="copilot">
+    <div class="cp-h"><span class="spark" aria-hidden="true">✦</span><b>Tell us in your own words</b><span class="pill acc">Copilot</span></div>
+    <textarea id="rq-text" data-ai-text rows="3" placeholder="For example: My dad is having knee surgery on Nov 12 and I need to help him for about 3 weeks.">${esc(A.text)}</textarea>
+    <span class="hint">English or Spanish is fine. You do not need to name a diagnosis. AI reads this to fill in the form, and HR sees it too.</span>
+    <div class="btns"><button class="btn" data-intake ${A.busy ? "disabled" : ""}>${A.busy ? "Reading it now" : d ? "Read it again" : "Fill in the form for me"}</button></div>
+    ${A.error ? `<p class="err" role="alert">${esc(A.error)}</p>` : ""}${note}
+  </div>
+  <div class="or"><span>${d ? "Check the details" : "Or fill in the details yourself"}</span></div>`;
+}
+function intakePanel(c, e) {
+  const I = c.intake; if (!I) return "";
+  const ai = I.ai;
+  return `<section class="panel"><div class="panel-h"><h3>${I.source === "manager" ? "From the manager's note" : `In ${esc(first(e.name))}'s words`}</h3><span class="pill acc">✦ Copilot intake</span></div>
+    <blockquote class="quote">${esc(I.text)}</blockquote>
+    <div class="small"><span class="muted">Copilot read it as</span> <b>${esc(describeDraft(ai))}</b></div>
+    <div class="small">${I.changed && I.changed.length ? `<span class="pill warn">Changed before sending: ${esc(I.changed.map((k) => FIELD_NAMES[k]).join(", "))}</span>` : `<span class="pill ok">Sent as the Copilot read it</span>`}</div>
+    ${ai && ai.flag ? `<div class="warnbox">${esc(ai.flag)} The Copilot ignored it.</div>` : ""}
+    ${ai && ai.ask && ai.ask.length ? `<div class="small"><span class="muted">Worth asking:</span> ${ai.ask.map(esc).join(" · ")}</div>` : ""}
+    <p class="small muted">The Copilot only drafts. Eligibility, pay and deadlines come from the rules engine.</p></section>`;
+}
+
 /* ---------- HR: Today ---------- */
 function taskRow(c, t, showWho) {
   const s = dueState(t), tx = taskText(c, t), e = emp(c.empId);
@@ -223,12 +274,15 @@ function hrCase(c) {
   const items = c.tasks.map((t) => taskRow(c, t, false)).join("");
   let body;
   if (c.reason === "unknown") {
+    const CV = UI.conv.caseId === c.id ? UI.conv : { draft: null }, cd = CV.draft && CV.draft.reason !== "unclear" ? CV.draft : null;
     body = `<section class="panel"><h3>What kind of leave is this?</h3><p class="muted small">${esc(emp(e.mgr)?.name || "A manager")} flagged this on ${fmt(c.requested)}${c.notes ? `: “${esc(c.notes)}”` : ""}. Talk with ${esc(first(e.name))}, then pick the leave type to see the plan and the notices you owe.</p>
-      <div class="row"><div class="field"><label for="cv-reason">Leave type</label><select id="cv-reason">${reasonOptions("own_health", "hr")}</select></div><div class="field"><label for="cv-start">Start date</label><input type="date" id="cv-start" value="${addDays(TODAY, 7)}"></div></div>
+      ${S.ai.on && c.notes ? `<div class="btns"><button class="btn" data-suggest="${c.id}" ${CV.busy ? "disabled" : ""}>✦ ${CV.busy ? "Reading the note" : "Suggest from the manager's note"}</button></div>` : ""}
+      ${CV.error ? `<p class="err">${esc(CV.error)}</p>` : ""}${CV.draft ? `<div class="cp-note">${CV.draft.reason === "unclear" ? "The note does not say enough to tell. Ask the employee." : `<b>Copilot suggests:</b> ${esc(describeDraft(CV.draft))}. Check it before saving.`}</div>` : ""}
+      <div class="row"><div class="field"><label for="cv-reason">Leave type</label><select id="cv-reason">${reasonOptions(cd ? cd.reason : "own_health", "hr")}</select></div><div class="field"><label for="cv-start">Start date</label><input type="date" id="cv-start" value="${cd && cd.start ? cd.start : addDays(TODAY, 7)}"></div></div>
       <div class="btns"><button class="btn primary" data-convert="${c.id}">Set leave type</button></div></section>`;
   } else {
     const p = planFor(c);
-    body = `<section class="panel"><div class="panel-h"><h3>The plan</h3><span class="small muted">${esc(REASONS[c.reason].hr)}${c.opts.relation && REASONS[c.reason].rel ? " · " + esc(relName(c.opts.relation)) : ""}</span></div>${timelineHTML(p)}${payHTML(p)}</section>
+    body = `${intakePanel(c, e)}<section class="panel"><div class="panel-h"><h3>The plan</h3><span class="small muted">${esc(REASONS[c.reason].hr)}${c.opts.relation && REASONS[c.reason].rel ? " · " + esc(relName(c.opts.relation)) : ""}</span></div>${timelineHTML(p)}${payHTML(p)}</section>
     <section class="panel"><h3>Does ${esc(first(e.name))} qualify?</h3>${eligHTML(p, c.reason)}${factsHTML(p)}</section>`;
   }
   return `<div class="head"><div><button class="linkish" data-back>← All leaves</button><div class="person" style="margin-top:10px">${avatar(e, "lg")}<div><h2>${esc(e.name)}</h2><p class="muted">${esc(e.role)} · hired ${fmt(e.hire)} · asked ${fmt(c.requested)}</p></div></div></div>${pill(s.t, s.cls)}</div>
@@ -276,6 +330,22 @@ function hrEmployees() {
 }
 
 /* ---------- HR: Settings ---------- */
+function copilotStats() {
+  const L = (D().intakeLog || []).filter((x) => x.ai), u = D().aiUsage || {}, mk = TODAY.slice(0, 7), m = (u.month || {})[mk];
+  const clean = L.filter((x) => !x.changed.length).length;
+  const byField = ["reason", "relation", "start", "length"].map((k) => [k, L.filter((x) => x.changed.includes(k)).length]);
+  const haiku = /haiku-5-5/.test(S.ai.model || "");
+  const cost = m && haiku ? (m.input * 0.10 + m.output * 0.50) / 1e6 : null;
+  return `<h3>✦ Copilot intake</h3>
+    ${S.ai.on ? `<p class="small">On · model <code>${esc(S.ai.model)}</code>. Employees can describe their need in their own words and the Copilot fills in the request form. It never decides eligibility.</p>` : `<div class="infobox">Off. Add <code>ANTHROPIC_API_KEY</code> in Netlify, under Site configuration, Environment variables, then redeploy.</div>`}
+    <div class="balance">
+      <div><span class="label">Requests this month</span><span class="v">${m ? m.requests : 0}</span><span class="small muted">${m && m.requests ? `${Math.round(m.ms / m.requests / 100) / 10}s average` : "None yet"}</span></div>
+      <div><span class="label">Sent without changes</span><span class="v">${L.length ? Math.round((clean / L.length) * 100) + "%" : "n/a"}</span><span class="small muted">${clean} of ${L.length} sent requests</span></div>
+      <div><span class="label">AI cost this month</span><span class="v">${cost !== null ? "$" + cost.toFixed(cost < 1 ? 4 : 2) : "n/a"}</span><span class="small muted">${haiku ? "At Haiku 5.5 list price" : "Model price not tracked"}</span></div>
+    </div>
+    ${L.length ? `<p class="small muted">Fixes users made before sending: ${byField.map(([k, n]) => `${FIELD_NAMES[k]} ${n}`).join(" · ")}. Each fix is a test case for the golden dataset.</p>
+    <details class="more"><summary>Show the last ${Math.min(10, L.length)} intakes</summary><div class="tw"><table><thead><tr><th>When</th><th>Their words</th><th>Copilot read</th><th>Sent as</th></tr></thead><tbody>${L.slice(0, 10).map((x) => `<tr><td class="small mono">${new Date(x.at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Los_Angeles" })}</td><td class="small">${esc(x.text.length > 90 ? x.text.slice(0, 90) + "…" : x.text)}</td><td class="small">${esc(REASONS[x.ai.reason]?.hr || "Not sure")}${x.ai.flag ? " ⚑" : ""}</td><td class="small">${esc(REASONS[x.final.reason]?.hr || x.final.reason)}${x.changed.length ? `<div class="muted">fixed: ${esc(x.changed.map((k) => FIELD_NAMES[k]).join(", "))}</div>` : ""}</td></tr>`).join("")}</tbody></table></div></details>` : ""}`;
+}
 function hrSettings() {
   const co = D().company;
   return `<div class="head"><div><h2>Settings</h2><p>The number of employees decides which laws apply. Changes here apply to every test account.</p></div></div>
@@ -290,6 +360,7 @@ function hrSettings() {
     <div class="row"><div class="field"><label for="co-max">Weekly maximum</label><input type="number" id="co-max" value="${co.wbaMax}" data-co="wbaMax" data-num><span class="hint">$1,765 for 2026 claims</span></div>
     <div class="field"><label for="co-band">90% rate applies up to</label><input type="number" id="co-band" value="${co.band90}" data-co="band90" data-num><span class="hint">Highest quarter wages. 2025 figure until the state publishes 2026.</span></div></div>
     <div class="infobox">Lower earners get about 90% of weekly wages and others about 70%, up to the weekly maximum. The state makes the final calculation.</div>
+    ${copilotStats()}
     <h3>Test data</h3>
     <p class="small muted">Puts the sample company, employees and leaves back for every test account. Anything added since is removed.</p>
     <div class="btns"><button class="btn" data-reset>Reset to sample data</button></div>
@@ -327,6 +398,7 @@ function empView() {
   <div class="grid2">
     <div class="stack">${mine.length ? mine.map((c) => empCase(c)).join("") : `<section class="panel"><h3>No time off requested</h3><p class="muted">When you need time off, fill in the form. You will see what you qualify for before you send it, and HR replies within 5 business days.</p></section>`}</div>
     <section class="panel" data-form="req"><h3>Ask for time off</h3>
+      ${S.ai.on ? copilotBox() : ""}
       <div class="field"><label for="rq-reason">What is it for?</label><select id="rq-reason" data-bind="reason">${reasonOptions(f.reason, "emp")}</select></div>
       ${R.rel ? relSelect("rq-rel", R.rel, f.relation) : ""}
       <div class="field"><label for="rq-start">First day off</label><input type="date" id="rq-start" value="${f.start}" data-bind="start"></div>
@@ -423,7 +495,14 @@ function setChrome(on) {
   if (!on) document.getElementById("tabs").hidden = true;
   document.getElementById("coName").textContent = on ? `${D().company.name} · ${D().company.city}` : "California leave, made simple";
 }
+let RENDERING = false;
 function render() {
+  // Replacing the page can blur a focused input, which fires change and asks for another render. Queue it instead.
+  if (RENDERING) { queueMicrotask(render); return; }
+  RENDERING = true;
+  try { renderNow(); } finally { RENDERING = false; }
+}
+function renderNow() {
   if (!S) return renderLogin();
   setChrome(true);
   const me = emp(S.me.empId) || { id: S.me.empId, name: S.me.name };
@@ -438,6 +517,10 @@ function render() {
   const html = v === "emp" ? empView() : v === "mgr" ? mgrView() : { overview: hrOverview, cases: hrCases, plan: hrPlan, employees: hrEmployees, settings: hrSettings }[UI.tab]();
   document.getElementById("root").innerHTML = `<main>${html}<div class="foot"><span>Test site with a made-up company. Rules checked October 2026 for California employers. Not legal advice.</span><a href="/strategy">Product strategy progress</a></div></main>`;
   if (focusId) { const el = document.getElementById(focusId); if (el) el.focus(); }
+  if (v === "emp" && UI.reqAI.draft) {
+    const map = { reason: ["rq-reason"], relation: ["rq-rel"], start: ["rq-start"], length: ["rq-wk", "rq-dy", "rq-hr", "rq-dis", "rq-bond"] };
+    unsure(UI.reqAI.draft).forEach((k) => (map[k] || []).forEach((id) => document.getElementById(id)?.closest(".field")?.classList.add("needs-check")));
+  }
   saveUI();
 }
 function toast(msg) { const t = document.getElementById("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => (t.hidden = true), 3000); }
@@ -456,7 +539,9 @@ document.addEventListener("click", async (ev) => {
     if (j) { UI.tab = "cases"; UI.caseId = j.createdId; render(); window.scrollTo(0, 0); toast("Saved. The first notice is due in 5 business days."); } return;
   }
   if (b.hasAttribute("data-submitreq")) {
-    const f = UI.req; const j = await act({ type: "createCase", empId: S.me.empId, reason: f.reason, opts: optsFrom(f) });
+    const f = UI.req, A = UI.reqAI;
+    const j = await act({ type: "createCase", empId: S.me.empId, reason: f.reason, opts: optsFrom(f), intake: A.draft ? { text: A.sent, ai: A.draft } : undefined });
+    if (j) UI.reqAI = { text: "", sent: "", draft: null, busy: false, error: "" };
     if (j) { const c = j.data.cases.find((x) => x.id === j.createdId); const n = c && c.tasks.find((t) => t.key === "notice" || t.key === "confirm"); toast(n ? `Sent. HR will get back to you by ${fmtS(n.due)}.` : "Sent to HR."); window.scrollTo(0, 0); }
     return;
   }
@@ -466,7 +551,25 @@ document.addEventListener("click", async (ev) => {
     if (j) { UI.flag = { empId: "", heard: TODAY, note: "" }; render(); } return;
   }
   if (b.dataset.convert) {
-    await act({ type: "convert", caseId: b.dataset.convert, reason: document.getElementById("cv-reason").value, opts: { ...optsFrom(UI.planner), start: document.getElementById("cv-start").value } }, "Leave type set"); return;
+    const CV = UI.conv.caseId === b.dataset.convert ? UI.conv : { draft: null }, d = CV.draft && CV.draft.reason !== "unclear" ? CV.draft : null;
+    const lens = {}; if (d) LEN_KEYS.forEach((k) => { if (d[k] != null) lens[k] = d[k]; });
+    const j = await act({ type: "convert", caseId: b.dataset.convert, reason: document.getElementById("cv-reason").value, opts: { ...optsFrom(UI.planner), ...lens, relation: (d && d.relation) || "parent", start: document.getElementById("cv-start").value }, intake: CV.draft ? { ai: CV.draft, text: "" } : undefined }, "Leave type set");
+    if (j) UI.conv = { caseId: null, draft: null, busy: false, error: "" };
+    return;
+  }
+  if (b.hasAttribute("data-intake")) {
+    const A = UI.reqAI, t = (document.getElementById("rq-text")?.value || "").trim();
+    A.text = t; if (t.length < 4) { A.error = "Write a sentence or two about what you need."; render(); return; }
+    A.busy = true; A.error = ""; render();
+    try { const d = await askCopilot(t); A.draft = d; A.sent = t; applyDraft(UI.req, d); }
+    catch (e) { if (e.message === "signed out") return; A.error = e.message; }
+    A.busy = false; render(); return;
+  }
+  if (b.dataset.suggest) {
+    const c = D().cases.find((x) => x.id === b.dataset.suggest); if (!c) return;
+    UI.conv = { caseId: c.id, draft: null, busy: true, error: "" }; render();
+    try { UI.conv.draft = await askCopilot(c.notes); } catch (e) { if (e.message === "signed out") return; UI.conv.error = e.message; }
+    UI.conv.busy = false; render(); return;
   }
   if (b.dataset.delete) {
     if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Tap again to delete"; b.classList.add("primary"); setTimeout(() => { if (b.isConnected) { b.dataset.armed = ""; b.textContent = "Delete this leave"; b.classList.remove("primary"); } }, 4000); return; }
@@ -496,6 +599,7 @@ document.addEventListener("change", (ev) => {
 });
 document.addEventListener("input", (ev) => {
   const el = ev.target;
+  if (el.hasAttribute && el.hasAttribute("data-ai-text")) { UI.reqAI.text = el.value; return; }
   if (el.closest('[data-form="flag"]') && el.dataset.bind) UI.flag[el.dataset.bind] = el.value;
 });
 function bind(el) {
