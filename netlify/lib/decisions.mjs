@@ -7,9 +7,13 @@ export const STATUSES = { decided: "Decided", info: "Need more info", deferred: 
 
 const trim = (s, n) => String(s ?? "").replace(/\r/g, "").trim().slice(0, n);
 
+import SEED from "./decisions-seed.mjs";
+
 export async function loadDecisions(store) {
   const d = await store.get(DKEY, { type: "json" });
-  return d && d.items ? d : { items: {} };
+  const out = d && d.items ? d : { items: {} };
+  for (const x of SEED) if (!out.items[x.key]) out.items[x.key] = { ...x, history: [], seeded: true };
+  return out;
 }
 
 export function cleanDecision(a) {
