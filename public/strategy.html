@@ -99,6 +99,28 @@ details.file summary{cursor:pointer;font-weight:600;font-size:.9rem}
 .md th{white-space:nowrap;font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .empty{color:var(--muted);font-size:.92rem}
 .msg{max-width:520px;margin:60px auto;text-align:center;display:flex;flex-direction:column;gap:12px;align-items:center}
+.dec{border-top:1px solid var(--line);padding-top:14px;display:flex;flex-direction:column;gap:8px}
+.dec:first-of-type{border-top:0;padding-top:0}
+.dec-h{display:flex;align-items:flex-start;gap:10px}
+.dec-h h3{font-size:1rem;flex:1;min-width:0}
+.dec-h .num{width:24px;height:24px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-weight:700;font-size:.8rem;flex:none}
+.dec .q{color:var(--muted);font-size:.92rem;margin-left:34px}
+.dec .body{margin-left:34px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.ans{background:var(--sunk);border-radius:6px;padding:10px 12px}
+.ans .md p:first-child{margin-top:0}.ans .md p:last-child{margin-bottom:0}
+textarea{font:inherit;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px 10px;width:100%;min-height:84px;resize:vertical}
+.choices{display:flex;flex-wrap:wrap;gap:6px}
+.choices label{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:.86rem;cursor:pointer;background:var(--surface)}
+.choices input{accent-color:var(--accent)}
+.choices label:has(input:checked){border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:600}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.link{border:0;background:none;color:var(--accent);padding:0}
+.err{color:var(--bad);font-weight:600;font-size:.88rem}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.log-w{font-family:var(--f-display);font-weight:700;margin-top:6px}
+.log-i{font-size:.9rem;padding:6px 0;border-top:1px solid var(--line)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-weight:600;z-index:40}
 .foot{font-size:.8rem;color:var(--muted);border-top:1px solid var(--line);padding-top:14px}
 </style>
 </head>
@@ -144,6 +166,76 @@ function statusOf(cell) {
   return { t: rest ? rest.split(",")[0] : "Drafted", cls: "acc", note: rest };
 }
 
+/* ---------- Weekly decisions ---------- */
+const DEC = { week: 0, module: "", items: [], saved: [], canEdit: false, github: { on: false }, editing: {}, error: {} };
+const STAT = { decided: ["Decided", "ok"], info: ["Need more info", "warn"], deferred: ["Deferred", ""], dropped: ["Not doing", ""] };
+function parseDecisions(text) {
+  const out = []; let cur = null;
+  for (const line of text.split("\n")) {
+    const m = line.match(/^(\d+)\.\s+(.*)$/);
+    if (m) {
+      if (cur) out.push(cur);
+      const rest = m[2];
+      const t = rest.match(/^(?:~~)?\*\*(.+?)\*\*(?:~~)?\s*(.*)$/) || rest.match(/^~~(.+?)~~\s*(.*)$/);
+      const title = (t ? t[1] : rest.split(/[.?]/)[0]).replace(/\.$/, "").replace(/~~/g, "").trim();
+      cur = { n: +m[1], title, question: (t ? t[2] : rest).trim(), done: /^~~/.test(rest) };
+    } else if (cur && line.trim()) cur.question += " " + line.trim();
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+const dkey = (w, n) => `w${w}-${n}`;
+const fmtDate = (iso) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Los_Angeles" });
+function renderDecisions() {
+  const el = document.getElementById("decPanel"); if (!el) return;
+  const byKey = Object.fromEntries(DEC.saved.map((x) => [x.key, x]));
+  const answered = DEC.items.filter((it) => byKey[dkey(DEC.week, it.n)]).length;
+  const gh = DEC.github || {};
+  el.innerHTML = `<div class="head"><h2>This week's decisions · Week ${DEC.week}${DEC.module ? ` · ${esc(DEC.module)}` : ""}</h2><span class="pill ${answered === DEC.items.length && DEC.items.length ? "ok" : "acc"}">${answered} of ${DEC.items.length} answered</span></div>
+    <p class="sub">${DEC.canEdit ? "Record each decision after your session. Answers are saved for everyone and feed next week's draft." : "Sign in as the HR admin account (Grace) to record decisions."} ${gh.on ? (gh.last && gh.last.error ? `<span class="err">Last copy to GitHub failed: ${esc(gh.last.error)}</span>` : "A copy goes to <code>strategy/decisions.md</code> on GitHub.") : "Saved on the site only. Add <code>LL_GITHUB_TOKEN</code> in Netlify to also keep a copy in the repo."}</p>
+    ${DEC.items.length ? DEC.items.map((it) => {
+      const k = dkey(DEC.week, it.n), sv = byKey[k], editing = DEC.editing[k] || (!sv && DEC.canEdit);
+      const st = sv ? STAT[sv.status] : null;
+      return `<div class="dec" id="d-${k}">
+        <div class="dec-h"><span class="num">${it.n}</span><h3>${esc(it.title)}</h3>${st ? `<span class="pill ${st[1]}">${st[0]}</span>` : `<span class="pill">Open</span>`}</div>
+        <div class="q md">${md(it.question)}</div>
+        <div class="body">
+          ${sv && !editing ? `<div class="ans"><div class="md">${md(sv.answer || "_No answer written._")}</div></div><div class="row sub">${st[0]} ${fmtDate(sv.at)} · ${esc(sv.by)}${sv.history && sv.history.length ? ` · changed ${sv.history.length} time${sv.history.length === 1 ? "" : "s"}` : ""}${DEC.canEdit ? ` <button class="btn link" data-edit="${k}">Change</button>` : ""}</div>` : ""}
+          ${editing ? `<label class="sub" for="a-${k}">Your decision and why</label><textarea id="a-${k}" placeholder="For example: Tilt is the bigger threat. Our edge for a 15-person company is price and the notice clock. Test this in interviews.">${esc(sv ? sv.answer : "")}</textarea>
+            <div class="choices" role="radiogroup" aria-label="Status">${Object.entries(STAT).map(([v, [lab]]) => `<label><input type="radio" name="s-${k}" value="${v}" ${(sv ? sv.status : "decided") === v ? "checked" : ""}>${lab}</label>`).join("")}</div>
+            ${DEC.error[k] ? `<p class="err">${esc(DEC.error[k])}</p>` : ""}
+            <div class="row"><button class="btn primary" data-save="${k}" data-n="${it.n}">Save</button>${sv ? `<button class="btn" data-cancel="${k}">Cancel</button>` : ""}</div>` : ""}
+          ${!sv && !DEC.canEdit ? `<p class="sub">Not answered yet.</p>` : ""}
+        </div></div>`;
+    }).join("") : `<p class="empty">No open decisions listed for this week.</p>`}`;
+  renderLog();
+}
+function renderLog() {
+  const el = document.getElementById("logPanel"); if (!el) return;
+  const weeks = [...new Set(DEC.saved.map((x) => x.week))].sort((a, b) => b - a);
+  el.innerHTML = `<h2>Decision log</h2>${weeks.length ? weeks.map((w) => `<div class="log-w">Week ${w}${(DEC.saved.find((x) => x.week === w) || {}).module ? ` · ${esc(DEC.saved.find((x) => x.week === w).module)}` : ""}</div>${DEC.saved.filter((x) => x.week === w).sort((a, b) => a.n - b.n).map((x) => `<div class="log-i"><b>${x.n}. ${esc(x.title)}</b> <span class="pill ${STAT[x.status][1]}">${STAT[x.status][0]}</span><div class="sub">${esc((x.answer || "").length > 220 ? x.answer.slice(0, 220) + "…" : x.answer || "No answer written.")}</div></div>`).join("")}`).join("") : `<p class="empty">Decisions you save show up here, week by week.</p>`}`;
+}
+function toast(msg) { let t = document.getElementById("toast"); if (!t) { t = document.createElement("div"); t.id = "toast"; t.className = "toast"; t.setAttribute("role", "status"); document.body.appendChild(t); } t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => (t.hidden = true), 3200); }
+document.addEventListener("click", async (ev) => {
+  const b = ev.target.closest("button"); if (!b) return;
+  if (b.dataset.edit) { DEC.editing[b.dataset.edit] = true; renderDecisions(); document.getElementById("a-" + b.dataset.edit)?.focus(); return; }
+  if (b.dataset.cancel) { delete DEC.editing[b.dataset.cancel]; delete DEC.error[b.dataset.cancel]; renderDecisions(); return; }
+  if (b.dataset.save) {
+    const k = b.dataset.save, n = +b.dataset.n, it = DEC.items.find((x) => x.n === n);
+    const answer = document.getElementById("a-" + k).value;
+    const status = (document.querySelector(`input[name="s-${k}"]:checked`) || {}).value;
+    b.disabled = true; b.textContent = "Saving";
+    try {
+      const r = await fetch("/api/strategy/decision", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ week: DEC.week, module: DEC.module, n, title: it.title, question: it.question, answer, status }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "Could not save. Try again.");
+      DEC.saved = j.decisions; DEC.github = { on: j.github.on, last: j.github }; delete DEC.editing[k]; delete DEC.error[k];
+      renderDecisions();
+      toast(j.github.on ? (j.github.ok ? "Saved, and copied to GitHub" : "Saved. The GitHub copy failed; see the note at the top.") : "Saved");
+    } catch (e) { DEC.error[k] = e.message; renderDecisions(); }
+  }
+});
+
 async function load() {
   const root = document.getElementById("root");
   let r;
@@ -151,6 +243,7 @@ async function load() {
   if (r.status === 401) { root.innerHTML = `<div class="msg"><h1>Sign in first</h1><p class="sub">The strategy is only visible to signed-in test users.</p><a class="btn" href="/">Go to sign in</a></div>`; return; }
   const data = await r.json();
   const F = data.files || {};
+  const odKey = Object.keys(sections(F["README.md"] || "")).find((k) => k.startsWith("Open decisions"));
   const readme = F["README.md"] || "";
   const S = sections(readme);
   const top = S._top || "";
@@ -196,15 +289,21 @@ async function load() {
       <div class="stat"><span class="label">Confidence in the bet</span><span class="big">${esc(confName)}</span><span class="sub">${pc ? `${pc[0]} of ${pc[1]} partner challenges done` : ""}</span></div>
     </section>
     <section class="track" aria-label="Six weeks">${mods.map((m, i) => `<button class="wk ${i === current ? "now" : ""}" data-go="m${m.n}"><span class="n">Week ${m.n}${i === current ? " · now" : ""}</span><span class="t">${esc(m.key)}</span><span class="sub">${esc(m.weekLabel)}</span><span class="pill ${m.status.cls}">${esc(m.status.t)}</span></button>`).join("")}</section>
+    <section class="panel" id="decPanel"></section>
     <div class="grid">
       <section class="panel"><div class="head"><h2>Modules</h2><span class="sub">Tap a week to open it</span></div>${mods.map((m, i) => pane(m, i === current)).join("")}</section>
       <div style="display:flex;flex-direction:column;gap:20px;min-width:0">
-        <section class="panel"><h2>${esc(Object.keys(S).find((k) => k.startsWith("Open decisions")) || "Open decisions")}</h2><div class="md">${md(S[Object.keys(S).find((k) => k.startsWith("Open decisions"))] || "_None right now._")}</div></section>
+        <section class="panel" id="logPanel"></section>
         <section class="panel"><h2>Changelog</h2><div class="md">${md(S["Changelog"] || "_Nothing yet._")}</div></section>
       </div>
     </div>
     <p class="foot">Read from the strategy folder in GitHub each time the site deploys${data.builtAt ? `, last on ${new Date(data.builtAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" })}` : ""}. Visible only to signed-in test users.</p>
   </main>`;
+  DEC.week = +((odKey || "").match(/Week (\d+)/) || [])[1] || (current + 1);
+  DEC.module = mods[DEC.week - 1] ? mods[DEC.week - 1].key : "";
+  DEC.items = parseDecisions(S[odKey] || "");
+  DEC.saved = data.decisions || []; DEC.canEdit = !!data.canEdit; DEC.github = data.github || { on: false };
+  renderDecisions();
   root.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => { const d = document.getElementById(b.dataset.go); d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); }));
 }
 load();

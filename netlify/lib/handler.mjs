@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import * as E from "../../public/engine.mjs";
 import STRATEGY from "./strategy-data.mjs";
 import { runIntake, validate as validateDraft, changedFields, DEFAULT_MODEL } from "./intake.mjs";
+import { DKEY, loadDecisions, cleanDecision, mirrorToGitHub } from "./decisions.mjs";
 
 export const ACCOUNTS = [
   { email: "grace@mesaverde.example", empId: "e7", name: "Grace Okafor", role: "hr", label: "HR admin" },
@@ -209,7 +210,26 @@ export async function handle(req, store, env) {
   const acct = verify(cookieOf(req), env);
   if (!acct) return err("Signed out", 401);
 
-  if (route === "strategy" && req.method === "GET") return json({ ...STRATEGY, viewer: acct.email });
+  if (route === "strategy" && req.method === "GET") {
+    const dec = await loadDecisions(store);
+    return json({ ...STRATEGY, viewer: acct.email, decisions: Object.values(dec.items), canEdit: acct.role === "hr", github: { on: !!env.LL_GITHUB_TOKEN, last: dec.github || null } });
+  }
+
+  if (route === "strategy/decision" && req.method === "POST") {
+    if (acct.role !== "hr") return err("Only the HR admin account can record decisions.", 403);
+    const body = await req.json().catch(() => ({}));
+    const d = cleanDecision(body);
+    if (d.error) return err(d.error);
+    const dec = await loadDecisions(store);
+    const prev = dec.items[d.key];
+    const me = ACCOUNTS.find((x) => x.email === acct.email);
+    const history = prev ? [{ at: prev.at, status: prev.status, answer: prev.answer }, ...(prev.history || [])].slice(0, 20) : [];
+    dec.items[d.key] = { ...d, at: new Date().toISOString(), by: me ? me.name : acct.email, history };
+    const ghErr = await mirrorToGitHub(dec, env);
+    dec.github = { at: new Date().toISOString(), ok: !ghErr, error: ghErr === "not set up" ? null : ghErr, on: !!env.LL_GITHUB_TOKEN };
+    await store.setJSON(DKEY, dec);
+    return json({ decisions: Object.values(dec.items), github: dec.github });
+  }
 
   if (route === "state" && req.method === "GET") return json(viewFor(await load(store, today), acct, today, env));
 

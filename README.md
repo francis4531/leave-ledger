@@ -93,3 +93,7 @@ Measure accuracy against the golden set:
 ```bash
 ANTHROPIC_API_KEY=... node scripts/eval-intake.mjs
 ```
+
+## Strategy decisions
+
+The `/strategy` page lists each week's open decisions from `strategy/README.md`. Signed in as the HR admin (Grace), you can record an answer and a status (Decided, Need more info, Deferred, Not doing). Answers are saved in Netlify Blobs and, when `LL_GITHUB_TOKEN` is set, copied to `strategy/decisions.md` with a `[skip netlify]` commit so saving does not trigger a rebuild. Other test accounts can read them.
