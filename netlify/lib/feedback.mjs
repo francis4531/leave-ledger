@@ -8,9 +8,11 @@ export const SKEY = "fb-surveys-v1";
 export const AIKEY = "fb-ai-day-v1";
 const trim = (s, n = 1000) => String(s ?? "").slice(0, n).trim();
 
+// Keyed maps are rebuilt without a prototype, so codes like "constructor" never match a built-in.
+export const dict = (o) => Object.assign(Object.create(null), o || {});
 export async function loadInvites(store) {
   const o = await store.get(IKEY, { type: "json" });
-  return o && o.items ? o : { items: {} };
+  return { ...(o || {}), items: dict(o && o.items) };
 }
 export const newCode = () => {
   const abc = "abcdefghjkmnpqrstuvwxyz23456789";
@@ -18,10 +20,14 @@ export const newCode = () => {
 };
 export const validCode = (c) => /^[a-z0-9]{6,16}$/.test(String(c || ""));
 
-export async function addFeedback(store, item) {
+// Returns false when this copy has sent too much feedback in the last 24 hours.
+export async function addFeedback(store, item, spaceId) {
   const o = (await store.get(FKEY, { type: "json" })) || { items: [] };
-  o.items = [item, ...o.items].slice(0, 2000);
+  const day = Date.now() - 24 * 3600 * 1000;
+  if (o.items.filter((f) => (f.invite || "org:" + f.org) === spaceId && Date.parse(f.at) > day).length >= 60) return false;
+  o.items = [item, ...o.items].slice(0, 5000);
   await store.setJSON(FKEY, o);
+  return true;
 }
 export function cleanFeedback(b) {
   const rating = Math.round(+b.rating);

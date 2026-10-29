@@ -7,8 +7,10 @@ import {
 /* ---------- State ---------- */
 let S = null;          // {me, today, data}
 let TODAY = "";
-let MODE = "test";     // "feedback" on the prospect site: invite links, no Settings, feedback and survey
+let MODE = "test";     // "feedback" on the prospect site: invite links, Google sign-in, workspaces, feedback and survey
 const FB = () => MODE === "feedback";
+let ME = null;         // preview site: who is signed in with Google and which spaces they can open
+const ORG = () => !!(S && S.space && S.space.kind === "org");
 const UI = {
   tab: null, caseId: null,
   planner: { empId: "e1", reason: "pregnancy_bonding", relation: "parent", start: "", weeks: 6, disWeeks: 10, bondWeeks: 12, days: 5, hours: 8 },
@@ -19,6 +21,9 @@ const UI = {
   conv: { caseId: null, draft: null, busy: false, error: "" },
   fb: { open: false, rating: 0, kind: "", note: "", busy: false, error: "" },
   survey: { open: false, q: null, a: {}, busy: false, error: "", done: null, later: false },
+  home: { busy: false, error: "", form: { name: "", city: "", headcount: 20, jobTitle: "", start: "sample", lockDomain: false, agree: false } },
+  users: { list: null, domain: null, canLock: false, myDomain: null, email: "", role: "emp", empId: "", busy: false, error: "" },
+  addEmp: { open: false, name: "", role: "", hire: "", hours12: 1000, sick: 24, hiQuarter: 12000, mgr: "", error: "" },
 };
 const store = {
   get(k, s = localStorage) { try { return s.getItem(k); } catch (e) { return null; } },
@@ -35,11 +40,12 @@ const caseStatus = (c) => caseStatusD(c, D(), TODAY);
 
 /* Tabs per role. The view follows from the tab. */
 const TABS = {
-  hr: [["overview", "Today"], ["cases", "Leaves"], ["plan", "Plan a leave"], ["employees", "Employees"], ["settings", "Settings"], ["myleave", "My leave"]],
+  hr: [["overview", "Today"], ["cases", "Leaves"], ["plan", "Plan a leave"], ["employees", "Employees"], ["access", "Users"], ["settings", "Settings"], ["myleave", "My leave"]],
   mgr: [["team", "My team"], ["myleave", "My leave"]],
   emp: [["myleave", "My leave"]],
 };
-const tabsFor = (role) => TABS[role].filter(([k]) => !(FB() && k === "settings"));
+// Users is for workspaces only; Settings is hidden in preview copies of the sample company.
+const tabsFor = (role) => TABS[role].filter(([k]) => (k !== "access" || ORG()) && !(k === "settings" && FB() && !ORG()));
 const viewOf = () => (UI.tab === "myleave" ? "emp" : S.me.role === "mgr" ? "mgr" : S.me.role === "hr" ? "hr" : "emp");
 
 /* ---------- API ---------- */
@@ -53,7 +59,7 @@ async function api(path, body) {
   return j;
 }
 function accept(j) {
-  S = { me: j.me, today: j.today, data: j.data, ai: j.ai || { on: false } }; TODAY = j.today;
+  S = { me: j.me, today: j.today, data: j.data, ai: j.ai || { on: false }, space: j.space || { kind: "test" } }; TODAY = j.today;
   if (j.mode) MODE = j.mode;
   if (!UI.tab || !tabsFor(S.me.role).some(([k]) => k === UI.tab)) UI.tab = tabsFor(S.me.role)[0][0];
   if (!UI.planner.start) UI.planner.start = addDays(TODAY, 14);
@@ -322,16 +328,34 @@ function hrPlan() {
 }
 
 /* ---------- HR: Employees ---------- */
+function addEmployeePanel() {
+  const A = UI.addEmp, emps = D().employees;
+  if (!A.open) return `<div class="btns"><button class="btn primary" data-addemp-open>Add an employee</button></div>`;
+  return `<section class="panel" data-form="addEmp"><h3>Add an employee</h3>
+    <div class="note-box">Made-up details only for now. Do not enter real employee names or health information.</div>
+    <div class="row"><div class="field"><label for="ae-name">Name</label><input type="text" id="ae-name" data-bind="name" value="${esc(A.name)}" maxlength="80"></div>
+      <div class="field"><label for="ae-role">Job title</label><input type="text" id="ae-role" data-bind="role" value="${esc(A.role)}" maxlength="80"></div>
+      <div class="field"><label for="ae-hire">Hire date</label><input type="date" id="ae-hire" data-bind="hire" value="${esc(A.hire || addDays(TODAY, -365))}" max="${TODAY}"></div></div>
+    <div class="row"><div class="field"><label for="ae-h">Hours worked, last 12 months</label><input type="number" id="ae-h" data-bind="hours12" data-num value="${A.hours12}"><span class="hint">1,250 or more is needed for family leave.</span></div>
+      <div class="field"><label for="ae-s">Sick hours available</label><input type="number" id="ae-s" data-bind="sick" data-num value="${A.sick}"></div>
+      <div class="field"><label for="ae-q">Wages in highest quarter ($)</label><input type="number" id="ae-q" data-bind="hiQuarter" data-num value="${A.hiQuarter}"><span class="hint">Used for the state pay estimate.</span></div></div>
+    <div class="field"><label for="ae-mgr">Manager</label><select id="ae-mgr" data-bind="mgr"><option value="">None</option>${emps.map((e) => `<option value="${e.id}" ${A.mgr === e.id ? "selected" : ""}>${esc(e.name)}</option>`).join("")}</select></div>
+    ${A.error ? `<p class="err" role="alert">${esc(A.error)}</p>` : ""}
+    <div class="btns"><button class="btn" data-addemp-cancel>Cancel</button><button class="btn primary" data-addemp>Add employee</button></div>
+  </section>`;
+}
 function hrEmployees() {
-  const co = D().company;
+  const co = D().company, org = ORG(), emps = D().employees;
+  const mgrSel = (e) => `<select aria-label="Manager for ${esc(e.name)}" data-emp="${e.id}|mgr"><option value="">None</option>${emps.filter((x) => x.id !== e.id).map((x) => `<option value="${x.id}" ${e.mgr === x.id ? "selected" : ""}>${esc(x.name)}</option>`).join("")}</select>`;
   return `<div class="head"><div><h2>Employees</h2><p>Who qualifies for what, as of today. Hours and sick balances come from payroll; change them right here.</p></div></div>
-  <section class="panel"><div class="tw"><table class="cards"><thead><tr><th>Employee</th><th>Hired</th><th class="num">Hours, last 12 months</th><th class="num">Family leave left</th><th class="num">Sick hours</th><th>Qualifies today for</th></tr></thead><tbody>
+  ${org ? addEmployeePanel() : ""}
+  <section class="panel"><div class="tw"><table class="cards"><thead><tr><th>Employee</th><th>Hired</th><th class="num">Hours, last 12 months</th><th class="num">Family leave left</th><th class="num">Sick hours</th><th>Qualifies today for</th>${org ? "<th>Manager</th><th></th>" : ""}</tr></thead><tbody>
   ${D().employees.map((e) => { const el = eligibility(e, co, TODAY); const q = [["Family leave", el.cfra.ok], ...(el.fmla.covered ? [["FMLA", el.fmla.ok]] : []), ["Pregnancy leave", el.pdl.ok], ["Bereavement", el.short.ok], ["Sick leave", el.sick.ok]];
-    return `<tr><td class="full"><div class="person">${avatar(e, "sm")}<div><b>${esc(e.name)}</b><div class="small muted">${esc(e.role)}</div></div></div></td><td data-l="Hired" class="small mono">${fmt(e.hire)}</td>
+    return `<tr><td class="full"><div class="person">${avatar(e, "sm")}<div><b>${esc(e.name)}</b><div class="small muted">${esc(e.role)}</div></div></div></td><td data-l="Hired" class="small mono">${org ? `<input type="date" aria-label="Hire date for ${esc(e.name)}" data-emp="${e.id}|hire" value="${e.hire}" max="${TODAY}">` : fmt(e.hire)}</td>
   <td data-l="Hours, 12 mo" class="num"><input type="number" aria-label="Hours worked in the last 12 months for ${esc(e.name)}" id="h-${e.id}" data-emp="${e.id}|hours12" value="${e.hours12}" style="width:90px;text-align:right"></td>
   <td data-l="Family leave left" class="num">${el.cfra.ok ? plural(el.cfra.remaining, "week") : '<span class="muted">Not yet</span>'}</td>
   <td data-l="Sick hours" class="num"><input type="number" aria-label="Sick hours for ${esc(e.name)}" id="s-${e.id}" data-emp="${e.id}|sick" value="${e.sick}" style="width:72px;text-align:right"></td>
-  <td class="full"><div class="btns" style="gap:4px">${q.map(([n, ok]) => pill((ok ? "✓ " : "✕ ") + n, ok ? "ok" : "")).join("")}</div></td></tr>`; }).join("")}
+  <td class="full"><div class="btns" style="gap:4px">${q.map(([n, ok]) => pill((ok ? "✓ " : "✕ ") + n, ok ? "ok" : "")).join("")}</div></td>${org ? `<td data-l="Manager">${mgrSel(e)}</td><td>${e.id === S.me.empId ? "" : `<button class="btn sm" data-emp-remove="${e.id}">Remove</button>`}</td>` : ""}</tr>`; }).join("")}
   </tbody></table></div><p class="small muted">Sick leave builds up at 1 hour for every 30 worked. You can cap the balance at 80 hours and yearly use at 40.</p></section>`;
 }
 
@@ -354,7 +378,7 @@ function copilotStats() {
 }
 function hrSettings() {
   const co = D().company;
-  return `<div class="head"><div><h2>Settings</h2><p>The number of employees decides which laws apply. Changes here apply to every test account.</p></div></div>
+  return `<div class="head"><div><h2>Settings</h2><p>The number of employees decides which laws apply. ${ORG() ? "Changes here apply to everyone in this workspace." : "Changes here apply to every test account."}</p></div></div>
   <section class="panel"><h3>Laws that apply to ${esc(co.name)}</h3><div class="lawlist">${lawRows().map(([n, ab, on, what, when]) => `<div><div><b>${n}</b>${ab ? ` <span class="muted small">${ab}</span>` : ""}<div class="why">${what}${!on && when ? ` ${when}.` : ""}</div></div>${on ? pill("Applies", "ok") : pill("Not yet", "")}</div>`).join("")}</div></section>
   <div class="grid2 even"><section class="panel"><h3>Company</h3>
     <div class="field"><label for="co-name">Company name</label><input type="text" id="co-name" value="${esc(co.name)}" data-co="name"></div>
@@ -367,9 +391,11 @@ function hrSettings() {
     <div class="field"><label for="co-band">90% rate applies up to</label><input type="number" id="co-band" value="${co.band90}" data-co="band90" data-num><span class="hint">Highest quarter wages. 2025 figure until the state publishes 2026.</span></div></div>
     <div class="infobox">Lower earners get about 90% of weekly wages and others about 70%, up to the weekly maximum. The state makes the final calculation.</div>
     ${copilotStats()}
-    <h3>Test data</h3>
+    ${ORG() ? `<h3>Start over</h3>
+    <p class="small muted">Deletes every leave in this workspace. Employees and users stay.</p>
+    <div class="btns"><button class="btn" data-clear>Clear all leaves</button></div>` : `<h3>Test data</h3>
     <p class="small muted">Puts the sample company, employees and leaves back for every test account. Anything added since is removed.</p>
-    <div class="btns"><button class="btn" data-reset>Reset to sample data</button></div>
+    <div class="btns"><button class="btn" data-reset>Reset to sample data</button></div>`}
   </section></div>`;
 }
 
@@ -472,7 +498,11 @@ async function renderLogin() {
     try { ACCOUNTS = await (await fetch("/api/accounts")).json(); } catch (e) { ACCOUNTS = { accounts: [], configured: false }; }
   }
   if (ACCOUNTS.mode) { MODE = ACCOUNTS.mode; setChrome(false); }
-  if (FB()) { if (ACCOUNTS.surveyDone != null) UI.survey.done = ACCOUNTS.surveyDone; return renderPreviewLogin(root); }
+  if (FB()) {
+    if (ACCOUNTS.surveyDone != null) UI.survey.done = ACCOUNTS.surveyDone;
+    if (!ME) await loadMe();
+    return ACCOUNTS.invited ? renderPreviewLogin(root) : renderHome(root);
+  }
   const L = UI.login, pw = store.get("ll-pw", sessionStorage) || "";
   const scen = (a) => a.label.split(" · ")[1] || (a.role === "hr" ? "Runs leave for the company" : "");
   const groups = [["HR", "hr"], ["Managers", "mgr"], ["Employees", "emp"]].map(([g, r]) => [g, ACCOUNTS.accounts.filter((a) => (a.role || (a.label.startsWith("HR") ? "hr" : a.label.startsWith("Manager") ? "mgr" : "emp")) === r)]);
@@ -499,21 +529,22 @@ function renderPreviewLogin(root) {
     root.innerHTML = `<section class="login" style="grid-template-columns:minmax(0,520px);justify-content:center">
       <div class="panel welcome" style="gap:14px"><h1>Leave Ledger</h1>
         <p class="lede">California leave of absence, worked out for you: which leaves apply, what the state pays, and the notices and deadlines you owe.</p>
-        <p>This early preview is invite only. Open the link you were sent to get in. If it has stopped working, ask the person who sent it for a new one.</p>
+        <p>This early preview is invite only. Open the link you were sent to get in. If it has stopped working, ask the sender for a new one.</p>
         ${L.error ? `<p class="err" role="alert">${esc(L.error)}</p>` : ""}
       </div></section>`;
     return;
   }
   root.innerHTML = `<section class="login">
     <div class="panel welcome" style="gap:16px">
-      <div><h1>Welcome</h1><p class="lede" style="margin-top:6px">Thanks for trying Leave Ledger. You have your own copy of Mesa Verde Coffee Roasters, a made-up 24-person company in Oakland, with a few leaves already in progress.</p></div>
+      <div><h1>Welcome</h1><p class="lede" style="margin-top:6px">Thanks for trying Leave Ledger. You have your own copy of Mesa Verde Coffee Roasters, a made-up coffee company in Oakland, with a few leaves already in progress.</p></div>
       <ol class="small" style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px">
         <li>Start as <b>Grace</b>, the HR admin, to see the leaves that need attention.</li>
         <li>Switch to an employee such as <b>Ben</b> and ask for time off in your own words.</li>
         <li>Switch to a manager such as <b>Dana</b> to see what managers can and cannot see.</li>
       </ol>
       <p class="small">Tap <b>Feedback</b> on any screen to tell us what works and what does not. When you are done, there is a 2-minute survey.</p>
-      <div class="note-box">Please use made-up details only, no real names or health information. Text you type for Clerk, the built-in assistant, is processed by Anthropic to fill in the form.</div>
+      <div class="note-box">Please use made-up details only, no real names or health information. Text you type for Clerk, the built-in assistant, is processed by Anthropic to fill in the form. <a href="/privacy">Privacy</a></div>
+      ${googleBar()}
       ${L.error ? `<p class="err" role="alert">${esc(L.error)}</p>` : ""}
     </div>
     ${personaCards()}
@@ -554,16 +585,18 @@ function renderNow() {
   setChrome(true);
   const me = emp(S.me.empId) || { id: S.me.empId, name: S.me.name };
   const roleName = { hr: "HR admin", mgr: S.me.label, emp: "Employee" }[S.me.role];
-  document.getElementById("who").innerHTML = `${avatar(me)}<span class="meta"><span class="nm">${esc(S.me.name)}</span><span class="r">${esc(roleName)}</span></span><button class="btn sm" data-logout>Switch user</button>`;
+  const whoBtns = ORG() ? `<button class="btn sm" data-home>Spaces</button><button class="btn sm" data-signout>Sign out</button>`
+    : FB() && ME && ME.user ? `<button class="btn sm" data-logout>Switch user</button><button class="btn sm" data-home>Spaces</button>` : `<button class="btn sm" data-logout>Switch user</button>`;
+  document.getElementById("who").innerHTML = `${avatar(me)}<span class="meta"><span class="nm">${esc(S.me.name)}</span><span class="r">${esc(ORG() ? `${roleName} · ${S.space.name}` : roleName)}</span></span>${whoBtns}`;
   const tabs = document.getElementById("tabs"), list = tabsFor(S.me.role);
   tabs.hidden = list.length < 2;
   const late = S.me.role === "hr" ? lateCount() : 0;
   tabs.innerHTML = list.map(([k, n]) => `<button role="tab" class="${k === "myleave" && list.length > 2 ? "push" : ""}" data-tab="${k}" aria-selected="${UI.tab === k}">${n}${k === "overview" && late ? `<span class="count" title="${late} late or due today">${late}</span>` : ""}</button>`).join("");
   const focusId = document.activeElement && document.activeElement.id;
   const v = viewOf();
-  const html = FB() && UI.survey.open ? surveyView() : v === "emp" ? empView() : v === "mgr" ? mgrView() : { overview: hrOverview, cases: hrCases, plan: hrPlan, employees: hrEmployees, settings: hrSettings }[UI.tab]();
+  const html = FB() && UI.survey.open ? surveyView() : v === "emp" ? empView() : v === "mgr" ? mgrView() : { overview: hrOverview, cases: hrCases, plan: hrPlan, employees: hrEmployees, access: hrUsers, settings: hrSettings }[UI.tab]();
   const foot = FB()
-    ? `<span>Early preview with a made-up company. Rules checked October 2026 for California employers. Not legal advice.</span>${UI.survey.open ? "" : `<button class="btn sm" data-survey>${UI.survey.done ? "Edit your survey answers" : "Take the 2-minute survey"}</button>`}`
+    ? `<span>${ORG() ? "Early preview workspace. Use made-up employee details only." : "Early preview with a made-up company."} Rules checked October 2026 for California employers. Not legal advice. <a href="/privacy">Privacy</a></span>${UI.survey.open ? "" : `<button class="btn sm" data-survey>${UI.survey.done ? "Edit your survey answers" : "Take the 2-minute survey"}</button>`}`
     : `<span>Test site with a made-up company. Rules checked October 2026 for California employers. Not legal advice.</span><a href="/strategy">Product strategy progress</a>`;
   document.getElementById("root").innerHTML = `<main>${surveyBanner()}${html}<div class="foot">${foot}</div></main>`;
   if (focusId) { const el = document.getElementById(focusId); if (el) el.focus(); }
@@ -574,6 +607,133 @@ function renderNow() {
   saveUI();
 }
 function toast(msg) { const t = document.getElementById("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => (t.hidden = true), 3000); }
+
+/* ---------- Google sign-in, spaces and workspaces (preview site only) ---------- */
+async function loadMe() { try { ME = await api("me"); } catch (e) { ME = { google: false, user: null, spaces: [], create: { ok: false } }; } return ME; }
+const G_ICON = `<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.97 10.72A5.4 5.4 0 0 1 3.68 9c0-.6.1-1.18.29-1.72V4.95H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.05l3.01-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z"/></svg>`;
+const gButton = (label = "Sign in with Google") => `<a class="btn gbtn" href="/api/auth/google/start?next=/">${G_ICON}<span>${label}</span></a>`;
+function googleBar() {
+  if (!ME || !ME.google) return "";
+  if (!ME.user) return `<div class="gbar"><p class="small">Want to come back from another device, or set up your own workspace? Sign in with Google.</p>${gButton()}</div>`;
+  return `<div class="gbar"><p class="small">Signed in as <b>${esc(ME.user.email)}</b>.</p><div class="btns"><button class="btn sm" data-home>Your spaces</button><button class="btn sm" data-signout>Sign out</button></div></div>`;
+}
+function renderHome(root) {
+  setChrome(false);
+  const L = UI.login, H = UI.home, f = H.form, u = ME && ME.user;
+  const err = L.error || H.error;
+  if (!u) {
+    root.innerHTML = `<section class="login" style="grid-template-columns:minmax(0,520px);justify-content:center">
+      <div class="panel welcome" style="gap:14px"><h1>Leave Ledger</h1>
+        <p class="lede">California leave of absence, worked out for you: which leaves apply, what the state pays, and the notices and deadlines you owe.</p>
+        <p>This early preview is invite only. Open the link you were sent, or sign in with the Google account your invite went to.</p>
+        ${ME && ME.google ? gButton() : ""}
+        ${err ? `<p class="err" role="alert">${esc(err)}</p>` : ""}
+        <p class="small muted"><a href="/privacy">Privacy</a></p>
+      </div></section>`;
+    return;
+  }
+  const sp = ME.spaces || [];
+  const card = (x) => `<button type="button" class="acct space" data-space="${x.kind}|${x.id}" ${x.disabled || x.domainBlocked ? "disabled" : ""}>
+    <div><b>${esc(x.name)}</b><span class="scn">${x.kind === "preview" ? "Sample company, your own copy" : esc(x.roleName)}${x.disabled ? " · turned off" : ""}${x.domainBlocked ? " · needs your company Google account" : ""}</span></div></button>`;
+  const C = ME.create || { ok: false };
+  root.innerHTML = `<section class="login">
+    <div class="panel welcome" style="gap:14px">
+      <div><h1>Hi ${esc(u.name.split(" ")[0])}</h1><p class="lede" style="margin-top:6px">Signed in as ${esc(u.email)}.</p></div>
+      <div class="btns"><button class="btn sm" data-signout>Sign out</button></div>
+      ${err ? `<p class="err" role="alert">${esc(err)}</p>` : ""}
+      <p class="small muted"><a href="/privacy">Privacy</a></p>
+    </div>
+    <div class="stack">
+      ${(ME.pending || []).length ? `<div class="grp"><span class="label">Invitations</span>${ME.pending.map((x) => `<div class="banner"><span><b>${esc(x.name)}</b> invited you as ${esc(x.roleName)}<span class="small muted"> · from ${esc(x.invitedBy)}</span>${x.domainBlocked ? `<br><span class="small">Needs a Google Workspace account on @${esc(x.domain)}.</span>` : ""}</span><span class="btns" style="margin:0"><button class="btn sm" data-decline="${esc(x.id)}">Decline</button>${x.domainBlocked ? "" : `<button class="btn sm primary" data-accept="${esc(x.id)}">Accept</button>`}</span></div>`).join("")}<p class="small muted">Only accept invitations you expect.</p></div>` : ""}
+      <div class="grp"><span class="label">Your spaces</span>
+        ${sp.length ? `<div class="accts">${sp.map(card).join("")}</div>` : `<div class="infobox">Nothing here yet. If you were invited, ask the sender to use ${esc(u.email)}, or open the invite link you were sent.</div>`}
+      </div>
+      ${C.ok ? `<section class="panel" data-form="home"><h3>Set up a workspace for your company</h3>
+        <p class="small muted">Your own workspace, where you invite your HR team, managers and employees with their Google accounts. Each user sees only what their role allows.</p>
+        <div class="note-box"><b>Made-up details only for now.</b> Real employee names, dates and health information are not supported until the security review is done. Use made-up employees to try how it would work for your team.</div>
+        <div class="row"><div class="field"><label for="ws-name">Company name</label><input type="text" id="ws-name" data-bind="name" value="${esc(f.name)}" maxlength="80" placeholder="Bayside Dental"></div>
+          <div class="field"><label for="ws-city">City</label><input type="text" id="ws-city" data-bind="city" value="${esc(f.city)}" maxlength="60" placeholder="San Jose, CA"></div></div>
+        <div class="row"><div class="field"><label for="ws-hc">Number of employees</label><input type="number" id="ws-hc" data-bind="headcount" data-num min="1" value="${esc(f.headcount)}"><span class="hint">This decides which laws apply.</span></div>
+          <div class="field"><label for="ws-job">Your job title</label><input type="text" id="ws-job" data-bind="jobTitle" value="${esc(f.jobTitle)}" maxlength="60" placeholder="Office manager"></div></div>
+        <div class="field"><span class="label" style="font-weight:600;font-size:.86rem;text-transform:none;letter-spacing:0;color:var(--ink)">Start with</span>
+          <label class="check"><input type="radio" name="ws-start" data-bind="start" value="sample" ${f.start === "sample" ? "checked" : ""}>10 made-up employees and a few leaves, with you as the HR admin</label>
+          <label class="check"><input type="radio" name="ws-start" data-bind="start" value="empty" ${f.start === "empty" ? "checked" : ""}>Just me. I will add made-up employees myself</label></div>
+        ${u.hd ? `<label class="check"><input type="checkbox" data-bind="lockDomain" ${f.lockDomain ? "checked" : ""}>Only allow @${esc(u.hd)} Google accounts to join</label>` : ""}
+        <label class="check"><input type="checkbox" id="ws-agree" data-bind="agree" ${f.agree ? "checked" : ""}>I will use made-up employee details only</label>
+        <div class="btns"><button class="btn primary" data-create ${H.busy ? "disabled" : ""}>${H.busy ? "Setting up..." : "Create workspace"}</button></div>
+      </section>` : C.why && !sp.length ? "" : C.why ? `<p class="small muted">${esc(C.why)}</p>` : ""}
+    </div>
+  </section>`;
+}
+async function openSpace(kind, id) {
+  UI.login.error = ""; UI.home.error = "";
+  try {
+    await api("space", { kind, id });
+    UI.tab = null; UI.caseId = null; UI.users.list = null; UI.survey = { ...UI.survey, open: false, q: null, done: null };
+    ACCOUNTS = null; await loadMe();
+    if (kind === "preview") { renderLogin(); return; }
+    accept(await api("state")); render(); window.scrollTo(0, 0);
+  } catch (e) { if (e.message === "signed out") return; UI.home.error = e.message; renderLogin(); }
+}
+async function goHome() {
+  S = null; ACCOUNTS = null; UI.survey.open = false; closeFeedback();
+  await loadMe(); renderHome(document.getElementById("root")); window.scrollTo(0, 0);
+}
+async function signOutGoogle() {
+  await api("auth/signout", {}).catch(() => {});
+  S = null; ACCOUNTS = null; ME = null; UI.login.error = ""; closeFeedback(); renderLogin(); window.scrollTo(0, 0);
+}
+async function createWorkspace() {
+  const H = UI.home, f = H.form;
+  H.busy = true; H.error = ""; renderHome(document.getElementById("root"));
+  try {
+    await api("org/create", { ...f, headcount: +f.headcount });
+    H.busy = false; H.form = { name: "", city: "", headcount: 20, jobTitle: "", start: "sample", lockDomain: false, agree: false };
+    UI.tab = null; UI.caseId = null; await loadMe();
+    accept(await api("state")); render(); window.scrollTo(0, 0); toast("Your workspace is ready");
+  } catch (e) { if (e.message === "signed out") return; H.busy = false; H.error = e.message; renderHome(document.getElementById("root")); }
+}
+
+/* ---------- Workspace: Users (HR admins) ---------- */
+async function loadUsers() {
+  try { const j = await api("org/members"); Object.assign(UI.users, { list: j.members, domain: j.domain, canLock: j.canLock, myDomain: j.myDomain }); }
+  catch (e) { if (e.message !== "signed out") UI.users.error = e.message; UI.users.list = UI.users.list || []; }
+  render();
+}
+const ROLE_NAMES = { hr: "HR admin", mgr: "Manager", emp: "Employee" };
+function hrUsers() {
+  const U = UI.users;
+  if (!U.list) { queueMicrotask(loadUsers); return `<div class="head"><div><h2>Users</h2></div></div><section class="panel"><p class="muted">Loading...</p></section>`; }
+  const emps = D().employees, taken = new Set(U.list.map((m) => m.empId));
+  const free = emps.filter((e) => !taken.has(e.id));
+  const nameOf = (id) => (emps.find((e) => e.id === id) || {}).name || "Removed employee";
+  return `<div class="head"><div><h2>Users</h2><p>Who can sign in to ${esc(S.space.name)} with Google, and what they see. HR admins see everything, managers see dates and coverage for their team, and employees see their own leave.</p></div></div>
+  <div class="grid2 form">
+    <section class="panel" data-form="users"><h3>Invite a user</h3>
+      <div class="field"><label for="us-email">Google account email</label><input type="email" id="us-email" data-bind="email" value="${esc(U.email)}" placeholder="${U.domain ? "name@" + esc(U.domain) : "name@company.com"}" autocomplete="off"></div>
+      <div class="field"><label for="us-emp">Which employee is this?</label><select id="us-emp" data-bind="empId"><option value="">Choose</option>${free.map((e) => `<option value="${e.id}" ${U.empId === e.id ? "selected" : ""}>${esc(e.name)} · ${esc(e.role)}</option>`).join("")}</select>${free.length ? "" : `<span class="hint">Everyone already has access. Add an employee first.</span>`}</div>
+      <div class="field"><label for="us-role">Role</label><select id="us-role" data-bind="role">${Object.entries(ROLE_NAMES).map(([k, n]) => `<option value="${k}" ${U.role === k ? "selected" : ""}>${n}</option>`).join("")}</select></div>
+      ${U.error ? `<p class="err" role="alert">${esc(U.error)}</p>` : ""}
+      <div class="btns"><button class="btn primary" data-invite-user ${U.busy ? "disabled" : ""}>Invite</button></div>
+      <p class="small muted">They sign in at this site with Google using that email. There is no email sent yet, so tell them yourself.</p>
+      <h3>Company Google accounts only</h3>
+      ${U.canLock ? `<label class="check"><input type="checkbox" data-lock ${U.domain ? "checked" : ""}>Only allow @${esc(U.myDomain)} accounts</label><span class="hint small muted">Users must sign in with a Google Workspace account on your company domain.</span>` : `<p class="small muted">Available when you sign in with a Google Workspace account on your company domain.</p>`}
+    </section>
+    <section class="panel"><h3>${U.list.length} ${U.list.length === 1 ? "user" : "users"}</h3>
+      <div class="tw"><table><thead><tr><th>User</th><th>Employee</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>
+      ${U.list.map((m) => { const self = m.email === S.space.user; return `<tr><td class="small">${esc(m.email)}${self ? ' <span class="muted">(you)</span>' : ""}</td><td>${esc(nameOf(m.empId))}</td>
+        <td><select aria-label="Role for ${esc(m.email)}" data-user-role="${esc(m.email)}">${Object.entries(ROLE_NAMES).map(([k, n]) => `<option value="${k}" ${m.role === k ? "selected" : ""}>${n}</option>`).join("")}</select></td>
+        <td>${m.joined ? pill("Signed in", "ok") : pill("Invited", "")}</td>
+        <td>${self ? "" : `<button class="btn sm" data-user-remove="${esc(m.email)}">Remove</button>`}</td></tr>`; }).join("")}
+      </tbody></table></div>
+    </section>
+  </div>`;
+}
+async function usersChange(body, okMsg) {
+  const U = UI.users; U.busy = true; U.error = "";
+  try { const j = await api("org/members", body); Object.assign(U, { list: j.members, domain: j.domain, busy: false }); accept(j); render(); if (okMsg) toast(okMsg); return true; }
+  catch (e) { if (e.message === "signed out") return false; U.busy = false; U.error = e.message; render(); return false; }
+}
 
 /* ---------- Feedback and survey (prospect site only) ---------- */
 const TAB_NAMES = { overview: "Today", cases: "Leaves", plan: "Plan a leave", employees: "Employees", team: "My team", myleave: "My leave" };
@@ -634,7 +794,7 @@ async function openSurvey() {
 }
 function surveyView() {
   const V = UI.survey;
-  if (V.sent) return `<section class="panel survey"><h2>Thank you</h2><p>Your answers are in. They go straight to the person building Leave Ledger.</p><p class="small muted">You can keep using the preview, and send more feedback from any screen.</p><div class="btns"><button class="btn primary" data-survey-close>Back to the app</button></div></section>`;
+  if (V.sent) return `<section class="panel survey"><h2>Thank you</h2><p>Your answers are in. They go straight to the team building Leave Ledger.</p><p class="small muted">You can keep using the preview, and send more feedback from any screen.</p><div class="btns"><button class="btn primary" data-survey-close>Back to the app</button></div></section>`;
   const qs = (V.q || []).map((q, i) => {
     const v = V.a[q.id], id = `sv-${q.id}`;
     let input = "";
@@ -670,7 +830,42 @@ async function joinFromLink() {
 document.addEventListener("click", async (ev) => {
   const b = ev.target.closest("button, tr[data-open]"); if (!b) return;
   if (b.dataset.pick) { signIn(b.dataset.pick); return; }
+  if (b.dataset.space) { const [k, id] = b.dataset.space.split("|"); openSpace(k, id); return; }
+  if (b.hasAttribute("data-home")) { goHome(); return; }
+  if (b.hasAttribute("data-signout")) { signOutGoogle(); return; }
+  if (b.hasAttribute("data-create")) { createWorkspace(); return; }
+  if (b.dataset.accept) {
+    try { await api("org/accept", { id: b.dataset.accept }); UI.tab = null; UI.caseId = null; await loadMe(); accept(await api("state")); render(); window.scrollTo(0, 0); toast("Welcome in"); }
+    catch (e) { if (e.message !== "signed out") { UI.home.error = e.message; await loadMe(); renderHome(document.getElementById("root")); } }
+    return;
+  }
+  if (b.dataset.decline) { await api("org/decline", { id: b.dataset.decline }).catch(() => {}); await loadMe(); renderHome(document.getElementById("root")); toast("Invitation declined"); return; }
   if (!S) return;
+  if (b.hasAttribute("data-addemp-open")) { UI.addEmp = { ...UI.addEmp, open: true, error: "", hire: UI.addEmp.hire || addDays(TODAY, -365) }; render(); document.getElementById("ae-name")?.focus(); return; }
+  if (b.hasAttribute("data-addemp-cancel")) { UI.addEmp.open = false; render(); return; }
+  if (b.hasAttribute("data-addemp")) {
+    const A = UI.addEmp;
+    try { const j = await api("action", { type: "addEmployee", employee: { name: A.name, role: A.role, hire: A.hire || addDays(TODAY, -365), hours12: A.hours12, sick: A.sick, hiQuarter: A.hiQuarter, mgr: A.mgr } }); accept(j); UI.addEmp = { open: false, name: "", role: "", hire: "", hours12: 1000, sick: 24, hiQuarter: 12000, mgr: "", error: "" }; render(); toast("Employee added"); }
+    catch (e) { if (e.message !== "signed out") { A.error = e.message; render(); } }
+    return;
+  }
+  if (b.dataset.empRemove) {
+    if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Tap again"; b.classList.add("primary"); setTimeout(() => { if (b.isConnected) { b.dataset.armed = ""; b.textContent = "Remove"; b.classList.remove("primary"); } }, 4000); return; }
+    await act({ type: "removeEmployee", id: b.dataset.empRemove }, "Employee removed"); return;
+  }
+  if (b.hasAttribute("data-invite-user")) {
+    const U = UI.users;
+    if (await usersChange({ op: "invite", email: U.email.trim(), role: U.role, empId: U.empId }, "Invited. Ask them to sign in with Google.")) { U.email = ""; U.empId = ""; render(); }
+    return;
+  }
+  if (b.dataset.userRemove) {
+    if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Tap again"; b.classList.add("primary"); setTimeout(() => { if (b.isConnected) { b.dataset.armed = ""; b.textContent = "Remove"; b.classList.remove("primary"); } }, 4000); return; }
+    usersChange({ op: "remove", email: b.dataset.userRemove }, "Access removed"); return;
+  }
+  if (b.hasAttribute("data-clear")) {
+    if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Tap again to clear every leave"; b.classList.add("primary"); return; }
+    await act({ type: "clearCases" }, "All leaves cleared"); return;
+  }
   if (b.id === "fbBtn") { UI.fb.open ? closeFeedback() : openFeedback(); return; }
   if (b.hasAttribute("data-fb-close")) { UI.fb.note = document.getElementById("fb-note")?.value || ""; closeFeedback(); document.getElementById("fbBtn").focus(); return; }
   if (b.dataset.fbRate) { UI.fb.note = document.getElementById("fb-note")?.value || ""; UI.fb.rating = UI.fb.rating === +b.dataset.fbRate ? 0 : +b.dataset.fbRate; renderFeedback(); return; }
@@ -690,8 +885,8 @@ document.addEventListener("click", async (ev) => {
     const cur = new Set(UI.survey.a[b.dataset.svMulti] || []); cur.has(b.dataset.val) ? cur.delete(b.dataset.val) : cur.add(b.dataset.val);
     UI.survey.a[b.dataset.svMulti] = [...cur]; render(); return;
   }
-  if (b.hasAttribute("data-logout")) { await api("logout", {}).catch(() => {}); S = null; UI.login.error = ""; UI.survey.open = false; ACCOUNTS = FB() ? null : ACCOUNTS; renderLogin(); window.scrollTo(0, 0); return; }
-  if (b.dataset.tab) { UI.tab = b.dataset.tab; UI.caseId = null; render(); window.scrollTo(0, 0); return; }
+  if (b.hasAttribute("data-logout")) { await api("logout", {}).catch(() => {}); S = null; UI.login.error = ""; UI.survey.open = false; ACCOUNTS = FB() ? null : ACCOUNTS; if (FB()) await loadMe(); renderLogin(); window.scrollTo(0, 0); return; }
+  if (b.dataset.tab) { UI.tab = b.dataset.tab; UI.caseId = null; if (b.dataset.tab === "access") UI.users.list = null; render(); window.scrollTo(0, 0); return; }
   if (b.dataset.open) { UI.tab = "cases"; UI.caseId = b.dataset.open; render(); window.scrollTo(0, 0); return; }
   if (b.hasAttribute("data-back")) { UI.caseId = null; render(); return; }
   if (b.hasAttribute("data-createcase")) {
@@ -746,7 +941,16 @@ document.addEventListener("keydown", (ev) => {
   if (ev.key === "Enter" && ev.target.id === "lg-pw") { ev.preventDefault(); store.set("ll-pw", ev.target.value, sessionStorage); toast("Now tap a user to sign in"); }
 });
 document.addEventListener("change", (ev) => {
-  const el = ev.target; if (!S) return;
+  const el = ev.target;
+  const formName = el.closest && el.closest("[data-form]")?.dataset.form;
+  if (["home", "users", "addEmp"].includes(formName) && el.dataset.bind) {
+    const t = { home: UI.home.form, users: UI.users, addEmp: UI.addEmp }[formName];
+    t[el.dataset.bind] = el.type === "checkbox" ? el.checked : el.hasAttribute("data-num") ? Math.max(0, +el.value || 0) : el.value;
+    return;
+  }
+  if (!S) return;
+  if (el.dataset.userRole) { usersChange({ op: "role", email: el.dataset.userRole, role: el.value }, "Role changed"); return; }
+  if (el.hasAttribute("data-lock")) { usersChange({ op: "lock", on: el.checked }, el.checked ? "Company accounts only" : "Any Google account can be invited"); return; }
   if (el.dataset.task) { const [caseId, key] = el.dataset.task.split("|"); act({ type: "toggleTask", caseId, key, done: el.checked }, el.checked ? "Marked done" : "Reopened"); return; }
   if (el.dataset.emp) { const [id, field] = el.dataset.emp.split("|"); act({ type: "updateEmployee", id, field, value: el.value }, "Saved"); return; }
   if (el.dataset.co) {
@@ -760,6 +964,12 @@ document.addEventListener("change", (ev) => {
 });
 document.addEventListener("input", (ev) => {
   const el = ev.target;
+  const formName = el.closest && el.closest("[data-form]")?.dataset.form;
+  if (["home", "users", "addEmp"].includes(formName) && el.dataset.bind && el.type !== "checkbox" && el.type !== "radio") {
+    const t = { home: UI.home.form, users: UI.users, addEmp: UI.addEmp }[formName];
+    t[el.dataset.bind] = el.hasAttribute("data-num") ? Math.max(0, +el.value || 0) : el.value;
+    return;
+  }
   if (el.hasAttribute && el.hasAttribute("data-ai-text")) { UI.reqAI.text = el.value; return; }
   if (el.closest('[data-form="flag"]') && el.dataset.bind) UI.flag[el.dataset.bind] = el.value;
 });
@@ -782,6 +992,11 @@ document.addEventListener("visibilitychange", async () => {
 
 (async () => {
   await joinFromLink();
+  const u0 = new URL(location.href), ae = u0.searchParams.get("auth_error");
+  const AUTH_MSG = { cancelled: "Google sign-in was cancelled.", expired: "Sign-in took too long or started in another browser. Try again.", failed: "Sign-in could not be confirmed. Try again.", unreachable: "Could not reach Google. Try again.", unverified: "Your Google account email is not verified yet.", off: "Google sign-in is not set up yet." };
+  if (ae) { UI.login.error = AUTH_MSG[ae] || "Sign-in did not work. Try again."; u0.searchParams.delete("auth_error"); history.replaceState(null, "", u0.pathname + (u0.search || "") + u0.hash); }
+  try { const site = await (await fetch("/api/site")).json(); MODE = site.mode || MODE; } catch (e) {}
+  if (FB()) await loadMe();
   try {
     accept(await api("state"));
     if (FB() && UI.survey.done === null) { try { UI.survey.done = !!(await api("survey")).answers; } catch (e) {} }

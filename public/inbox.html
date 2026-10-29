@@ -92,14 +92,19 @@ async function api(path, body) {
 }
 async function refresh() { ST = await api("admin/state"); render(); }
 
-function renderLogin(msg) {
+let CFG = null;
+async function renderLogin(msg) {
+  if (!CFG) { try { CFG = await (await fetch("/api/admin/config")).json(); } catch (e) { CFG = { password: true, google: false }; } }
+  msg = msg || AUTH_ERR;
   root.innerHTML = `<section class="panel" style="max-width:420px;margin:40px auto">
     <h1>Feedback inbox</h1>
     <p class="muted">For the site owner. Prospects use their invite links instead.</p>
-    <form id="lf" class="field"><label for="pw">Admin password</label><input id="pw" type="password" autocomplete="current-password" required>
+    ${CFG.google ? `<a class="btn" style="text-decoration:none;color:inherit;text-align:center" href="/api/auth/google/start?intent=admin">Sign in with Google</a>` : ""}
+    ${CFG.password ? `<form id="lf" class="field"><label for="pw">Admin password</label><input id="pw" type="password" autocomplete="current-password" required>
+    <div class="btns" style="margin-top:6px"><button class="btn primary">Sign in</button></div></form>` : ""}
     ${msg ? `<p class="err" role="alert">${esc(msg)}</p>` : ""}
-    <div class="btns" style="margin-top:6px"><button class="btn primary">Sign in</button></div></form>
   </section>`;
+  if (!CFG.password) return;
   document.getElementById("lf").onsubmit = async (e) => {
     e.preventDefault();
     try { await api("admin/login", { password: document.getElementById("pw").value }); await refresh(); }
@@ -107,6 +112,9 @@ function renderLogin(msg) {
   };
   document.getElementById("pw").focus();
 }
+const AUTH_MSG = { notadmin: "That Google account is not an admin for this site.", cancelled: "Google sign-in was cancelled.", expired: "Sign-in took too long. Try again.", failed: "Sign-in could not be confirmed. Try again.", unreachable: "Could not reach Google. Try again.", unverified: "That Google account email is not verified.", off: "Google sign-in is not set up." };
+const _u = new URL(location.href), AUTH_ERR = AUTH_MSG[_u.searchParams.get("auth_error")] || (_u.searchParams.get("auth_error") ? "Sign-in did not work. Try again." : "");
+if (AUTH_ERR) { _u.searchParams.delete("auth_error"); history.replaceState(null, "", _u.pathname); }
 
 function render() {
   const S = ST.summary, inv = ST.invites, fbCount = (c) => ST.feedback.filter((f) => f.invite === c).length;
@@ -130,20 +138,22 @@ function render() {
   </section>
 
   <section class="panel">
-    <h2>Invite someone</h2>
+    <h2>Invite a prospect</h2>
     <form id="nf" class="row">
       <div class="field"><label for="nm">Who is it for</label><input id="nm" placeholder="Sam Lee, Bayside Dental" required maxlength="80"></div>
+      <div class="field"><label for="ne">Their Google email (optional)</label><input id="ne" type="email" placeholder="sam@baysidedental.com" maxlength="200"></div>
       <div class="field"><label for="nt">Note for you (optional)</label><input id="nt" placeholder="Met at the SMB HR meetup" maxlength="300"></div>
       <button class="btn primary">Create invite link</button>
     </form>
+    ${ST.google ? `<p class="small muted">With an email, they can also just sign in with that Google account. No link needed.</p>` : ""}
     ${NEW ? `<div class="fb" style="border-color:var(--accent)"><b>Link for ${esc(NEW.name)}</b><div class="link">${esc(link(NEW.code))}</div><div class="btns"><button class="btn sm primary" data-copy="${NEW.code}">Copy link</button></div><p class="small muted">Anyone with this link gets into this copy, so send it only to them. You can turn it off below.</p></div>` : ""}
     <div class="scroll"><table class="tbl">
       <thead><tr><th>Invite</th><th>Status</th><th>Last active</th><th>Activity</th><th>Feedback</th><th>Survey</th><th></th></tr></thead>
       <tbody>${inv.length ? inv.map((i) => { const A = i.activity; return `<tr>
-        <td><b>${esc(i.name)}</b>${i.note ? `<div class="small muted">${esc(i.note)}</div>` : ""}<div class="small muted">Created ${when(i.created)}</div></td>
+        <td><b>${esc(i.name)}</b>${i.note ? `<div class="small muted">${esc(i.note)}</div>` : ""}${i.email ? `<div class="small muted">For ${esc(i.email)}</div>` : ""}${(i.users || []).map((u) => `<div class="small">Signed in: ${esc(u.name)} · ${esc(u.email)}</div>`).join("")}<div class="small muted">Created ${when(i.created)}</div></td>
         <td>${i.disabled ? `<span class="pill bad">Off</span>` : i.joined ? `<span class="pill ok">Joined</span>` : `<span class="pill warn">Not opened</span>`}</td>
         <td>${A ? when(A.last) : "-"}</td>
-        <td class="small">${A ? `${A.actions} actions, ${A.intakes} Clerk, ${Object.keys(A.personas || {}).length} of 10 people tried` : "-"}</td>
+        <td class="small">${A ? `${A.actions} actions, ${A.intakes} Clerk, ${Object.keys(A.personas || {}).length} of 10 users tried` : "-"}</td>
         <td>${fbCount(i.code) ? `<button class="btn sm" data-filter="${i.code}">${fbCount(i.code)}</button>` : "0"}</td>
         <td>${i.survey ? `<span class="pill ok">Done</span>` : "-"}</td>
         <td><div class="btns"><button class="btn sm" data-copy="${i.code}">Copy link</button>
@@ -153,10 +163,24 @@ function render() {
   </section>
 
   <section class="panel">
+    <h2>Company workspaces</h2>
+    <p class="small muted">Set up by invited users with Google sign-in. Made-up employee details only until the security review is done.</p>
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>Workspace</th><th>Status</th><th>Users</th><th>Employees</th><th>Leaves</th><th>Last active</th><th>Survey</th><th></th></tr></thead>
+      <tbody>${(ST.orgs || []).length ? ST.orgs.map((o) => `<tr>
+        <td><b>${esc(o.name)}</b><div class="small muted">${esc(o.ownerEmail)}${o.domain ? ` · @${esc(o.domain)} only` : ""}</div><div class="small muted">Created ${when(o.created)}</div></td>
+        <td>${o.disabled ? `<span class="pill bad">Off</span>` : `<span class="pill ok">On</span>`}</td>
+        <td>${o.joined} of ${o.users} signed in</td><td>${o.employees}</td><td>${o.cases}</td>
+        <td>${o.activity ? when(o.activity.last) : "-"}</td><td>${o.survey ? `<span class="pill ok">Done</span>` : "-"}</td>
+        <td><button class="btn sm" data-org="${o.id}" data-off="${o.disabled ? "0" : "1"}">${o.disabled ? "Turn on" : "Turn off"}</button></td></tr>`).join("") : `<tr><td colspan="8" class="muted">No workspaces yet.</td></tr>`}</tbody>
+    </table></div>
+  </section>
+
+  <section class="panel">
     <div class="head"><h2>Feedback${FILTER ? ` from ${esc((inv.find((i) => i.code === FILTER) || {}).name)}` : ""}</h2>
       <div class="btns">${FILTER ? `<button class="btn sm" data-filter="">Show all</button>` : ""}<button class="btn sm" data-csv="feedback">Download CSV</button></div></div>
     <div class="list">${fb.length ? fb.map((f) => `<div class="fb">
-      <div class="meta"><b>${esc(f.who)}</b><span>${esc(f.screen)}</span><span>as ${esc(f.persona.split("@")[0])}</span><span>${when(f.at)}</span>${f.rating ? `<span class="pill">${f.rating} of 5</span>` : ""}${f.kind ? `<span class="pill">${esc({ like: "Likes it", confusing: "Confusing", bug: "Something broke", idea: "Idea" }[f.kind])}</span>` : ""}</div>
+      <div class="meta"><b>${esc(f.who)}</b><span>${esc(f.screen)}</span><span>as ${esc(f.persona.split("@")[0])}</span>${f.user ? `<span>${esc(f.user)}</span>` : ""}<span>${when(f.at)}</span>${f.rating ? `<span class="pill">${f.rating} of 5</span>` : ""}${f.kind ? `<span class="pill">${esc({ like: "Likes it", confusing: "Confusing", bug: "Something broke", idea: "Idea" }[f.kind])}</span>` : ""}</div>
       ${f.note ? `<p>${esc(f.note)}</p>` : ""}</div>`).join("") : `<p class="muted">Nothing yet.</p>`}</div>
   </section>
 
@@ -167,12 +191,14 @@ function render() {
   </section>`;
   document.getElementById("nf").onsubmit = async (e) => {
     e.preventDefault();
-    const name = document.getElementById("nm").value, note = document.getElementById("nt").value;
-    try { const j = await api("admin/invite", { name, note }); NEW = { code: j.code, name }; await refresh(); } catch (er) { if (er.message !== "signed out") toast(er.message); }
+    const name = document.getElementById("nm").value, note = document.getElementById("nt").value, email = document.getElementById("ne").value;
+    try { const j = await api("admin/invite", { name, note, email }); NEW = { code: j.code, name }; await refresh(); } catch (er) { if (er.message !== "signed out") toast(er.message); }
   };
 }
 
-function csv(rows) { return rows.map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n"); }
+// Cells that start like a formula are prefixed so a spreadsheet shows them as text.
+const cell = (v) => { let t = String(v ?? ""); if (/^[=+\-@\t\r]/.test(t)) t = "'" + t; return `"${t.replace(/"/g, '""')}"`; };
+function csv(rows) { return rows.map((r) => r.map(cell).join(",")).join("\n"); }
 function download(name, text) { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type: "text/csv" })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); }
 
 document.addEventListener("click", async (e) => {
@@ -186,8 +212,9 @@ document.addEventListener("click", async (e) => {
       if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Tap again to reset"; b.classList.add("primary"); return; }
       await api("admin/invite/update", { code: b.dataset.reset, resetData: true }); await refresh(); toast("Their copy is back to the sample data");
     }
+    else if (b.dataset.org) { await api("admin/org/update", { id: b.dataset.org, disabled: b.dataset.off === "1" }); await refresh(); toast(b.dataset.off === "1" ? "Workspace turned off" : "Workspace turned on"); }
     else if ("filter" in b.dataset) { FILTER = b.dataset.filter; render(); }
-    else if (b.dataset.csv === "feedback") download("leave-ledger-feedback.csv", csv([["When", "Invite", "Screen", "Persona", "Rating", "Type", "Note"], ...ST.feedback.map((f) => [f.at, f.who, f.screen, f.persona, f.rating, f.kind, f.note])]));
+    else if (b.dataset.csv === "feedback") download("leave-ledger-feedback.csv", csv([["When", "From", "Screen", "Signed in as", "Google account", "Rating", "Type", "Note"], ...ST.feedback.map((f) => [f.at, f.who, f.screen, f.persona, f.user || "", f.rating, f.kind, f.note])]));
     else if (b.dataset.csv === "survey") { const qs = ST.questions; download("leave-ledger-survey.csv", csv([["When", "Invite", ...qs.map((q) => q.q)], ...ST.surveys.map((s) => [s.at, s.who, ...qs.map((q) => { const v = s.answers[q.id]; return Array.isArray(v) ? v.join("; ") : v; })])])); }
   } catch (er) { if (er.message !== "signed out") toast(er.message); }
 });
