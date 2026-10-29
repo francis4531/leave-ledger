@@ -19,19 +19,19 @@ What works today:
 - **Deadline clock**: 5 business days for the first notice, 15 calendar days for certification, 5 business days to designate. It skips weekends and company holidays.
 - **Server-side privacy**: managers never receive the reason for a leave, and employees only receive their own records.
 - **Manager flag**: when a manager hears about a possible leave, the notice clock starts.
-- **Copilot intake (added Oct 27)**: an employee describes the need in their own words (English or Spanish) and Claude Haiku 5.5 fills in the request form, marking anything it is unsure of. HR sees the original words next to what the Copilot read and what the employee changed. HR can also ask it to read a manager's note. The rules engine still decides eligibility. Every intake is logged with its corrections, and a 20-case golden set (`tests/intake-golden.json`, 4 adversarial) with `scripts/eval-intake.mjs` measures accuracy.
+- **Clerk intake (added Oct 27)**: an employee describes the need in their own words (English or Spanish) and Claude Haiku 5.5 fills in the request form, marking anything it is unsure of. HR sees the original words next to what Clerk read and what the employee changed. HR can also ask it to read a manager's note. The rules engine still decides eligibility. Every intake is logged with its corrections, and a 20-case golden set (`tests/intake-golden.json`, 4 adversarial) with `scripts/eval-intake.mjs` measures accuracy.
 
 ## AI Value Archetype
 
-**Copilot** (confirmed Oct 26, 2026).
+**Copilot** (confirmed Oct 26, 2026). The AI inside the product is named **Clerk** (Oct 29, 2026): it prepares the paperwork, and HR decides.
 
-The prototype is a deterministic rules engine with the first Copilot piece (intake) on top of it. The AI layer sits on top of the rules engine, and the rules engine stays the only thing that decides eligibility:
+The prototype is a deterministic rules engine with the first Clerk piece (intake) on top of it. The AI layer sits on top of the rules engine, and the rules engine stays the only thing that decides eligibility:
 
-1. **Intake.** An employee or manager writes in plain words ("my dad has surgery on the 12th, I need a few weeks"). The copilot turns that into a draft case: likely leave type, family relation, dates. HR confirms it with one click.
+1. **Intake.** An employee or manager writes in plain words ("my dad has surgery on the 12th, I need a few weeks"). Clerk turns that into a draft case: likely leave type, family relation, dates. HR confirms it with one click.
 2. **Plain-language answers.** Employees ask "will I get paid?" and get an answer grounded in their own case, in English or Spanish.
-3. **Notice drafting.** The copilot fills in the eligibility, designation and return-to-work notices from the case for HR to review and send.
+3. **Notice drafting.** Clerk fills in the eligibility, designation and return-to-work notices from the case for HR to review and send.
 
-The copilot never decides eligibility or denies a leave; a human signs off on every notice. That boundary is the trust story for Module 4.
+Clerk never decides eligibility or denies a leave; a human signs off on every notice. That boundary is the trust story for Module 4.
 
 Why not the other archetypes: an **Automator** that sends notices on its own is too risky for legal notices. An **Oracle** with no workflow is what ChatGPT already gives away for free.
 

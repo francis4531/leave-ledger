@@ -2,7 +2,7 @@
 
 > Week 2 · Oct 28, 2026 · Draft for partner challenge
 
-**Where AI is used today:** only the Copilot intake (`netlify/lib/intake.mjs`). One model call per request, about 1,500 tokens in and 200 out. Eligibility, pay estimates and deadlines run in the rules engine with no AI. If the AI is off or failing, users fill in the form by hand and nothing else changes.
+**Where AI is used today:** only Clerk intake (`netlify/lib/intake.mjs`). One model call per request, about 1,500 tokens in and 200 out. Eligibility, pay estimates and deadlines run in the rules engine with no AI. If the AI is off or failing, users fill in the form by hand and nothing else changes.
 
 ## Vendor Dependency Assessment
 

@@ -3,7 +3,7 @@
 > Week 2 · Oct 28, 2026 · Draft for partner challenge
 > Score each loop 1-5. Your weakest loop is where competitors attack first.
 
-**Starting point:** Leave Ledger is a test build with 10 test accounts and no real customers. The Copilot intake (built Oct 27) is the first part that produces data that could compound. Scores below describe what exists today, not the plan.
+**Starting point:** Leave Ledger is a test build with 10 test accounts and no real customers. Clerk intake (built Oct 27) is the first part that produces data that could compound. Scores below describe what exists today, not the plan.
 
 ## Flywheel Loops
 
@@ -15,7 +15,7 @@
 | **Network** | Does each new user / team make the product better for everyone? | Isolated | Strong network effects | 1/5 |
 
 ### Correction Loop · 2/5
-**What you capture today:** Every Copilot intake is stored with the user's own words, what the Copilot read (leave type, family member, start date, length, confidence per field) and which fields the user changed before sending. HR sees "Sent as the Copilot read it" or "Changed before sending: start date". HR Settings shows the share sent without changes and the count of fixes per field.
+**What you capture today:** Every Clerk intake is stored with the user's own words, what Clerk read (leave type, family member, start date, length, confidence per field) and which fields the user changed before sending. HR sees "Sent as Clerk read it" or "Changed before sending: start date". HR Settings shows the share sent without changes and the count of fixes per field.
 **How it compounds:** It doesn't yet. Corrections are captured but nothing feeds them back. Step to 3/5: a weekly review that turns each fixed intake into a row in `tests/intake-golden.json`, and the most common misses into prompt examples, with the eval score tracked over time. Step to 4/5: per-company examples ("at this company, 'a few weeks' usually means 4").
 
 ### Preference Loop · 1/5
@@ -52,7 +52,7 @@ Two axes that matter to a 5 to 49 employee California employer:
 | Gusto | Low | High | PTO requests, accruals and balances inside payroll; no sign of CFRA eligibility, notices or state leave stacking |
 | CalChamber | High (content) | High | Forms, guides and a helpline, not a workflow |
 | ChatGPT and similar | Medium | High | Free answers; no employee data, no deadlines, no record |
-| **Leave Ledger** | **High** | **High (target)** | Rules engine, notice clock, three role views, Copilot intake; no integrations, no customers |
+| **Leave Ledger** | **High** | **High (target)** | Rules engine, notice clock, three role views, Clerk intake; no integrations, no customers |
 
 **Placement:** Leave Ledger aims for the top right corner, where only CalChamber (content, not software) and Tilt (partly) sit today. That corner is attractive and also the easiest to copy, because the rules are public law.
 
@@ -68,7 +68,7 @@ Time-to-threat and value-at-risk figures are estimates for partner challenge, no
 **Attacker:** Gusto (where California small businesses already run payroll).
 **Vector:** Adds a California leave module to its plans: CFRA and PDL eligibility from the hours and hire dates it already holds, a notice checklist, and payroll pay codes that update automatically.
 **Time-to-threat:** 6 to 18 months. Gusto has the data and the customers; nothing public suggests it is building this now.
-**% of value at risk:** About 70%. Eligibility, balances and tracking would be covered. What it would likely not match early: the notice clock tied to the manager flag, PDL to CFRA stacking detail, and the Copilot.
+**% of value at risk:** About 70%. Eligibility, balances and tracking would be covered. What it would likely not match early: the notice clock tied to the manager flag, PDL to CFRA stacking detail, and Clerk.
 
 ### 2. Vertical Competitor
 **Attacker:** Tilt.
@@ -96,5 +96,5 @@ Time-to-threat and value-at-risk figures are estimates for partner challenge, no
 **Your defense:**
 1. **Be inside Gusto, not against it.** List in Gusto's app directory with a two-way sync (hours, hire dates, pay codes). Position as the California leave specialist that Gusto customers add, the way Tilt already does.
 2. **Own the record.** The notice clock, the signed notices and the 12-month leave history are what an employer needs in a dispute. Make exporting it easy, and make keeping it in Leave Ledger the safer choice.
-3. **Win on correctness for California.** Publish the rules engine's test cases (PDL to bonding, bereavement within 3 months, reproductive loss caps) and the Copilot's accuracy score. A free bundled checklist does not ship with either.
+3. **Win on correctness for California.** Publish the rules engine's test cases (PDL to bonding, bereavement within 3 months, reproductive loss caps) and Clerk's accuracy score. A free bundled checklist does not ship with either.
 4. **Go through advisors.** Payroll bookkeepers, PEOs and employment lawyers who serve 5 to 49 employee companies are a channel Gusto does not control.

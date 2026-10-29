@@ -91,7 +91,7 @@ function validOpts(reason, o) {
 }
 const cleanOpts = (o) => ({ start: o.start, weeks: +o.weeks || 1, disWeeks: +o.disWeeks || 1, bondWeeks: +o.bondWeeks || 0, days: +o.days || 1, hours: +o.hours || 1, relation: trim(o.relation, 20) || "parent" });
 
-// Keeps what the Copilot read next to what the user finally sent. This is the correction signal.
+// Keeps what Clerk read next to what the user finally sent. This is the correction signal.
 function attachIntake(D, c, a, today, source) {
   if (!a.intake || typeof a.intake !== "object" || !a.intake.text) return;
   const ai = validateDraft(a.intake.ai, today);
@@ -121,7 +121,7 @@ function apply(D, acct, a, today) {
       const plan = E.buildPlan(target, D.company, a.reason, opts);
       const c = { id: newId(), empId: a.empId, reason: a.reason, requested: today, opts, source: hr ? "hr" : "employee", tasks: E.makeTasks(a.reason, today, plan, D.company), coverage: "", notes: "" };
       attachIntake(D, c, a, today, hr ? "hr" : "employee");
-      D.cases.unshift(c); log(`${hr ? "Opened" : "Requested"} ${E.REASONS[a.reason].hr.toLowerCase()} for ${target.name}${c.intake ? " (Copilot intake)" : ""}`); a._id = c.id; return null;
+      D.cases.unshift(c); log(`${hr ? "Opened" : "Requested"} ${E.REASONS[a.reason].hr.toLowerCase()} for ${target.name}${c.intake ? " (Clerk intake)" : ""}`); a._id = c.id; return null;
     }
     case "flag": {
       const target = emp(a.empId);
@@ -238,7 +238,7 @@ export async function handle(req, store, env) {
     const D = await load(store, today);
     const u = D.aiUsage && D.aiUsage.day === today ? D.aiUsage : { day: today, count: 0, by: {}, input: 0, output: 0, month: (D.aiUsage && D.aiUsage.month) || {} };
     const perUser = +(env.LL_AI_PER_USER_DAY || 40), perDay = +(env.LL_AI_DAY || 400);
-    if ((u.by[acct.email] || 0) >= perUser || u.count >= perDay) return err("The Copilot has reached today's test limit. Fill in the form yourself, or try again tomorrow.", 429);
+    if ((u.by[acct.email] || 0) >= perUser || u.count >= perDay) return err("Clerk has reached today's test limit. Fill in the form yourself, or try again tomorrow.", 429);
     const res = await runIntake(body.text, today, env);
     if (res.error) return err(res.error, res.status || 502);
     const mk = today.slice(0, 7);

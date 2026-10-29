@@ -1,4 +1,4 @@
-// Copilot intake: turns an employee's or manager's own words into a draft leave request.
+// Clerk intake: turns an employee's or manager's own words into a draft leave request.
 // The model only drafts. The rules engine decides eligibility and HR signs off on every notice.
 // Model output is treated as untrusted: every field is validated and anything off is dropped.
 
@@ -112,7 +112,7 @@ export function validate(raw, today) {
 // Calls Claude. fetchImpl is injectable for tests.
 export async function runIntake(text, today, env, fetchImpl = fetch) {
   const key = env.ANTHROPIC_API_KEY;
-  if (!key) return { error: "The Copilot is not set up yet. Add ANTHROPIC_API_KEY in Netlify.", status: 503 };
+  if (!key) return { error: "Clerk is not set up yet. Add ANTHROPIC_API_KEY in Netlify.", status: 503 };
   const msg = String(text || "").trim().slice(0, 1200);
   if (msg.length < 4) return { error: "Write a sentence or two about what you need.", status: 400 };
   const started = Date.now();
@@ -135,11 +135,11 @@ export async function runIntake(text, today, env, fetchImpl = fetch) {
   if (!r.ok || !body) return { error: "The AI service did not answer. Fill in the form yourself for now.", status: 502, detail: body?.error?.message };
   const textOut = (body.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
   const draft = validate(extractJSON(textOut), today);
-  if (!draft) return { error: "The Copilot could not read that. Fill in the form yourself, or try rewording it.", status: 502 };
+  if (!draft) return { error: "Clerk could not read that. Fill in the form yourself, or try rewording it.", status: 502 };
   return { draft, usage: { input: body.usage?.input_tokens || 0, output: body.usage?.output_tokens || 0, ms: Date.now() - started, model: body.model || env.LL_MODEL || DEFAULT_MODEL } };
 }
 
-// Which fields the user changed between the Copilot's draft and what they sent.
+// Which fields the user changed between Clerk's draft and what they sent.
 export function changedFields(ai, reason, opts) {
   if (!ai) return [];
   const ch = [];

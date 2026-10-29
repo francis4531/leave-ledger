@@ -35,7 +35,7 @@ Netlify Drop (drag and drop) does not deploy functions, so use Git or the CLI.
    - `LL_TEST_PASSWORD`: the shared password for every test account
    - `LL_SECRET`: a long random string that signs sessions (`openssl rand -hex 32`)
 5. Deploys, Trigger deploy, so the function picks up the variables.
-6. Optional, for the Copilot: add `ANTHROPIC_API_KEY` (from console.anthropic.com). `LL_MODEL` overrides the model (default `claude-haiku-5-5`); `LL_AI_PER_USER_DAY` (default 40) and `LL_AI_DAY` (default 400) cap requests.
+6. Optional, for Clerk: add `ANTHROPIC_API_KEY` (from console.anthropic.com). `LL_MODEL` overrides the model (default `claude-haiku-5-5`); `LL_AI_PER_USER_DAY` (default 40) and `LL_AI_DAY` (default 400) cap requests.
 
 ### Option B: Netlify CLI
 
@@ -84,9 +84,9 @@ All use `LL_TEST_PASSWORD`.
 - The site sends `noindex` so search engines skip it.
 - Rules were checked October 2026. Benefit amounts are estimates; EDD makes the final calculation. Not legal advice.
 
-## Copilot intake
+## Clerk intake
 
-Employees can describe a leave need in their own words. `netlify/lib/intake.mjs` sends the text to Claude, validates the reply field by field, and fills the request form. The model only drafts; `public/engine.mjs` decides eligibility and HR signs off on every notice. Each intake is stored with what the user changed before sending (HR, Settings, Copilot intake).
+Employees can describe a leave need in their own words. `netlify/lib/intake.mjs` sends the text to Claude, validates the reply field by field, and fills the request form. The model only drafts; `public/engine.mjs` decides eligibility and HR signs off on every notice. Each intake is stored with what the user changed before sending (HR, Settings, Clerk intake).
 
 Measure accuracy against the golden set:
 

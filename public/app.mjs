@@ -168,7 +168,7 @@ function lawRows() {
   ];
 }
 
-/* ---------- Copilot helpers ---------- */
+/* ---------- Clerk helpers ---------- */
 const LEN_KEYS = ["weeks", "days", "hours", "disWeeks", "bondWeeks"];
 function describeDraft(d) {
   if (!d || d.reason === "unclear") return "Not sure what kind of leave this is";
@@ -184,11 +184,11 @@ function applyDraft(f, d) {
   LEN_KEYS.forEach((k) => { if (d[k] != null) f[k] = d[k]; });
 }
 function unsure(d) { if (!d) return []; return Object.entries(d.confidence || {}).filter(([k, v]) => v !== "high" && !(k === "relation" && !REASONS[d.reason]?.rel)).map(([k]) => k); }
-async function askCopilot(text) {
+async function askClerk(text) {
   const r = await fetch("/api/intake", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) });
-  const j = await r.json().catch(() => ({ error: "The Copilot did not answer. Fill in the form yourself." }));
+  const j = await r.json().catch(() => ({ error: "Clerk did not answer. Fill in the form yourself." }));
   if (r.status === 401) { S = null; renderLogin(); throw new Error("signed out"); }
-  if (!r.ok) throw new Error(j.error || "The Copilot did not answer.");
+  if (!r.ok) throw new Error(j.error || "Clerk did not answer.");
   return j.draft;
 }
 function copilotBox() {
@@ -197,7 +197,7 @@ function copilotBox() {
   if (d && d.reason === "unclear") note = `<div class="cp-note warn">I could not tell what kind of time off this is. Pick it below, or add a little more detail and try again.</div>`;
   else if (d) { const u = unsure(d); note = `<div class="cp-note"><b>Here is what I understood:</b> ${esc(d.summary || describeDraft(d))}<div class="small" style="margin-top:4px">I filled in the form below.${u.length ? ` Please check what is marked in orange (${u.map((k) => FIELD_NAMES[k]).join(", ")}).` : " Check it, then send."}</div></div>`; }
   return `<div class="copilot">
-    <div class="cp-h"><span class="spark" aria-hidden="true">✦</span><b>Tell us in your own words</b><span class="pill acc">Copilot</span></div>
+    <div class="cp-h"><span class="spark" aria-hidden="true">✦</span><b>Tell us in your own words</b><span class="pill acc">Clerk</span></div>
     <textarea id="rq-text" data-ai-text rows="3" placeholder="For example: My dad is having knee surgery on Nov 12 and I need to help him for about 3 weeks.">${esc(A.text)}</textarea>
     <span class="hint">English or Spanish is fine. You do not need to name a diagnosis. AI reads this to fill in the form, and HR sees it too.</span>
     <div class="btns"><button class="btn" data-intake ${A.busy ? "disabled" : ""}>${A.busy ? "Reading it now" : d ? "Read it again" : "Fill in the form for me"}</button></div>
@@ -208,13 +208,13 @@ function copilotBox() {
 function intakePanel(c, e) {
   const I = c.intake; if (!I) return "";
   const ai = I.ai;
-  return `<section class="panel"><div class="panel-h"><h3>${I.source === "manager" ? "From the manager's note" : `In ${esc(first(e.name))}'s words`}</h3><span class="pill acc">✦ Copilot intake</span></div>
+  return `<section class="panel"><div class="panel-h"><h3>${I.source === "manager" ? "From the manager's note" : `In ${esc(first(e.name))}'s words`}</h3><span class="pill acc">✦ Clerk intake</span></div>
     <blockquote class="quote">${esc(I.text)}</blockquote>
-    <div class="small"><span class="muted">Copilot read it as</span> <b>${esc(describeDraft(ai))}</b></div>
-    <div class="small">${I.changed && I.changed.length ? `<span class="pill warn">Changed before sending: ${esc(I.changed.map((k) => FIELD_NAMES[k]).join(", "))}</span>` : `<span class="pill ok">Sent as the Copilot read it</span>`}</div>
-    ${ai && ai.flag ? `<div class="warnbox">${esc(ai.flag)} The Copilot ignored it.</div>` : ""}
+    <div class="small"><span class="muted">Clerk read it as</span> <b>${esc(describeDraft(ai))}</b></div>
+    <div class="small">${I.changed && I.changed.length ? `<span class="pill warn">Changed before sending: ${esc(I.changed.map((k) => FIELD_NAMES[k]).join(", "))}</span>` : `<span class="pill ok">Sent as Clerk read it</span>`}</div>
+    ${ai && ai.flag ? `<div class="warnbox">${esc(ai.flag)} Clerk ignored it.</div>` : ""}
     ${ai && ai.ask && ai.ask.length ? `<div class="small"><span class="muted">Worth asking:</span> ${ai.ask.map(esc).join(" · ")}</div>` : ""}
-    <p class="small muted">The Copilot only drafts. Eligibility, pay and deadlines come from the rules engine.</p></section>`;
+    <p class="small muted">Clerk only drafts. Eligibility, pay and deadlines come from the rules engine.</p></section>`;
 }
 
 /* ---------- HR: Today ---------- */
@@ -277,7 +277,7 @@ function hrCase(c) {
     const CV = UI.conv.caseId === c.id ? UI.conv : { draft: null }, cd = CV.draft && CV.draft.reason !== "unclear" ? CV.draft : null;
     body = `<section class="panel"><h3>What kind of leave is this?</h3><p class="muted small">${esc(emp(e.mgr)?.name || "A manager")} flagged this on ${fmt(c.requested)}${c.notes ? `: “${esc(c.notes)}”` : ""}. Talk with ${esc(first(e.name))}, then pick the leave type to see the plan and the notices you owe.</p>
       ${S.ai.on && c.notes ? `<div class="btns"><button class="btn" data-suggest="${c.id}" ${CV.busy ? "disabled" : ""}>✦ ${CV.busy ? "Reading the note" : "Suggest from the manager's note"}</button></div>` : ""}
-      ${CV.error ? `<p class="err">${esc(CV.error)}</p>` : ""}${CV.draft ? `<div class="cp-note">${CV.draft.reason === "unclear" ? "The note does not say enough to tell. Ask the employee." : `<b>Copilot suggests:</b> ${esc(describeDraft(CV.draft))}. Check it before saving.`}</div>` : ""}
+      ${CV.error ? `<p class="err">${esc(CV.error)}</p>` : ""}${CV.draft ? `<div class="cp-note">${CV.draft.reason === "unclear" ? "The note does not say enough to tell. Ask the employee." : `<b>Clerk suggests:</b> ${esc(describeDraft(CV.draft))}. Check it before saving.`}</div>` : ""}
       <div class="row"><div class="field"><label for="cv-reason">Leave type</label><select id="cv-reason">${reasonOptions(cd ? cd.reason : "own_health", "hr")}</select></div><div class="field"><label for="cv-start">Start date</label><input type="date" id="cv-start" value="${cd && cd.start ? cd.start : addDays(TODAY, 7)}"></div></div>
       <div class="btns"><button class="btn primary" data-convert="${c.id}">Set leave type</button></div></section>`;
   } else {
@@ -336,15 +336,15 @@ function copilotStats() {
   const byField = ["reason", "relation", "start", "length"].map((k) => [k, L.filter((x) => x.changed.includes(k)).length]);
   const haiku = /haiku-5-5/.test(S.ai.model || "");
   const cost = m && haiku ? (m.input * 0.10 + m.output * 0.50) / 1e6 : null;
-  return `<h3>✦ Copilot intake</h3>
-    ${S.ai.on ? `<p class="small">On · model <code>${esc(S.ai.model)}</code>. Employees can describe their need in their own words and the Copilot fills in the request form. It never decides eligibility.</p>` : `<div class="infobox">Off. Add <code>ANTHROPIC_API_KEY</code> in Netlify, under Site configuration, Environment variables, then redeploy.</div>`}
+  return `<h3>✦ Clerk intake</h3>
+    ${S.ai.on ? `<p class="small">On · model <code>${esc(S.ai.model)}</code>. Employees can describe their need in their own words and Clerk fills in the request form. It never decides eligibility.</p>` : `<div class="infobox">Off. Add <code>ANTHROPIC_API_KEY</code> in Netlify, under Site configuration, Environment variables, then redeploy.</div>`}
     <div class="balance">
       <div><span class="label">Requests this month</span><span class="v">${m ? m.requests : 0}</span><span class="small muted">${m && m.requests ? `${Math.round(m.ms / m.requests / 100) / 10}s average` : "None yet"}</span></div>
       <div><span class="label">Sent without changes</span><span class="v">${L.length ? Math.round((clean / L.length) * 100) + "%" : "n/a"}</span><span class="small muted">${clean} of ${L.length} sent requests</span></div>
       <div><span class="label">AI cost this month</span><span class="v">${cost !== null ? "$" + cost.toFixed(cost < 1 ? 4 : 2) : "n/a"}</span><span class="small muted">${haiku ? "At Haiku 5.5 list price" : "Model price not tracked"}</span></div>
     </div>
     ${L.length ? `<p class="small muted">Fixes users made before sending: ${byField.map(([k, n]) => `${FIELD_NAMES[k]} ${n}`).join(" · ")}. Each fix is a test case for the golden dataset.</p>
-    <details class="more"><summary>Show the last ${Math.min(10, L.length)} intakes</summary><div class="tw"><table><thead><tr><th>When</th><th>Their words</th><th>Copilot read</th><th>Sent as</th></tr></thead><tbody>${L.slice(0, 10).map((x) => `<tr><td class="small mono">${new Date(x.at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Los_Angeles" })}</td><td class="small">${esc(x.text.length > 90 ? x.text.slice(0, 90) + "…" : x.text)}</td><td class="small">${esc(REASONS[x.ai.reason]?.hr || "Not sure")}${x.ai.flag ? " ⚑" : ""}</td><td class="small">${esc(REASONS[x.final.reason]?.hr || x.final.reason)}${x.changed.length ? `<div class="muted">fixed: ${esc(x.changed.map((k) => FIELD_NAMES[k]).join(", "))}</div>` : ""}</td></tr>`).join("")}</tbody></table></div></details>` : ""}`;
+    <details class="more"><summary>Show the last ${Math.min(10, L.length)} intakes</summary><div class="tw"><table><thead><tr><th>When</th><th>Their words</th><th>Clerk read</th><th>Sent as</th></tr></thead><tbody>${L.slice(0, 10).map((x) => `<tr><td class="small mono">${new Date(x.at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Los_Angeles" })}</td><td class="small">${esc(x.text.length > 90 ? x.text.slice(0, 90) + "…" : x.text)}</td><td class="small">${esc(REASONS[x.ai.reason]?.hr || "Not sure")}${x.ai.flag ? " ⚑" : ""}</td><td class="small">${esc(REASONS[x.final.reason]?.hr || x.final.reason)}${x.changed.length ? `<div class="muted">fixed: ${esc(x.changed.map((k) => FIELD_NAMES[k]).join(", "))}</div>` : ""}</td></tr>`).join("")}</tbody></table></div></details>` : ""}`;
 }
 function hrSettings() {
   const co = D().company;
@@ -561,14 +561,14 @@ document.addEventListener("click", async (ev) => {
     const A = UI.reqAI, t = (document.getElementById("rq-text")?.value || "").trim();
     A.text = t; if (t.length < 4) { A.error = "Write a sentence or two about what you need."; render(); return; }
     A.busy = true; A.error = ""; render();
-    try { const d = await askCopilot(t); A.draft = d; A.sent = t; applyDraft(UI.req, d); }
+    try { const d = await askClerk(t); A.draft = d; A.sent = t; applyDraft(UI.req, d); }
     catch (e) { if (e.message === "signed out") return; A.error = e.message; }
     A.busy = false; render(); return;
   }
   if (b.dataset.suggest) {
     const c = D().cases.find((x) => x.id === b.dataset.suggest); if (!c) return;
     UI.conv = { caseId: c.id, draft: null, busy: true, error: "" }; render();
-    try { UI.conv.draft = await askCopilot(c.notes); } catch (e) { if (e.message === "signed out") return; UI.conv.error = e.message; }
+    try { UI.conv.draft = await askClerk(c.notes); } catch (e) { if (e.message === "signed out") return; UI.conv.error = e.message; }
     UI.conv.busy = false; render(); return;
   }
   if (b.dataset.delete) {
