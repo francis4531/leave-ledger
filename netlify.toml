@@ -17,3 +17,8 @@
   from = "/strategy"
   to = "/strategy.html"
   status = 200
+
+[[redirects]]
+  from = "/inbox"
+  to = "/inbox.html"
+  status = 200

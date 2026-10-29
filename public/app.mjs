@@ -7,6 +7,8 @@ import {
 /* ---------- State ---------- */
 let S = null;          // {me, today, data}
 let TODAY = "";
+let MODE = "test";     // "feedback" on the prospect site: invite links, no Settings, feedback and survey
+const FB = () => MODE === "feedback";
 const UI = {
   tab: null, caseId: null,
   planner: { empId: "e1", reason: "pregnancy_bonding", relation: "parent", start: "", weeks: 6, disWeeks: 10, bondWeeks: 12, days: 5, hours: 8 },
@@ -15,6 +17,8 @@ const UI = {
   login: { error: "" },
   reqAI: { text: "", sent: "", draft: null, busy: false, error: "" },
   conv: { caseId: null, draft: null, busy: false, error: "" },
+  fb: { open: false, rating: 0, kind: "", note: "", busy: false, error: "" },
+  survey: { open: false, q: null, a: {}, busy: false, error: "", done: null, later: false },
 };
 const store = {
   get(k, s = localStorage) { try { return s.getItem(k); } catch (e) { return null; } },
@@ -35,6 +39,7 @@ const TABS = {
   mgr: [["team", "My team"], ["myleave", "My leave"]],
   emp: [["myleave", "My leave"]],
 };
+const tabsFor = (role) => TABS[role].filter(([k]) => !(FB() && k === "settings"));
 const viewOf = () => (UI.tab === "myleave" ? "emp" : S.me.role === "mgr" ? "mgr" : S.me.role === "hr" ? "hr" : "emp");
 
 /* ---------- API ---------- */
@@ -43,13 +48,14 @@ async function api(path, body) {
     method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
   });
   const j = await r.json().catch(() => ({ error: "The server did not answer. Try again in a moment." }));
-  if (r.status === 401 && path !== "login") { S = null; renderLogin(); throw new Error("signed out"); }
+  if (r.status === 401 && path !== "login") { S = null; if (FB()) ACCOUNTS = null; renderLogin(); throw new Error("signed out"); }
   if (!r.ok) throw new Error(j.error || "Something went wrong. Try again.");
   return j;
 }
 function accept(j) {
   S = { me: j.me, today: j.today, data: j.data, ai: j.ai || { on: false } }; TODAY = j.today;
-  if (!UI.tab || !TABS[S.me.role].some(([k]) => k === UI.tab)) UI.tab = TABS[S.me.role][0][0];
+  if (j.mode) MODE = j.mode;
+  if (!UI.tab || !tabsFor(S.me.role).some(([k]) => k === UI.tab)) UI.tab = tabsFor(S.me.role)[0][0];
   if (!UI.planner.start) UI.planner.start = addDays(TODAY, 14);
   if (!UI.req.start) UI.req.start = addDays(TODAY, 14);
   if (!UI.flag.heard) UI.flag.heard = TODAY;
@@ -465,6 +471,8 @@ async function renderLogin() {
   if (!ACCOUNTS) {
     try { ACCOUNTS = await (await fetch("/api/accounts")).json(); } catch (e) { ACCOUNTS = { accounts: [], configured: false }; }
   }
+  if (ACCOUNTS.mode) { MODE = ACCOUNTS.mode; setChrome(false); }
+  if (FB()) { if (ACCOUNTS.surveyDone != null) UI.survey.done = ACCOUNTS.surveyDone; return renderPreviewLogin(root); }
   const L = UI.login, pw = store.get("ll-pw", sessionStorage) || "";
   const scen = (a) => a.label.split(" · ")[1] || (a.role === "hr" ? "Runs leave for the company" : "");
   const groups = [["HR", "hr"], ["Managers", "mgr"], ["Employees", "emp"]].map(([g, r]) => [g, ACCOUNTS.accounts.filter((a) => (a.role || (a.label.startsWith("HR") ? "hr" : a.label.startsWith("Manager") ? "mgr" : "emp")) === r)]);
@@ -480,7 +488,43 @@ async function renderLogin() {
     <div class="stack">${groups.map(([g, list]) => `<div class="grp"><span class="label">${g}</span><div class="accts">${list.map((a) => { const nm = a.name || a.email.split("@")[0]; return `<button type="button" class="acct" data-pick="${esc(a.email)}">${avatar({ id: a.empId, name: nm })}<div><b>${esc(nm)}</b><span class="scn">${esc(scen(a))}</span></div></button>`; }).join("")}</div></div>`).join("")}</div>
   </section>`;
 }
+function personaCards() {
+  const scen = (a) => a.label.split(" · ")[1] || (a.role === "hr" ? "Runs leave for the company" : "");
+  const groups = [["HR", "hr"], ["Managers", "mgr"], ["Employees", "emp"]].map(([g, r]) => [g, ACCOUNTS.accounts.filter((a) => a.role === r)]);
+  return `<div class="stack">${groups.map(([g, list]) => `<div class="grp"><span class="label">${g}</span><div class="accts">${list.map((a) => `<button type="button" class="acct" data-pick="${esc(a.email)}">${avatar({ id: a.empId, name: a.name })}<div><b>${esc(a.name)}</b><span class="scn">${esc(scen(a))}</span></div></button>`).join("")}</div></div>`).join("")}</div>`;
+}
+function renderPreviewLogin(root) {
+  const L = UI.login;
+  if (!ACCOUNTS.invited) {
+    root.innerHTML = `<section class="login" style="grid-template-columns:minmax(0,520px);justify-content:center">
+      <div class="panel welcome" style="gap:14px"><h1>Leave Ledger</h1>
+        <p class="lede">California leave of absence, worked out for you: which leaves apply, what the state pays, and the notices and deadlines you owe.</p>
+        <p>This early preview is invite only. Open the link you were sent to get in. If it has stopped working, ask the person who sent it for a new one.</p>
+        ${L.error ? `<p class="err" role="alert">${esc(L.error)}</p>` : ""}
+      </div></section>`;
+    return;
+  }
+  root.innerHTML = `<section class="login">
+    <div class="panel welcome" style="gap:16px">
+      <div><h1>Welcome</h1><p class="lede" style="margin-top:6px">Thanks for trying Leave Ledger. You have your own copy of Mesa Verde Coffee Roasters, a made-up 24-person company in Oakland, with a few leaves already in progress.</p></div>
+      <ol class="small" style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px">
+        <li>Start as <b>Grace</b>, the HR admin, to see the leaves that need attention.</li>
+        <li>Switch to an employee such as <b>Ben</b> and ask for time off in your own words.</li>
+        <li>Switch to a manager such as <b>Dana</b> to see what managers can and cannot see.</li>
+      </ol>
+      <p class="small">Tap <b>Feedback</b> on any screen to tell us what works and what does not. When you are done, there is a 2-minute survey.</p>
+      <div class="note-box">Please use made-up details only, no real names or health information. Text you type for Clerk, the built-in assistant, is processed by Anthropic to fill in the form.</div>
+      ${L.error ? `<p class="err" role="alert">${esc(L.error)}</p>` : ""}
+    </div>
+    ${personaCards()}
+  </section>`;
+}
 async function signIn(email) {
+  if (FB()) {
+    try { const j = await api("login", { email }); UI.login.error = ""; UI.tab = null; UI.caseId = null; accept(j); seenPersona(email); render(); window.scrollTo(0, 0); }
+    catch (e) { UI.login.error = e.message; renderLogin(); }
+    return;
+  }
   const pwEl = document.getElementById("lg-pw"); const pw = pwEl ? pwEl.value : "";
   if (!pw) { UI.login.error = "Enter the test password first, then tap a user."; await renderLogin(); document.getElementById("lg-pw").focus(); return; }
   store.set("ll-pw", pw, sessionStorage);
@@ -491,6 +535,9 @@ async function signIn(email) {
 /* ---------- Shell ---------- */
 function setChrome(on) {
   document.getElementById("views").hidden = true;
+  const tag = document.querySelector(".envtag"); if (tag) { tag.textContent = FB() ? "Early preview" : "Test"; tag.hidden = false; }
+  document.getElementById("fbBtn").hidden = !(on && FB());
+  if (!(on && FB())) closeFeedback();
   document.getElementById("who").hidden = !on;
   if (!on) document.getElementById("tabs").hidden = true;
   document.getElementById("coName").textContent = on ? `${D().company.name} · ${D().company.city}` : "California leave, made simple";
@@ -508,14 +555,17 @@ function renderNow() {
   const me = emp(S.me.empId) || { id: S.me.empId, name: S.me.name };
   const roleName = { hr: "HR admin", mgr: S.me.label, emp: "Employee" }[S.me.role];
   document.getElementById("who").innerHTML = `${avatar(me)}<span class="meta"><span class="nm">${esc(S.me.name)}</span><span class="r">${esc(roleName)}</span></span><button class="btn sm" data-logout>Switch user</button>`;
-  const tabs = document.getElementById("tabs"), list = TABS[S.me.role];
+  const tabs = document.getElementById("tabs"), list = tabsFor(S.me.role);
   tabs.hidden = list.length < 2;
   const late = S.me.role === "hr" ? lateCount() : 0;
   tabs.innerHTML = list.map(([k, n]) => `<button role="tab" class="${k === "myleave" && list.length > 2 ? "push" : ""}" data-tab="${k}" aria-selected="${UI.tab === k}">${n}${k === "overview" && late ? `<span class="count" title="${late} late or due today">${late}</span>` : ""}</button>`).join("");
   const focusId = document.activeElement && document.activeElement.id;
   const v = viewOf();
-  const html = v === "emp" ? empView() : v === "mgr" ? mgrView() : { overview: hrOverview, cases: hrCases, plan: hrPlan, employees: hrEmployees, settings: hrSettings }[UI.tab]();
-  document.getElementById("root").innerHTML = `<main>${html}<div class="foot"><span>Test site with a made-up company. Rules checked October 2026 for California employers. Not legal advice.</span><a href="/strategy">Product strategy progress</a></div></main>`;
+  const html = FB() && UI.survey.open ? surveyView() : v === "emp" ? empView() : v === "mgr" ? mgrView() : { overview: hrOverview, cases: hrCases, plan: hrPlan, employees: hrEmployees, settings: hrSettings }[UI.tab]();
+  const foot = FB()
+    ? `<span>Early preview with a made-up company. Rules checked October 2026 for California employers. Not legal advice.</span>${UI.survey.open ? "" : `<button class="btn sm" data-survey>${UI.survey.done ? "Edit your survey answers" : "Take the 2-minute survey"}</button>`}`
+    : `<span>Test site with a made-up company. Rules checked October 2026 for California employers. Not legal advice.</span><a href="/strategy">Product strategy progress</a>`;
+  document.getElementById("root").innerHTML = `<main>${surveyBanner()}${html}<div class="foot">${foot}</div></main>`;
   if (focusId) { const el = document.getElementById(focusId); if (el) el.focus(); }
   if (v === "emp" && UI.reqAI.draft) {
     const map = { reason: ["rq-reason"], relation: ["rq-rel"], start: ["rq-start"], length: ["rq-wk", "rq-dy", "rq-hr", "rq-dis", "rq-bond"] };
@@ -525,12 +575,122 @@ function renderNow() {
 }
 function toast(msg) { const t = document.getElementById("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => (t.hidden = true), 3000); }
 
+/* ---------- Feedback and survey (prospect site only) ---------- */
+const TAB_NAMES = { overview: "Today", cases: "Leaves", plan: "Plan a leave", employees: "Employees", team: "My team", myleave: "My leave" };
+function screenName() {
+  if (!S) return "Sign in";
+  if (UI.survey.open) return "Survey";
+  const who = { hr: "HR", mgr: "Manager", emp: "Employee" }[S.me.role];
+  return `${who}: ${TAB_NAMES[UI.tab] || UI.tab}${UI.caseId ? " (leave detail)" : ""}`;
+}
+function seenPersona(email) {
+  try { const s = new Set(JSON.parse(sessionStorage.getItem("ll-fb-seen") || "[]")); s.add(email); sessionStorage.setItem("ll-fb-seen", JSON.stringify([...s])); } catch (e) {}
+}
+const personasSeen = () => { try { return JSON.parse(sessionStorage.getItem("ll-fb-seen") || "[]").length; } catch (e) { return 0; } };
+function surveyBanner() {
+  if (!FB() || UI.survey.open || UI.survey.done !== false || UI.survey.later || personasSeen() < 2) return "";
+  return `<div class="banner"><span><b>Done looking around?</b> Tell us what you think. It takes about 2 minutes.</span><span class="btns" style="margin:0"><button class="btn sm" data-survey-later>Later</button><button class="btn sm primary" data-survey>Take the survey</button></span></div>`;
+}
+const KINDS = [["like", "I like this"], ["confusing", "Confusing"], ["bug", "Something broke"], ["idea", "Idea"]];
+function renderFeedback() {
+  const pop = document.getElementById("fbPop"), F = UI.fb;
+  pop.innerHTML = `<div class="cp-h"><h3 style="margin:0">Feedback</h3><button class="btn sm" style="margin-left:auto" data-fb-close aria-label="Close">Close</button></div>
+    <p class="small muted" style="margin:0">About: ${esc(screenName())}</p>
+    <div class="field"><span class="label" style="font-weight:600;font-size:.86rem">How is this screen?</span>
+      <div class="scale" role="group" aria-label="Rating from 1 to 5">${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="chip" data-fb-rate="${n}" aria-pressed="${F.rating === n}">${n}</button>`).join("")}</div>
+      <div class="scale-ends"><span>1 Not useful</span><span>5 Very useful</span></div></div>
+    <div class="chips" role="group" aria-label="Type">${KINDS.map(([k, n]) => `<button type="button" class="chip" data-fb-kind="${k}" aria-pressed="${F.kind === k}">${n}</button>`).join("")}</div>
+    <div class="field"><label for="fb-note">What would you change? (optional)</label><textarea id="fb-note" placeholder="I expected to see...">${esc(F.note)}</textarea></div>
+    ${F.error ? `<p class="err" role="alert">${esc(F.error)}</p>` : ""}
+    <div class="btns"><button class="btn primary" data-fb-send ${F.busy ? "disabled" : ""}>${F.busy ? "Sending..." : "Send"}</button></div>`;
+}
+function openFeedback() {
+  UI.fb.open = true; renderFeedback();
+  const pop = document.getElementById("fbPop"), btn = document.getElementById("fbBtn");
+  pop.hidden = false; btn.setAttribute("aria-expanded", "true"); btn.textContent = "Close feedback";
+  document.getElementById("fb-note")?.focus();
+}
+function closeFeedback() {
+  UI.fb.open = false;
+  const pop = document.getElementById("fbPop"), btn = document.getElementById("fbBtn");
+  if (pop) pop.hidden = true; if (btn) { btn.setAttribute("aria-expanded", "false"); btn.textContent = "Feedback"; }
+}
+async function sendFeedback() {
+  const F = UI.fb; F.note = document.getElementById("fb-note")?.value || F.note;
+  if (!F.rating && !F.note.trim()) { F.error = "Pick a number or write a note."; renderFeedback(); return; }
+  F.busy = true; F.error = ""; renderFeedback();
+  try {
+    await api("feedback", { screen: screenName(), rating: F.rating, kind: F.kind, note: F.note });
+    UI.fb = { open: false, rating: 0, kind: "", note: "", busy: false, error: "" }; closeFeedback(); toast("Thank you. Feedback sent.");
+  } catch (e) { if (e.message === "signed out") return; F.busy = false; F.error = e.message; renderFeedback(); }
+}
+async function openSurvey() {
+  const V = UI.survey; V.open = true; V.error = ""; closeFeedback();
+  if (!V.q) {
+    try { const j = await api("survey"); V.q = j.questions; V.a = j.answers ? { ...j.answers } : {}; V.done = !!j.answers; }
+    catch (e) { if (e.message === "signed out") return; V.open = false; toast(e.message); return; }
+  }
+  render(); window.scrollTo(0, 0);
+}
+function surveyView() {
+  const V = UI.survey;
+  if (V.sent) return `<section class="panel survey"><h2>Thank you</h2><p>Your answers are in. They go straight to the person building Leave Ledger.</p><p class="small muted">You can keep using the preview, and send more feedback from any screen.</p><div class="btns"><button class="btn primary" data-survey-close>Back to the app</button></div></section>`;
+  const qs = (V.q || []).map((q, i) => {
+    const v = V.a[q.id], id = `sv-${q.id}`;
+    let input = "";
+    if (q.type === "choice") input = `<div class="chips" role="radiogroup" aria-labelledby="${id}">${q.options.map((o) => `<button type="button" class="chip" role="radio" aria-checked="${v === o}" aria-pressed="${v === o}" data-sv="${q.id}" data-val="${esc(o)}">${esc(o)}</button>`).join("")}</div>`;
+    else if (q.type === "multi") input = `<div class="chips" role="group" aria-labelledby="${id}">${q.options.map((o) => `<button type="button" class="chip" aria-pressed="${(v || []).includes(o)}" data-sv-multi="${q.id}" data-val="${esc(o)}">${esc(o)}</button>`).join("")}</div><span class="hint small muted">Pick any that apply.</span>`;
+    else if (q.type === "scale") input = `<div class="scale" role="radiogroup" aria-labelledby="${id}">${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="chip" role="radio" aria-checked="${v === n}" aria-pressed="${v === n}" data-sv="${q.id}" data-val="${n}" data-num>${n}</button>`).join("")}</div><div class="scale-ends"><span>1 ${esc(q.low)}</span><span>5 ${esc(q.high)}</span></div>`;
+    else input = q.id === "contact" ? `<input id="${id}-in" type="email" data-sv-text="${q.id}" value="${esc(v || "")}" placeholder="you@company.com" autocomplete="email">` : q.id === "price" ? `<input id="${id}-in" type="text" data-sv-text="${q.id}" value="${esc(v || "")}" placeholder="For example, $50 a month flat">` : `<textarea id="${id}-in" data-sv-text="${q.id}">${esc(v || "")}</textarea>`;
+    return `<div class="q"><b id="${id}">${i + 1}. ${esc(q.q)}${q.optional ? ` <span class="muted" style="font-weight:400">(optional)</span>` : ""}</b>${input}</div>`;
+  }).join("");
+  return `<section class="panel survey">
+    <div><h2>A few quick questions</h2><p class="muted" style="margin:4px 0 0">About 2 minutes. Your answers help decide what gets built next.</p></div>
+    ${qs}
+    ${V.error ? `<p class="err" role="alert">${esc(V.error)}</p>` : ""}
+    <div class="btns"><button class="btn" data-survey-close>Not now</button><button class="btn primary" data-survey-send ${V.busy ? "disabled" : ""}>${V.busy ? "Sending..." : V.done ? "Update answers" : "Send answers"}</button></div>
+  </section>`;
+}
+async function sendSurvey() {
+  const V = UI.survey;
+  document.querySelectorAll("[data-sv-text]").forEach((el) => { V.a[el.dataset.svText] = el.value; });
+  V.busy = true; V.error = ""; render();
+  try { await api("survey", { answers: V.a }); V.busy = false; V.done = true; V.sent = true; render(); window.scrollTo(0, 0); }
+  catch (e) { if (e.message === "signed out") return; V.busy = false; V.error = e.message; render(); }
+}
+async function joinFromLink() {
+  const u = new URL(location.href), code = u.searchParams.get("invite");
+  if (!code) return;
+  u.searchParams.delete("invite"); history.replaceState(null, "", u.pathname + (u.search || "") + u.hash);
+  try { await api("join", { code }); ACCOUNTS = null; }
+  catch (e) { UI.login.error = e.message; }
+}
+
 /* ---------- Events ---------- */
 document.addEventListener("click", async (ev) => {
   const b = ev.target.closest("button, tr[data-open]"); if (!b) return;
   if (b.dataset.pick) { signIn(b.dataset.pick); return; }
   if (!S) return;
-  if (b.hasAttribute("data-logout")) { await api("logout", {}).catch(() => {}); S = null; UI.login.error = ""; renderLogin(); window.scrollTo(0, 0); return; }
+  if (b.id === "fbBtn") { UI.fb.open ? closeFeedback() : openFeedback(); return; }
+  if (b.hasAttribute("data-fb-close")) { UI.fb.note = document.getElementById("fb-note")?.value || ""; closeFeedback(); document.getElementById("fbBtn").focus(); return; }
+  if (b.dataset.fbRate) { UI.fb.note = document.getElementById("fb-note")?.value || ""; UI.fb.rating = UI.fb.rating === +b.dataset.fbRate ? 0 : +b.dataset.fbRate; renderFeedback(); return; }
+  if (b.dataset.fbKind) { UI.fb.note = document.getElementById("fb-note")?.value || ""; UI.fb.kind = UI.fb.kind === b.dataset.fbKind ? "" : b.dataset.fbKind; renderFeedback(); return; }
+  if (b.hasAttribute("data-fb-send")) { sendFeedback(); return; }
+  if (b.hasAttribute("data-survey")) { UI.survey.sent = false; openSurvey(); return; }
+  if (b.hasAttribute("data-survey-later")) { UI.survey.later = true; render(); return; }
+  if (b.hasAttribute("data-survey-close")) { UI.survey.open = false; UI.survey.sent = false; render(); window.scrollTo(0, 0); return; }
+  if (b.hasAttribute("data-survey-send")) { sendSurvey(); return; }
+  if (b.dataset.sv) {
+    document.querySelectorAll("[data-sv-text]").forEach((el) => { UI.survey.a[el.dataset.svText] = el.value; });
+    const v = b.hasAttribute("data-num") ? +b.dataset.val : b.dataset.val;
+    UI.survey.a[b.dataset.sv] = UI.survey.a[b.dataset.sv] === v ? undefined : v; render(); return;
+  }
+  if (b.dataset.svMulti) {
+    document.querySelectorAll("[data-sv-text]").forEach((el) => { UI.survey.a[el.dataset.svText] = el.value; });
+    const cur = new Set(UI.survey.a[b.dataset.svMulti] || []); cur.has(b.dataset.val) ? cur.delete(b.dataset.val) : cur.add(b.dataset.val);
+    UI.survey.a[b.dataset.svMulti] = [...cur]; render(); return;
+  }
+  if (b.hasAttribute("data-logout")) { await api("logout", {}).catch(() => {}); S = null; UI.login.error = ""; UI.survey.open = false; ACCOUNTS = FB() ? null : ACCOUNTS; renderLogin(); window.scrollTo(0, 0); return; }
   if (b.dataset.tab) { UI.tab = b.dataset.tab; UI.caseId = null; render(); window.scrollTo(0, 0); return; }
   if (b.dataset.open) { UI.tab = "cases"; UI.caseId = b.dataset.open; render(); window.scrollTo(0, 0); return; }
   if (b.hasAttribute("data-back")) { UI.caseId = null; render(); return; }
@@ -581,6 +741,7 @@ document.addEventListener("click", async (ev) => {
   }
 });
 document.addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape" && UI.fb.open) { UI.fb.note = document.getElementById("fb-note")?.value || ""; closeFeedback(); document.getElementById("fbBtn").focus(); return; }
   if (ev.key === "Enter" && ev.target.matches("tr[data-open]")) ev.target.click();
   if (ev.key === "Enter" && ev.target.id === "lg-pw") { ev.preventDefault(); store.set("ll-pw", ev.target.value, sessionStorage); toast("Now tap a user to sign in"); }
 });
@@ -620,6 +781,11 @@ document.addEventListener("visibilitychange", async () => {
 });
 
 (async () => {
-  try { accept(await api("state")); render(); }
+  await joinFromLink();
+  try {
+    accept(await api("state"));
+    if (FB() && UI.survey.done === null) { try { UI.survey.done = !!(await api("survey")).answers; } catch (e) {} }
+    seenPersona(S.me.email); render();
+  }
   catch (e) { if (e.message !== "signed out") renderLogin(); }
 })();

@@ -25,6 +25,22 @@
 .field.needs-check select,.field.needs-check input{border-color:var(--warn);box-shadow:0 0 0 1px var(--warn)}
 .quote{margin:0;padding:10px 14px;border-left:3px solid var(--accent);background:var(--sunk);border-radius:0 6px 6px 0;font-size:.95rem}
 .err{color:var(--bad);font-size:.88rem;font-weight:600;margin:0}
+/* Feedback mode */
+.fb-btn{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:30;background:var(--accent);color:var(--accent-ink);border:0;border-radius:999px;padding:10px 16px;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.2);cursor:pointer}
+.fb-pop{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(68px + env(safe-area-inset-bottom,0px));z-index:31;width:min(360px,calc(100vw - 32px));max-height:calc(100vh - 100px);overflow:auto;box-shadow:0 12px 32px rgba(0,0,0,.25)}
+.fb-pop textarea{min-height:90px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 11px;font-size:.85rem;cursor:pointer;color:var(--ink)}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.scale{display:flex;gap:6px;flex-wrap:wrap}
+.scale .chip{min-width:40px;text-align:center}
+.scale-ends{display:flex;justify-content:space-between;font-size:.78rem;color:var(--muted);max-width:260px}
+.banner{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:space-between;background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line));border-radius:var(--r);padding:12px 14px}
+.survey{max-width:720px;margin:0 auto;width:100%}
+.survey .q{display:flex;flex-direction:column;gap:8px;padding-block:6px}
+.survey .q b{font-size:.98rem}
+.note-box{font-size:.86rem;color:var(--muted);background:var(--sunk);border-radius:6px;padding:10px 12px}
+@media print{.fb-btn,.fb-pop{display:none}}
 </style>
 <style>
 /* Layout: sticky app bar with role switch, tabbed workspace below; summary rail first, detail second, stacks to one column on phones. */
@@ -147,7 +163,7 @@ tr.click:hover td{background:var(--sunk)}
 .field{display:flex;flex-direction:column;gap:5px}
 .field label{font-weight:600;font-size:.86rem}
 .field .hint{font-size:.8rem;color:var(--muted)}
-input[type=text],input[type=password],input[type=number],input[type=date],select,textarea{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px 10px;width:100%;min-width:0}
+input[type=text],input[type=password],input[type=number],input[type=date],input[type=email],select,textarea{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px 10px;width:100%;min-width:0}
 textarea{min-height:70px;resize:vertical}
 .row{display:flex;gap:10px;flex-wrap:wrap}
 .row>.field{flex:1 1 140px}
@@ -227,7 +243,7 @@ textarea{min-height:70px;resize:vertical}
 .acct .em{font-family:var(--f-mono);font-size:.72rem}
 .grp{display:flex;flex-direction:column;gap:8px}
 .err{color:var(--bad);font-size:.88rem;font-weight:600}
-.envtag{font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--warn);background:var(--warn-soft);padding:2px 8px;border-radius:999px}
+.envtag{white-space:nowrap;font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--warn);background:var(--warn-soft);padding:2px 8px;border-radius:999px}
 .who{display:flex;align-items:center;gap:10px;font-size:.84rem}
 .who .nm{font-weight:600}
 .loading{padding:60px 16px;text-align:center;color:var(--muted)}
@@ -308,7 +324,7 @@ details.more[open] summary{margin-bottom:4px}
   <div class="bar-in">
     <div class="brand">
       <span class="mark" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16"><rect x="2" y="2" width="3" height="12" rx="1" fill="var(--accent-ink)"/><rect x="6.5" y="5" width="3" height="9" rx="1" fill="var(--accent-ink)" opacity=".75"/><rect x="11" y="8" width="3" height="6" rx="1" fill="var(--accent-ink)" opacity=".5"/></svg></span>
-      <div><b>Leave Ledger</b> <span class="envtag">Test</span><div class="co" id="coName"></div></div>
+      <div><b>Leave Ledger</b> <span class="envtag" hidden>Test</span><div class="co" id="coName"></div></div>
     </div>
     <div class="seg" id="views" role="group" aria-label="View"></div>
     <div class="who" id="who"></div>
@@ -317,6 +333,8 @@ details.more[open] summary{margin-bottom:4px}
 </header>
 <div id="root"><div class="loading">Loading</div></div>
 <div class="toast" id="toast" role="status" hidden></div>
+<button class="fb-btn" id="fbBtn" type="button" hidden aria-expanded="false" aria-controls="fbPop">Feedback</button>
+<section class="panel fb-pop" id="fbPop" hidden aria-label="Send feedback"></section>
 <script type="module" src="/app.mjs"></script>
 </body>
 </html>

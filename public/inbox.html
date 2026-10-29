@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Feedback Inbox</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230d5d79'/%3E%3Crect x='3' y='3' width='2.5' height='10' rx='.8' fill='white'/%3E%3Crect x='6.75' y='6' width='2.5' height='7' rx='.8' fill='white' opacity='.75'/%3E%3Crect x='10.5' y='9' width='2.5' height='4' rx='.8' fill='white' opacity='.5'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Schibsted+Grotesk:wght@600;700;800&display=swap">
+<style>
+:root{
+  --bg:#f3f5f7; --surface:#ffffff; --sunk:#eaeef2; --ink:#15202b; --muted:#5a6876; --line:#d9e0e7;
+  --accent:#0d5d79; --accent-ink:#ffffff; --accent-soft:#e0edf2;
+  --ok:#2c7a4b; --ok-soft:#e1f1e7; --warn:#9a6510; --warn-soft:#fbefd6; --bad:#b83a27; --bad-soft:#f8e1dc;
+  --f-display:"Schibsted Grotesk","Helvetica Neue",Arial,sans-serif;
+  --f-body:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e141a; --surface:#161f28; --sunk:#1c2732; --ink:#e4eaf0; --muted:#97a5b3; --line:#2a3743;
+  --accent:#5fb4d3; --accent-ink:#06202b; --accent-soft:#163240;
+  --ok:#6cc58f; --ok-soft:#173326; --warn:#e2b056; --warn-soft:#3a2d12; --bad:#f08470; --bad-soft:#3d1d17;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0e141a; --surface:#161f28; --sunk:#1c2732; --ink:#e4eaf0; --muted:#97a5b3; --line:#2a3743;
+  --accent:#5fb4d3; --accent-ink:#06202b; --accent-soft:#163240;
+  --ok:#6cc58f; --ok-soft:#173326; --warn:#e2b056; --warn-soft:#3a2d12; --bad:#f08470; --bad-soft:#3d1d17;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14.5px;line-height:1.5}
+h1,h2,h3{font-family:var(--f-display);margin:0;letter-spacing:-.01em}
+h1{font-size:1.6rem;font-weight:800}h2{font-size:1.15rem}h3{font-size:1rem}
+p{margin:0}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+main{max-width:1180px;margin:0 auto;padding:24px 16px 60px;display:flex;flex-direction:column;gap:20px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.head{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.muted{color:var(--muted)}.small{font-size:.86rem}
+.label{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.btn{border:1px solid var(--line);background:var(--surface);padding:7px 12px;border-radius:6px;cursor:pointer;font-weight:600}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.sm{padding:4px 9px;font-size:.82rem}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+input,textarea,select{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:8px 10px;width:100%}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+.row>.field{flex:1 1 220px}
+.field{display:flex;flex-direction:column;gap:5px}.field label{font-weight:600;font-size:.86rem}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.stat{border:1px solid var(--line);border-radius:8px;padding:12px;background:var(--surface)}
+.stat b{display:block;font-family:var(--f-body);font-weight:700;font-size:1.6rem;font-variant-numeric:tabular-nums}
+.stat span{font-size:.82rem;color:var(--muted)}
+.tbl{width:100%;border-collapse:collapse;font-size:.9rem}
+.tbl th{text-align:left;font-size:.74rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line)}
+.tbl td{padding:8px;border-bottom:1px solid var(--line);vertical-align:top}
+.scroll{overflow-x:auto}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:.76rem;font-weight:600;background:var(--sunk);color:var(--muted)}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}.pill.bad{background:var(--bad-soft);color:var(--bad)}.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.fb{border:1px solid var(--line);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:4px}
+.fb .meta{font-size:.8rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 10px}
+.list{display:flex;flex-direction:column;gap:8px}
+.err{color:var(--bad);font-weight:600;font-size:.88rem}
+.link{font-family:ui-monospace,Menlo,monospace;font-size:.82rem;word-break:break-all;background:var(--sunk);padding:6px 8px;border-radius:6px}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-weight:600}
+.ans{display:grid;grid-template-columns:minmax(0,220px) minmax(0,1fr);gap:4px 12px;font-size:.88rem}
+@media (max-width:640px){.ans{grid-template-columns:minmax(0,1fr)}.ans dt{margin-top:6px}}
+.ans dt{color:var(--muted)}.ans dd{margin:0}
+details summary{cursor:pointer;font-weight:600}
+</style>
+</head>
+<body>
+<main id="root"><p class="muted">Loading...</p></main>
+<div class="toast" id="toast" hidden></div>
+<script type="module">
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const when = (iso) => iso ? new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
+const root = document.getElementById("root");
+let ST = null, ERR = "", NEW = null, FILTER = "";
+const link = (code) => `${location.origin}/?invite=${code}`;
+function toast(m) { const t = document.getElementById("toast"); t.textContent = m; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), 2500); }
+
+async function api(path, body) {
+  const r = await fetch("/api/" + path, body === undefined ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({ error: "The server did not answer." }));
+  if (r.status === 401 && path !== "admin/login") { ST = null; renderLogin(); throw new Error("signed out"); }
+  if (!r.ok) throw new Error(j.error || "Something went wrong.");
+  return j;
+}
+async function refresh() { ST = await api("admin/state"); render(); }
+
+function renderLogin(msg) {
+  root.innerHTML = `<section class="panel" style="max-width:420px;margin:40px auto">
+    <h1>Feedback inbox</h1>
+    <p class="muted">For the site owner. Prospects use their invite links instead.</p>
+    <form id="lf" class="field"><label for="pw">Admin password</label><input id="pw" type="password" autocomplete="current-password" required>
+    ${msg ? `<p class="err" role="alert">${esc(msg)}</p>` : ""}
+    <div class="btns" style="margin-top:6px"><button class="btn primary">Sign in</button></div></form>
+  </section>`;
+  document.getElementById("lf").onsubmit = async (e) => {
+    e.preventDefault();
+    try { await api("admin/login", { password: document.getElementById("pw").value }); await refresh(); }
+    catch (er) { renderLogin(er.message); }
+  };
+  document.getElementById("pw").focus();
+}
+
+function render() {
+  const S = ST.summary, inv = ST.invites, fbCount = (c) => ST.feedback.filter((f) => f.invite === c).length;
+  const pct = (n) => S.responses ? Math.round((n / S.responses) * 100) + "%" : "-";
+  const fb = ST.feedback.filter((f) => !FILTER || f.invite === FILTER);
+  const qName = Object.fromEntries(ST.questions.map((q) => [q.id, q.q]));
+  root.innerHTML = `
+  <div class="head"><div><h1>Feedback inbox</h1><p class="muted">Leave Ledger early preview. Each invite gets its own copy of the sample company.</p></div>
+    <div class="btns"><button class="btn" data-refresh>Refresh</button><button class="btn" data-out>Sign out</button></div></div>
+
+  <section class="panel">
+    <h2>Survey so far</h2>
+    <div class="stats">
+      <div class="stat"><b>${S.responses}</b><span>Surveys answered</span></div>
+      <div class="stat"><b>${S.handledLeave}</b><span>Handled a leave in the last 12 months</span></div>
+      <div class="stat"><b>${S.painAvg ?? "-"}</b><span>Average pain (1 to 5); ${S.painful} said 4 or 5</span></div>
+      <div class="stat"><b>${S.usefulAvg ?? "-"}</b><span>Average usefulness (1 to 5)</span></div>
+      <div class="stat"><b>${S.payYes}</b><span>Would pay $4 per employee per month (${pct(S.payYes)}); ${S.payMaybe} maybe at a lower price</span></div>
+    </div>
+    <p class="small muted">Kill criteria check on Nov 23: at least 3 of 10 feel the pain, and at least 2 of 10 would pay $4 per employee per month.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Invite someone</h2>
+    <form id="nf" class="row">
+      <div class="field"><label for="nm">Who is it for</label><input id="nm" placeholder="Sam Lee, Bayside Dental" required maxlength="80"></div>
+      <div class="field"><label for="nt">Note for you (optional)</label><input id="nt" placeholder="Met at the SMB HR meetup" maxlength="300"></div>
+      <button class="btn primary">Create invite link</button>
+    </form>
+    ${NEW ? `<div class="fb" style="border-color:var(--accent)"><b>Link for ${esc(NEW.name)}</b><div class="link">${esc(link(NEW.code))}</div><div class="btns"><button class="btn sm primary" data-copy="${NEW.code}">Copy link</button></div><p class="small muted">Anyone with this link gets into this copy, so send it only to them. You can turn it off below.</p></div>` : ""}
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>Invite</th><th>Status</th><th>Last active</th><th>Activity</th><th>Feedback</th><th>Survey</th><th></th></tr></thead>
+      <tbody>${inv.length ? inv.map((i) => { const A = i.activity; return `<tr>
+        <td><b>${esc(i.name)}</b>${i.note ? `<div class="small muted">${esc(i.note)}</div>` : ""}<div class="small muted">Created ${when(i.created)}</div></td>
+        <td>${i.disabled ? `<span class="pill bad">Off</span>` : i.joined ? `<span class="pill ok">Joined</span>` : `<span class="pill warn">Not opened</span>`}</td>
+        <td>${A ? when(A.last) : "-"}</td>
+        <td class="small">${A ? `${A.actions} actions, ${A.intakes} Clerk, ${Object.keys(A.personas || {}).length} of 10 people tried` : "-"}</td>
+        <td>${fbCount(i.code) ? `<button class="btn sm" data-filter="${i.code}">${fbCount(i.code)}</button>` : "0"}</td>
+        <td>${i.survey ? `<span class="pill ok">Done</span>` : "-"}</td>
+        <td><div class="btns"><button class="btn sm" data-copy="${i.code}">Copy link</button>
+          <button class="btn sm" data-toggle="${i.code}" data-off="${i.disabled ? "0" : "1"}">${i.disabled ? "Turn on" : "Turn off"}</button>
+          <button class="btn sm" data-reset="${i.code}">Reset data</button></div></td></tr>`; }).join("") : `<tr><td colspan="7" class="muted">No invites yet.</td></tr>`}</tbody>
+    </table></div>
+  </section>
+
+  <section class="panel">
+    <div class="head"><h2>Feedback${FILTER ? ` from ${esc((inv.find((i) => i.code === FILTER) || {}).name)}` : ""}</h2>
+      <div class="btns">${FILTER ? `<button class="btn sm" data-filter="">Show all</button>` : ""}<button class="btn sm" data-csv="feedback">Download CSV</button></div></div>
+    <div class="list">${fb.length ? fb.map((f) => `<div class="fb">
+      <div class="meta"><b>${esc(f.who)}</b><span>${esc(f.screen)}</span><span>as ${esc(f.persona.split("@")[0])}</span><span>${when(f.at)}</span>${f.rating ? `<span class="pill">${f.rating} of 5</span>` : ""}${f.kind ? `<span class="pill">${esc({ like: "Likes it", confusing: "Confusing", bug: "Something broke", idea: "Idea" }[f.kind])}</span>` : ""}</div>
+      ${f.note ? `<p>${esc(f.note)}</p>` : ""}</div>`).join("") : `<p class="muted">Nothing yet.</p>`}</div>
+  </section>
+
+  <section class="panel">
+    <div class="head"><h2>Survey answers</h2><button class="btn sm" data-csv="survey">Download CSV</button></div>
+    <div class="list">${ST.surveys.length ? ST.surveys.map((s) => `<details class="fb"><summary>${esc(s.who)} <span class="muted small">${when(s.at)} · pain ${s.answers.pain ?? "-"} · pay: ${esc(s.answers.pay || "-")}</span></summary>
+      <dl class="ans">${Object.entries(s.answers).map(([k, v]) => `<dt>${esc(qName[k] || k)}</dt><dd>${esc(Array.isArray(v) ? v.join("; ") : v)}</dd>`).join("")}</dl></details>`).join("") : `<p class="muted">No surveys yet.</p>`}</div>
+  </section>`;
+  document.getElementById("nf").onsubmit = async (e) => {
+    e.preventDefault();
+    const name = document.getElementById("nm").value, note = document.getElementById("nt").value;
+    try { const j = await api("admin/invite", { name, note }); NEW = { code: j.code, name }; await refresh(); } catch (er) { if (er.message !== "signed out") toast(er.message); }
+  };
+}
+
+function csv(rows) { return rows.map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n"); }
+function download(name, text) { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type: "text/csv" })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); }
+
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("button"); if (!b || !ST) return;
+  try {
+    if (b.hasAttribute("data-refresh")) { await refresh(); toast("Up to date"); }
+    else if (b.hasAttribute("data-out")) { await api("admin/logout", {}); ST = null; renderLogin(); }
+    else if (b.dataset.copy) { const t = link(b.dataset.copy); try { await navigator.clipboard.writeText(t); toast("Link copied"); } catch (er) { prompt("Copy this link", t); } }
+    else if (b.dataset.toggle) { await api("admin/invite/update", { code: b.dataset.toggle, disabled: b.dataset.off === "1" }); await refresh(); toast(b.dataset.off === "1" ? "Invite turned off" : "Invite turned on"); }
+    else if (b.dataset.reset) {
+      if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Tap again to reset"; b.classList.add("primary"); return; }
+      await api("admin/invite/update", { code: b.dataset.reset, resetData: true }); await refresh(); toast("Their copy is back to the sample data");
+    }
+    else if ("filter" in b.dataset) { FILTER = b.dataset.filter; render(); }
+    else if (b.dataset.csv === "feedback") download("leave-ledger-feedback.csv", csv([["When", "Invite", "Screen", "Persona", "Rating", "Type", "Note"], ...ST.feedback.map((f) => [f.at, f.who, f.screen, f.persona, f.rating, f.kind, f.note])]));
+    else if (b.dataset.csv === "survey") { const qs = ST.questions; download("leave-ledger-survey.csv", csv([["When", "Invite", ...qs.map((q) => q.q)], ...ST.surveys.map((s) => [s.at, s.who, ...qs.map((q) => { const v = s.answers[q.id]; return Array.isArray(v) ? v.join("; ") : v; })])])); }
+  } catch (er) { if (er.message !== "signed out") toast(er.message); }
+});
+
+(async () => { try { await refresh(); } catch (e) { if (e.message !== "signed out") root.innerHTML = `<section class="panel"><h1>Feedback inbox</h1><p class="err">${esc(e.message === "Not found" ? "The inbox only runs on the preview site." : e.message)}</p></section>`; } })();
+</script>
+</body>
+</html>

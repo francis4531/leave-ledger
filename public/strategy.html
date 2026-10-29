@@ -252,6 +252,7 @@ async function load() {
   let r;
   try { r = await fetch("/api/strategy", { credentials: "same-origin" }); } catch (e) { root.innerHTML = `<div class="msg"><h1>Can't reach the site</h1><p>Check your connection and reload.</p></div>`; return; }
   if (r.status === 401) { root.innerHTML = `<div class="msg"><h1>Sign in first</h1><p class="sub">The strategy is only visible to signed-in test users.</p><a class="btn" href="/">Go to sign in</a></div>`; return; }
+  if (!r.ok) { root.innerHTML = `<div class="msg"><h1>Page not found</h1><a class="btn" href="/">Go to the app</a></div>`; return; }
   const data = await r.json();
   const F = data.files || {};
   const odKey = Object.keys(sections(F["README.md"] || "")).find((k) => k.startsWith("Open decisions"));
