@@ -8,7 +8,7 @@ A working test site where an HR admin, a manager and an employee each see a Cali
 
 ## Tool Used
 
-Claude (product, rules research, code), GitHub (`francis4531/leave-ledger`), Netlify (hosting, serverless API, Blobs storage). Cursor for quick local edits from here on.
+Claude (product, rules research, code), GitHub (`francis4531/leave-ledger`), Netlify (hosting, serverless API, Blobs storage). Claude commits directly to the repo; no local editor needed.
 
 ## Prototype Link
 
