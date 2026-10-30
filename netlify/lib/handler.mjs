@@ -442,6 +442,39 @@ async function route_(req, store, env) {
     return json({ ok: true });
   }
 
+  /* ----- Strategy page: test-site users, or the site admin on the preview site ----- */
+  if (route === "strategy" || route === "strategy/decision") {
+    let who = null, canEdit = false;
+    if (FB) {
+      const adm = adminSession(req, env);
+      if (!adm) return err("Not found", 404); // prospects never learn the page exists
+      who = adm.em || "Admin"; canEdit = true;
+    } else {
+      if (!R.acct) return err("Signed out", 401);
+      who = R.acct.email; canEdit = R.acct.role === "hr";
+    }
+    if (route === "strategy" && req.method === "GET") {
+      const dec = await loadDecisions(store);
+      return json({ ...STRATEGY, viewer: who, admin: FB, decisions: Object.values(dec.items), canEdit, github: { on: !!env.LL_GITHUB_TOKEN, last: dec.github || null } });
+    }
+    if (route === "strategy/decision" && req.method === "POST") {
+      if (!canEdit) return err("Only the HR admin account can record decisions.", 403);
+      const body = await req.json().catch(() => ({}));
+      const d = cleanDecision(body);
+      if (d.error) return err(d.error);
+      const dec = await loadDecisions(store);
+      const prev = dec.items[d.key];
+      const me = ACCOUNTS.find((x) => x.email === who);
+      const history = prev ? [{ at: prev.at, status: prev.status, answer: prev.answer }, ...(prev.history || [])].slice(0, 20) : [];
+      dec.items[d.key] = { ...d, at: new Date().toISOString(), by: me ? me.name : FB ? "Site admin" : who, history };
+      const ghErr = await mirrorToGitHub(dec, env);
+      dec.github = { at: new Date().toISOString(), ok: !ghErr, error: ghErr === "not set up" ? null : ghErr, on: !!env.LL_GITHUB_TOKEN };
+      await store.setJSON(DKEY, dec);
+      return json({ decisions: Object.values(dec.items), github: dec.github });
+    }
+    return err("Not found", 404);
+  }
+
   const acct = R.acct;
   if (!acct) return err("Signed out", 401);
 
@@ -478,25 +511,6 @@ async function route_(req, store, env) {
     return json({ ok: true, members: R.meta.members.map(({ sub, ...m }) => ({ ...m, joined: !!sub })), domain: R.meta.domain, ...viewFor(R.D, acct, today, env, spaceInfo(R)) });
   }
 
-  if (!FB && route === "strategy" && req.method === "GET") {
-    const dec = await loadDecisions(store);
-    return json({ ...STRATEGY, viewer: acct.email, decisions: Object.values(dec.items), canEdit: acct.role === "hr", github: { on: !!env.LL_GITHUB_TOKEN, last: dec.github || null } });
-  }
-  if (!FB && route === "strategy/decision" && req.method === "POST") {
-    if (acct.role !== "hr") return err("Only the HR admin account can record decisions.", 403);
-    const body = await req.json().catch(() => ({}));
-    const d = cleanDecision(body);
-    if (d.error) return err(d.error);
-    const dec = await loadDecisions(store);
-    const prev = dec.items[d.key];
-    const me = ACCOUNTS.find((x) => x.email === acct.email);
-    const history = prev ? [{ at: prev.at, status: prev.status, answer: prev.answer }, ...(prev.history || [])].slice(0, 20) : [];
-    dec.items[d.key] = { ...d, at: new Date().toISOString(), by: me ? me.name : acct.email, history };
-    const ghErr = await mirrorToGitHub(dec, env);
-    dec.github = { at: new Date().toISOString(), ok: !ghErr, error: ghErr === "not set up" ? null : ghErr, on: !!env.LL_GITHUB_TOKEN };
-    await store.setJSON(DKEY, dec);
-    return json({ decisions: Object.values(dec.items), github: dec.github });
-  }
 
   const getD = async () => R.D || (await load(store, today, R.key));
 
@@ -561,6 +575,11 @@ async function surveyOf(store, id) {
 }
 
 /* ---------- Admin inbox (preview site only) ---------- */
+// A valid admin cookie: Google sign-in by an email in LL_ADMIN_EMAILS, or the admin password.
+function adminSession(req, env) {
+  const o = readObj(cookieOf(req, "ll_admin"), env);
+  return o && o.k === "admin" && (o.em ? isAdminEmail(env, o.em) : !!env.LL_ADMIN_PASSWORD) ? o : null;
+}
 const ADMIN_TTL = 12 * 3600;
 async function handleAdmin(req, route, store, env, today) {
   if (route === "admin/config" && req.method === "GET") return json({ password: !!env.LL_ADMIN_PASSWORD, google: googleOn(env) && !!env.LL_ADMIN_EMAILS });
@@ -572,9 +591,7 @@ async function handleAdmin(req, route, store, env, today) {
     return json({ ok: true }, 200, { "set-cookie": setCookie(signObj({ k: "admin" }, ADMIN_TTL, env), ADMIN_TTL, "ll_admin") });
   }
   if (route === "admin/logout" && req.method === "POST") return json({ ok: true }, 200, { "set-cookie": setCookie("", 0, "ll_admin") });
-  const o = readObj(cookieOf(req, "ll_admin"), env);
-  const ok = o && o.k === "admin" && (o.em ? isAdminEmail(env, o.em) : !!env.LL_ADMIN_PASSWORD);
-  if (!ok) return err("Signed out", 401);
+  if (!adminSession(req, env)) return err("Signed out", 401);
 
   const invites = await loadInvites(store);
   if (route === "admin/state" && req.method === "GET") {

@@ -254,6 +254,7 @@ async function load() {
   if (r.status === 401) { root.innerHTML = `<div class="msg"><h1>Sign in first</h1><p class="sub">The strategy is only visible to signed-in test users.</p><a class="btn" href="/">Go to sign in</a></div>`; return; }
   if (!r.ok) { root.innerHTML = `<div class="msg"><h1>Page not found</h1><a class="btn" href="/">Go to the app</a></div>`; return; }
   const data = await r.json();
+  if (data.admin) { const back = document.querySelector('header a.btn[href="/"]'); if (back) { back.href = "/inbox"; back.textContent = "Back to the inbox"; } }
   const F = data.files || {};
   const odKey = Object.keys(sections(F["README.md"] || "")).find((k) => k.startsWith("Open decisions"));
   const readme = F["README.md"] || "";
@@ -309,7 +310,7 @@ async function load() {
         <section class="panel"><h2>Changelog</h2><div class="md">${md(S["Changelog"] || "_Nothing yet._")}</div></section>
       </div>
     </div>
-    <p class="foot">Read from the strategy folder in GitHub each time the site deploys${data.builtAt ? `, last on ${new Date(data.builtAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" })}` : ""}. Visible only to signed-in test users.</p>
+    <p class="foot">Read from the strategy folder in GitHub each time the site deploys${data.builtAt ? `, last on ${new Date(data.builtAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" })}` : ""}. ${data.admin ? "Visible only to the site admin." : "Visible only to signed-in test users."}</p>
   </main>`;
   // Every week's questions: strategy/questions.md, plus this week's from the README if missing there.
   DEC.weeks = {};

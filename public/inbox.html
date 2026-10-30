@@ -123,7 +123,7 @@ function render() {
   const qName = Object.fromEntries(ST.questions.map((q) => [q.id, q.q]));
   root.innerHTML = `
   <div class="head"><div><h1>Feedback inbox</h1><p class="muted">Leave Ledger early preview. Each invite gets its own copy of the sample company.</p></div>
-    <div class="btns"><button class="btn" data-refresh>Refresh</button><button class="btn" data-out>Sign out</button></div></div>
+    <div class="btns"><a class="btn" style="text-decoration:none;color:inherit" href="/strategy">Strategy</a><button class="btn" data-refresh>Refresh</button><button class="btn" data-out>Sign out</button></div></div>
 
   <section class="panel">
     <h2>Survey so far</h2>
