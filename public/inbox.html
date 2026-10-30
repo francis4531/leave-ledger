@@ -221,5 +221,6 @@ document.addEventListener("click", async (e) => {
 
 (async () => { try { await refresh(); } catch (e) { if (e.message !== "signed out") root.innerHTML = `<section class="panel"><h1>Feedback inbox</h1><p class="err">${esc(e.message === "Not found" ? "The inbox only runs on the preview site." : e.message)}</p></section>`; } })();
 </script>
+<script src="/build.js" defer></script>
 </body>
 </html>

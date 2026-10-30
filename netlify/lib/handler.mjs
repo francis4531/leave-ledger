@@ -324,7 +324,7 @@ async function route_(req, store, env) {
     const user = await upsertUser(store, r.claims);
     if (r.intent === "admin") {
       if (!isAdminEmail(env, user.email)) return redirect("/inbox?auth_error=notadmin", [clear]);
-      return redirect("/inbox", [clear, setCookie(signObj({ k: "admin", em: user.email }, 12 * 3600, env), 12 * 3600, "ll_admin")]);
+      return redirect("/inbox", [clear, setCookie(signObj({ k: "admin", em: user.email }, ADMIN_TTL, env), ADMIN_TTL, "ll_admin")]);
     }
     // Workspace invites are shown on the spaces screen to accept or decline; nothing is joined automatically.
     await claimInviteEmails(store, user);
@@ -580,7 +580,7 @@ function adminSession(req, env) {
   const o = readObj(cookieOf(req, "ll_admin"), env);
   return o && o.k === "admin" && (o.em ? isAdminEmail(env, o.em) : !!env.LL_ADMIN_PASSWORD) ? o : null;
 }
-const ADMIN_TTL = 12 * 3600;
+const ADMIN_TTL = 7 * 24 * 3600; // admin stays signed in for a week
 async function handleAdmin(req, route, store, env, today) {
   if (route === "admin/config" && req.method === "GET") return json({ password: !!env.LL_ADMIN_PASSWORD, google: googleOn(env) && !!env.LL_ADMIN_EMAILS });
   if (route === "admin/login" && req.method === "POST") {
