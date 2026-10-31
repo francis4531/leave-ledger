@@ -2,6 +2,16 @@
 
 > Answered on the /strategy page of the test site and copied here automatically. Newest week first. Edit them on the page, not in this file; the page overwrites it.
 
+## Week 2 · The Moat
+
+### 1. Partner challenge on Tilt
+
+**Question:** Is Tilt the real threat rather than Gusto? It already has AI intake (Tilley), Gusto and Rippling sync, and California coverage. If yes, what does Leave Ledger do that Tilt will not do for a 15-person company?
+
+**Status:** Decided · Oct 30, 2026 · Site admin
+
+**Answer:** Our price and our notice clock is our edge.   To be tested in the interviews.
+
 ## Week 1 · The Bet
 
 ### 1. Confirm the archetype
