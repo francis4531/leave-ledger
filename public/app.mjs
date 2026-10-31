@@ -350,13 +350,13 @@ function hrEmployees() {
   return `<div class="head"><div><h2>Employees</h2><p>Who qualifies for what, as of today. Hours and sick balances come from payroll; change them right here.</p></div></div>
   ${org ? addEmployeePanel() : ""}
   <section class="panel"><div class="tw"><table class="cards"><thead><tr><th>Employee</th><th>Hired</th><th class="num">Hours, last 12 months</th><th class="num">Family leave left</th><th class="num">Sick hours</th><th>Qualifies today for</th>${org ? "<th>Manager</th><th></th>" : ""}</tr></thead><tbody>
-  ${D().employees.map((e) => { const el = eligibility(e, co, TODAY); const q = [["Family leave", el.cfra.ok], ...(el.fmla.covered ? [["FMLA", el.fmla.ok]] : []), ["Pregnancy leave", el.pdl.ok], ["Bereavement", el.short.ok], ["Sick leave", el.sick.ok]];
+  ${D().employees.map((e) => { const el = eligibility(e, co, TODAY); const q = [["Family leave", el.cfra.ok], ...(el.fmla.covered ? [["FMLA", el.fmla.ok]] : []), ...(D().cases.some((c) => c.empId === e.id && c.reason === "pregnancy_bonding") ? [["Pregnancy leave", el.pdl.ok]] : []), ["Bereavement", el.short.ok], ["Sick leave", el.sick.ok]];
     return `<tr><td class="full"><div class="person">${avatar(e, "sm")}<div><b>${esc(e.name)}</b><div class="small muted">${esc(e.role)}</div></div></div></td><td data-l="Hired" class="small mono">${org ? `<input type="date" aria-label="Hire date for ${esc(e.name)}" data-emp="${e.id}|hire" value="${e.hire}" max="${TODAY}">` : fmt(e.hire)}</td>
   <td data-l="Hours, 12 mo" class="num"><input type="number" aria-label="Hours worked in the last 12 months for ${esc(e.name)}" id="h-${e.id}" data-emp="${e.id}|hours12" value="${e.hours12}" style="width:90px;text-align:right"></td>
   <td data-l="Family leave left" class="num">${el.cfra.ok ? plural(el.cfra.remaining, "week") : '<span class="muted">Not yet</span>'}</td>
   <td data-l="Sick hours" class="num"><input type="number" aria-label="Sick hours for ${esc(e.name)}" id="s-${e.id}" data-emp="${e.id}|sick" value="${e.sick}" style="width:72px;text-align:right"></td>
   <td class="full"><div class="btns" style="gap:4px">${q.map(([n, ok]) => pill((ok ? "✓ " : "✕ ") + n, ok ? "ok" : "")).join("")}</div></td>${org ? `<td data-l="Manager">${mgrSel(e)}</td><td>${e.id === S.me.empId ? "" : `<button class="btn sm" data-emp-remove="${e.id}">Remove</button>`}</td>` : ""}</tr>`; }).join("")}
-  </tbody></table></div><p class="small muted">Sick leave builds up at 1 hour for every 30 worked. You can cap the balance at 80 hours and yearly use at 40.</p></section>`;
+  </tbody></table></div><p class="small muted">Sick leave builds up at 1 hour for every 30 worked. You can cap the balance at 80 hours and yearly use at 40. Pregnancy leave is available to any employee from their first day; it shows here once someone takes it.</p></section>`;
 }
 
 /* ---------- HR: Settings ---------- */
@@ -423,7 +423,7 @@ function empView() {
   <section class="panel"><h3>What you have</h3><div class="balance">
     <div><span class="label">Sick leave</span><span class="v">${e.sick} hours</span><div class="meter"><span style="width:${Math.min(100, (e.sick / 80) * 100)}%"></span></div><span class="small muted">${avail} you can use this year</span></div>
     <div><span class="label">Family and medical leave</span><span class="v">${el.cfra.ok ? plural(el.cfra.remaining, "week") : "Not yet"}</span><div class="meter"><span style="width:${el.cfra.ok ? (el.cfra.remaining / 12) * 100 : 0}%"></span></div><span class="small muted">${el.cfra.ok ? "Your job is held for you" : "After 12 months and 1,250 hours"}</span></div>
-    <div><span class="label">Pregnancy leave</span><span class="v">Up to 4 months</span><span class="small muted">From your first day</span></div>
+    ${mine.some((c) => c.reason === "pregnancy_bonding") ? `<div><span class="label">Pregnancy leave</span><span class="v">Up to 4 months</span><span class="small muted">From your first day</span></div>` : ""}
     <div><span class="label">Bereavement</span><span class="v">${el.short.ok ? "5 days" : "After 30 days"}</span><span class="small muted">For each family loss</span></div>
     <div><span class="label">State pay while out</span><span class="v">${wba ? "~" + money(wba.amount) + "/wk" : "Ask HR"}</span><span class="small muted">Paid by the state, not ${esc(co.name.split(" ")[0])}</span></div>
   </div></section>
