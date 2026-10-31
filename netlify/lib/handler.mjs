@@ -47,6 +47,8 @@ export async function load(store, today, key = KEY, seed = true) {
     D.log = [{ at: new Date().toISOString(), by: "System", text: "Sample data loaded" }];
     await store.setJSON(key, D);
   }
+  // Copies made before the 2026 pay table still carry the 2025 cutoff; move them to 2026 once.
+  if (D && D.company && D.company.band90 === 19936.8) { D.company.band90 = E.PAY2026.band90; D.company.band70 = E.PAY2026.band70; await store.setJSON(key, D); }
   return D && D.cases ? D : null;
 }
 

@@ -48,19 +48,29 @@ export const REL = {
 export const relName = (k) => (REL.care.find(r=>r[0]===k)||[,k])[1];
 
 /* ---------- Pay estimate ---------- */
+// 2026 EDD table: 90% of weekly wages up to band90, a flat amount between band90 and band70, then 70%.
+// band70 defaults to the point where 70% catches up with the flat amount. Quarters under $300 do not qualify.
+export const PAY2026 = { band90: 16279.90, band70: 20931.30, wbaMax: 1765, wbaMin: 50, minQuarter: 300 };
 export function weeklyBenefit(emp, co){
   const hq = emp.hiQuarter || 0;
-  if (hq <= 0) return null;
-  const rate = hq <= co.band90 ? 0.9 : 0.7;
-  const raw = hq/13*rate;
-  return {amount: Math.max(co.wbaMin, Math.min(co.wbaMax, raw)), rate, weekly: hq/13, capped: raw > co.wbaMax};
+  if (hq < (co.minQuarter ?? PAY2026.minQuarter)) return null;
+  const b90 = co.band90, flat = b90/13*0.9, b70 = co.band70 || flat*13/0.7;
+  const weekly = hq/13;
+  const rate = hq <= b90 ? 0.9 : hq < b70 ? null : 0.7;
+  const raw = rate === null ? flat : weekly*rate;
+  return {amount: Math.max(co.wbaMin, Math.min(co.wbaMax, raw)), rate, weekly, capped: raw > co.wbaMax, flat: rate === null};
 }
+// 12 months of service: the same date one year later (Feb 29 hires reach it on Mar 1).
+export function oneYearAfter(d){ const [y,m,dd] = d.split('-').map(Number); return iso(Date.UTC(y+1, m-1, dd)); }
 
 /* ---------- Eligibility ---------- */
 export function eligibility(emp, co, start){
   const tenure = diffDays(emp.hire, start);
-  const yr = tenure >= 365, hrs = emp.hours12 >= RULES.cfra.hours;
-  const cfraCo = co.headcount >= RULES.cfra.minCo, fmlaCo = co.headcount >= RULES.fmla.minCo && co.within75;
+  const yr = oneYearAfter(emp.hire) <= start, hrs = emp.hours12 >= RULES.cfra.hours;
+  // FMLA: the employer is covered at 50+ employees; the 75-mile test is part of the employee's eligibility.
+  const cfraCo = co.headcount >= RULES.cfra.minCo, fmlaCo = co.headcount >= RULES.fmla.minCo, near = !!co.within75;
+  // Sick leave can be used from the 90th day of employment, counting the hire date as day 1.
+  const sickDay = tenure >= RULES.sick.useAfter - 1, sickLeft = Math.min(emp.sick, Math.max(0, RULES.sick.use - emp.sickUsedYr));
   const tenureTxt = tenure >= 365 ? `${(tenure/365).toFixed(1)} years` : `${Math.max(0,Math.floor(tenure/30.44))} months`;
   return {
     tenure,
@@ -68,13 +78,14 @@ export function eligibility(emp, co, start){
       {t:`Employer has 5 or more employees (${co.headcount})`, ok:cfraCo},
       {t:`12 months of service by start date (${tenureTxt})`, ok:yr},
       {t:`1,250 hours in the last 12 months (${emp.hours12.toLocaleString()})`, ok:hrs}]},
-    fmla:{ok:fmlaCo&&yr&&hrs, covered:fmlaCo, remaining:Math.max(0,RULES.fmla.weeks-emp.fmlaUsed), checks:[
-      {t:`50 or more employees within 75 miles`, ok:fmlaCo},
+    fmla:{ok:fmlaCo&&near&&yr&&hrs, covered:fmlaCo, remaining:Math.max(0,RULES.fmla.weeks-emp.fmlaUsed), checks:[
+      {t:`Employer has 50 or more employees (${co.headcount})`, ok:fmlaCo},
+      {t:`50 or more employees within 75 miles of the worksite`, ok:near},
       {t:`12 months of service`, ok:yr},
       {t:`1,250 hours in the last 12 months`, ok:hrs}]},
     pdl:{ok:cfraCo, checks:[{t:`Employer has 5 or more employees`, ok:cfraCo},{t:'No minimum service or hours required', ok:true}]},
     short:{ok:cfraCo && tenure>=30, checks:[{t:`Employer has 5 or more employees`, ok:cfraCo},{t:`Employed 30 days before leave (${Math.max(0,tenure)} days)`, ok:tenure>=30}]},
-    sick:{ok:tenure>=RULES.sick.useAfter, checks:[{t:`Employed 90 days before using sick leave (${Math.max(0,tenure)} days)`, ok:tenure>=RULES.sick.useAfter}]}
+    sick:{ok:sickDay && sickLeft > 0, usable:sickLeft, checks:[{t:`Can use sick leave from the 90th day of employment (day ${Math.max(0,tenure+1)})`, ok:sickDay},{t:`Usable hours left this year (${sickLeft})`, ok:sickLeft > 0}]}
   };
 }
 
@@ -130,7 +141,7 @@ export function buildPlan(emp, co, reason, o){
   }
   else if (reason==='own_health' || reason==='family_care' || reason==='bonding'){
     const fmlaCovers = reason!=='family_care' || ['spouse','child','parent'].includes(o.relation);
-    const pflCovers = reason!=='own_health' && o.relation!=='designated';
+    const pflCovers = reason!=='own_health' && (o.relation!=='designated' || o.start >= '2028-07-01');
     const label = reason==='bonding' ? 'Bonding leave' : 'Family and medical leave';
     const end = protectCFRA(o.start, o.weeks, label);
     if (fmlaCovers) fmlaAlong(o.start, o.weeks);
@@ -162,18 +173,22 @@ export function buildPlan(emp, co, reason, o){
   }
   else if (reason==='bereavement' || reason==='repro'){
     const isR = reason==='repro';
-    const days = Math.min(o.days, RULES.bereave.days);
+    // Reproductive loss: at most 5 days per event and 20 days in 12 months.
+    const days = Math.max(0, Math.min(o.days, RULES.bereave.days, isR ? RULES.repro.cap - (emp.reproUsed||0) : Infinity));
     const sp = bizSpan(o.start, Math.max(1,o.days), hol);
     const okDays = bizSpan(o.start, Math.max(1,days), hol);
-    if (el.short.ok){
+    if (el.short.ok && days === 0){
+      seg('protect','none','Not required by law', sp.start, sp.end, '20-day yearly limit reached');
+    } else if (el.short.ok){
       seg('protect','short', isR?'Reproductive loss leave':'Bereavement leave', okDays.start, okDays.end, `${plural(days,'workday')}`);
-      if (o.days>5) seg('protect','none','Past 5 days', okDays.end, sp.end, 'Not required by law');
+      if (o.days>days) seg('protect','none', days<Math.min(o.days,5) ? 'Past the 20-day limit' : 'Past 5 days', okDays.end, sp.end, 'Not required by law');
     } else seg('protect','none','Not eligible', sp.start, sp.end, 'Employed under 30 days');
     seg('pay','unpaid','Unpaid unless policy pays', sp.start, sp.end, 'Employee may use sick leave, vacation, or PTO');
     if (!el.short.ok) P.warnings.push({bad:true, t:'Employee has worked here under 30 days, so this leave is not required by law. Company policy may still allow it.'});
     if (o.days>5) P.warnings.push({t:'The law requires 5 days. Anything more comes from company policy.'});
     if (isR){
-      if (emp.reproUsed + days > RULES.repro.cap) P.warnings.push({bad:true, t:`This would bring reproductive loss leave to ${emp.reproUsed+days} days in 12 months. You may cap it at 20.`});
+      const want = Math.min(o.days, RULES.bereave.days);
+      if ((emp.reproUsed||0) + want > RULES.repro.cap) P.warnings.push({bad:true, t:`${emp.reproUsed||0} reproductive loss days were already used in the last 12 months, so only ${days} of these days are required by law. You may cap it at 20.`});
       P.facts.push({t:'Do not ask for documentation. Keep the request confidential.', c:RULES.repro.cite});
       P.facts.push({t:'Days can be taken apart and must be used within 3 months of the event (longer if the employee is on another protected leave).', c:RULES.repro.cite});
     } else {
@@ -201,7 +216,7 @@ export function buildPlan(emp, co, reason, o){
 /* ---------- Tasks (compliance clock) ---------- */
 export function makeTasks(reason, req, plan, co){
   const hol = co.holidays, bd = n => addBiz(req, n, hol), t = [];
-  const fmlaOn = co.headcount>=50 && co.within75;
+  const fmlaOn = co.headcount>=50;
   const big = ['pregnancy_bonding','own_health','family_care','bonding'].includes(reason);
   if (big){
     const notice = reason==='pregnancy_bonding' ? `Send the pregnancy leave and CFRA rights notices${fmlaOn?' and the FMLA notice':''}` : `Send the eligibility and rights notice (${fmlaOn?'CFRA and FMLA':'CFRA'})`;
@@ -235,7 +250,7 @@ export function sampleData(TODAY){
   const T = n => addDays(TODAY, n);
   const company = {name:'Mesa Verde Coffee Roasters', city:'Oakland, CA', headcount:38, within75:true,
     holidays:['2026-11-26','2026-11-27','2026-12-25','2027-01-01','2027-01-18','2027-02-15','2027-05-31'],
-    band90:19936.80, wbaMax:1765, wbaMin:50, hrContact:'Grace Okafor'};
+    band90:PAY2026.band90, band70:PAY2026.band70, wbaMax:PAY2026.wbaMax, wbaMin:PAY2026.wbaMin, hrContact:'Grace Okafor'};
   const employees = [
     {id:'e1', name:'Priya Raman', role:'Roaster', hire:'2023-03-14', hours12:1980, cfraUsed:0, fmlaUsed:0, sick:32, sickUsedYr:8, reproUsed:0, hiQuarter:17550, mgr:'e9'},
     {id:'e2', name:'Marcus Bell', role:'Barista lead', hire:'2025-08-04', hours12:1410, cfraUsed:0, fmlaUsed:0, sick:24, sickUsedYr:16, reproUsed:0, hiQuarter:13200, mgr:'e10'},

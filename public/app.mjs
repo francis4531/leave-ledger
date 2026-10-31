@@ -109,7 +109,7 @@ function openTasks() {
 const lateCount = () => openTasks().filter((x) => x.t.due && x.t.due <= TODAY).length;
 function checksHTML(list) { return `<div class="checks">${list.map((c) => `<div class="chk ${c.ok ? "y" : "n"}"><i aria-hidden="true">${c.ok ? "✓" : "✕"}</i><span>${esc(c.t)}</span></div>`).join("")}</div>`; }
 const COLORS = { pdl: "var(--pdl)", cfra: "var(--cfra)", fmla: "var(--fmla)", short: "var(--short)", sdi: "var(--sdi)", pfl: "var(--pfl)", sick: "var(--sdi)", unpaid: "var(--unpaid)", wait: "var(--unpaid)", none: "var(--bad)" };
-const fmlaCovered = () => D().company.headcount >= 50 && D().company.within75;
+const fmlaCovered = () => D().company.headcount >= 50;
 
 /* ---------- Shared building blocks ---------- */
 function timelineHTML(p) {
@@ -133,14 +133,14 @@ function timelineHTML(p) {
 }
 function factsHTML(p) {
   const facts = [...p.facts];
-  if (!fmlaCovered()) facts.push({ t: `Federal FMLA does not apply here: it starts at 50 employees within 75 miles.`, c: RULES.fmla.cite });
+  if (!fmlaCovered()) facts.push({ t: `Federal FMLA does not apply here: it starts at 50 employees.`, c: RULES.fmla.cite });
   return `${p.warnings.map((w) => `<div class="warnbox ${w.bad ? "bad" : ""}">${esc(w.t)}</div>`).join("")}
   ${facts.length ? `<div class="notes">${facts.map((f) => `<div class="note"><span>${esc(f.t)}</span><span class="cite">${esc(f.c)}</span></div>`).join("")}</div>` : ""}`;
 }
 function payHTML(p) {
   if (!(p.pays.sdi || p.pays.pfl)) return "";
   const w = p.wba;
-  return `<div class="infobox">${w ? `State pay estimate: about <b>${money(w.amount)} a week</b>, which is ${Math.round(w.rate * 100)}% of ${money(w.weekly)} average weekly wages${w.capped ? " (capped at the 2026 maximum)" : ""}. The state (EDD) pays this, not the employer, and makes the final calculation.` : "The state (EDD) works out the amount from past wages."} ${p.pays.sdi ? `Disability pay claims are due within ${RULES.sdi.fileWithin} days of the first day out. ` : ""}${p.pays.pfl ? `Family leave pay claims are due within ${RULES.pfl.fileWithin} days of the first day of leave.` : ""}</div>`;
+  return `<div class="infobox">${w ? `State pay estimate: about <b>${money(w.amount)} a week</b>, ${w.flat ? `the flat amount for ${money(w.weekly)} average weekly wages` : `which is ${Math.round(w.rate * 100)}% of ${money(w.weekly)} average weekly wages`}${w.capped ? " (capped at the 2026 maximum)" : ""}. The state (EDD) pays this, not the employer, and makes the final calculation.` : "The state (EDD) works out the amount from past wages."} ${p.pays.sdi ? `Disability pay claims are due within ${RULES.sdi.fileWithin} days of the first day out. ` : ""}${p.pays.pfl ? `Family leave pay claims are due within ${RULES.pfl.fileWithin} days of the first day of leave.` : ""}</div>`;
 }
 function eligHTML(p, reason) {
   const el = p.el, blocks = [];
@@ -172,8 +172,8 @@ function lawRows() {
   return [
     ["Family and medical leave", "CFRA", c5, "Up to 12 weeks, job protected, for an own or family health condition or a new child.", "Applies at 5 or more employees"],
     ["Pregnancy leave", "PDL", c5, "Up to 4 months while unable to work due to pregnancy. No minimum time on the job.", "Applies at 5 or more employees"],
-    ["Federal FMLA", "FMLA", c50, "Runs at the same time as the state leaves.", "Starts at 50 employees within 75 miles"],
-    ["State pay while out", "SDI and PFL", true, "The state pays 70 to 90% of wages. The employer does not pay this.", ""],
+    ["Federal FMLA", "FMLA", c50, `Runs at the same time as the state leaves.${c50 && !co.within75 ? " Employees qualify only if 50 or more employees work within 75 miles of their worksite." : ""}`, "Starts at 50 employees"],
+    ["State pay while out", "SDI and PFL", true, "The state pays about 70 to 90% of wages, up to $1,765 a week in 2026. The employer does not pay this.", ""],
     ["Paid sick leave", "", true, "40 hours a year, for the employee or a sick family member.", ""],
     ["Bereavement leave", "", c5, "5 days for each family death, within 3 months.", "Applies at 5 or more employees"],
     ["Reproductive loss leave", "", c5, "5 days per loss, up to 20 a year. No documentation.", "Applies at 5 or more employees"],
@@ -388,8 +388,8 @@ function hrSettings() {
   </section><section class="panel">
     <h3>State pay estimates</h3>
     <div class="row"><div class="field"><label for="co-max">Weekly maximum</label><input type="number" id="co-max" value="${co.wbaMax}" data-co="wbaMax" data-num><span class="hint">$1,765 for 2026 claims</span></div>
-    <div class="field"><label for="co-band">90% rate applies up to</label><input type="number" id="co-band" value="${co.band90}" data-co="band90" data-num><span class="hint">Highest quarter wages. 2025 figure until the state publishes 2026.</span></div></div>
-    <div class="infobox">Lower earners get about 90% of weekly wages and others about 70%, up to the weekly maximum. The state makes the final calculation.</div>
+    <div class="field"><label for="co-band">90% rate applies up to</label><input type="number" id="co-band" value="${co.band90}" data-co="band90" data-num><span class="hint">Highest quarter wages. $16,279.90 for 2026 claims. Above it the state pays a flat amount, then 70%.</span></div></div>
+    <div class="infobox">Lower earners get about 90% of weekly wages, a middle band gets a flat amount, and higher earners get about 70%, up to the weekly maximum. The state makes the final calculation.</div>
     ${copilotStats()}
     ${ORG() ? `<h3>Start over</h3>
     <p class="small muted">Deletes every leave in this workspace. Employees and users stay.</p>

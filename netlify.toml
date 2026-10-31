@@ -1,6 +1,7 @@
 [build]
   publish = "public"
-  command = "node scripts/build-strategy.mjs"
+  # Tests run on every deploy. If any fail, the build stops and the last good version stays live.
+  command = "node scripts/build-strategy.mjs && node --test 'tests/*.test.mjs'"
 
 [functions]
   directory = "netlify/functions"
@@ -27,3 +28,6 @@
   from = "/privacy"
   to = "/privacy.html"
   status = 200
+
+[build.environment]
+  NODE_VERSION = "22"

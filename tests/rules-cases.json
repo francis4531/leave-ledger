@@ -1,0 +1,4304 @@
+[
+ {
+  "id": "elig-365-days",
+  "area": "eligibility",
+  "desc": "Hired exactly 365 days before leave start meets the 12-month service test for CFRA and FMLA.",
+  "source": "Gov. Code 12945.2(a), (b)(2), (b)(4); 2 CCR 11087(e), 11088(b); https://calcivilrights.ca.gov/family-medical-pregnancy-leave/; 29 CFR 825.104, 825.110, 825.111; https://www.dol.gov/agencies/whd/fmla",
+  "input": {
+   "employee": {
+    "hire": "2025-06-01",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-06-01",
+   "reason": "own_health",
+   "opts": {
+    "start": "2026-06-01",
+    "weeks": 12
+   },
+   "requested": "2026-06-01"
+  },
+  "expect": {
+   "elig": {
+    "cfra": true,
+    "fmla": true,
+    "fmlaCovered": true
+   }
+  }
+ },
+ {
+  "id": "elig-364-days",
+  "area": "eligibility",
+  "desc": "Hired 364 days before leave start is one day short of 12 months, so neither CFRA nor FMLA applies.",
+  "source": "Gov. Code 12945.2(a), (b)(2), (b)(4); 2 CCR 11087(e), 11088(b); https://calcivilrights.ca.gov/family-medical-pregnancy-leave/; 29 CFR 825.104, 825.110, 825.111; https://www.dol.gov/agencies/whd/fmla",
+  "input": {
+   "employee": {
+    "hire": "2025-06-02",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-06-01",
+   "reason": "own_health",
+   "opts": {
+    "start": "2026-06-01",
+    "weeks": 12
+   },
+   "requested": "2026-06-01"
+  },
+  "expect": {
+   "elig": {
+    "cfra": false,
+    "fmla": false
+   },
+   "plan": {
+    "jobProtectedUntil": null,
+    "warnsAbout": [
+     "not_cfra_eligible"
+    ],
+    "lawsExclude": [
+     "CFRA",
+     "FMLA"
+    ]
+   }
+  }
+ },
+ {
+  "id": "elig-1250-hours",
+  "area": "eligibility",
+  "desc": "Exactly 1,250 hours in the prior 12 months meets the hours test.",
+  "source": "Gov. Code 12945.2(a), (b)(2), (b)(4); 2 CCR 11087(e), 11088(b); https://calcivilrights.ca.gov/family-medical-pregnancy-leave/; 29 CFR 825.110(a)(2)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 1250,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-06-01",
+   "reason": "own_health",
+   "opts": {
+    "start": "2026-06-01",
+    "weeks": 12
+   },
+   "requested": "2026-06-01"
+  },
+  "expect": {
+   "elig": {
+    "cfra": true,
+    "fmla": true
+   }
+  }
+ },
+ {
+  "id": "elig-1249-hours",
+  "area": "eligibility",
+  "desc": "1,249 hours in the prior 12 months fails the hours test for both CFRA and FMLA.",
+  "source": "Gov. Code 12945.2(a), (b)(2), (b)(4); 2 CCR 11087(e), 11088(b); https://calcivilrights.ca.gov/family-medical-pregnancy-leave/; 29 CFR 825.110(a)(2)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 1249,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-06-01",
+   "reason": "own_health",
+   "opts": {
+    "start": "2026-06-01",
+    "weeks": 12
+   },
+   "requested": "2026-06-01"
+  },
+  "expect": {
+   "elig": {
+    "cfra": false,
+    "fmla": false
+   },
+   "plan": {
+    "jobProtectedUntil": null,
+    "warnsAbout": [
+     "not_cfra_eligible"
+    ]
+   }
+  }
+ },
+ {
+  "id": "elig-5-employees",
+  "area": "eligibility",
+  "desc": "An employer with 5 employees is covered by CFRA and PDL but not FMLA.",
+  "source": "Gov. Code 12945.2(a), (b)(2), (b)(4); 2 CCR 11087(e), 11088(b); https://calcivilrights.ca.gov/family-medical-pregnancy-leave/; Gov. Code 12945(a)(1); 2 CCR 11035(f), 11042(a) (4 months = 17 1/3 weeks); 2 CCR 11093(c) (PDL and CFRA do not run concurrently; FMLA runs with PDL); 29 CFR 825.104(a)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 5,
+    "within75": false,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-06-01",
+   "reason": "own_health",
+   "opts": {
+    "start": "2026-06-01",
+    "weeks": 12
+   },
+   "requested": "2026-06-01"
+  },
+  "expect": {
+   "elig": {
+    "cfra": true,
+    "fmla": false,
+    "fmlaCovered": false,
+    "pdl": true,
+    "bereavement": true
+   },
+   "plan": {
+    "lawsInclude": [
+     "CFRA"
+    ],
+    "lawsExclude": [
+     "FMLA"
+    ]
+   }
+  }
+ },
+ {
+  "id": "elig-4-employees",
+  "area": "eligibility",
+  "desc": "An employer with 4 employees is not covered by CFRA, PDL or bereavement leave, so there is no job-protected leave.",
+  "source": "Gov. Code 12945.2(a), (b)(2), (b)(4); 2 CCR 11087(e), 11088(b); https://calcivilrights.ca.gov/family-medical-pregnancy-leave/; Gov. Code 12945(a)(1); 2 CCR 11035(f), 11042(a) (4 months = 17 1/3 weeks); 2 CCR 11093(c) (PDL and CFRA do not run concurrently; FMLA runs with PDL); Gov. Code 12945.7 (5+ employees, employed 30 days, 5 days, documentation within 30 days of first day of leave)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 4,
+    "within75": false,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-06-01",
+   "reason": "own_health",
+   "opts": {
+    "start": "2026-06-01",
+    "weeks": 12
+   },
+   "requested": "2026-06-01"
+  },
+  "expect": {
+   "elig": {
+    "cfra": false,
+    "fmla": false,
+    "fmlaCovered": false,
+    "pdl": false,
+    "bereavement": false
+   },
+   "plan": {
+    "jobProtectedUntil": null,
+    "paysSDI": true,
+    "lawsExclude": [
+     "CFRA",
+     "FMLA",
+     "PDL"
+    ]
+   }
+  }
+ },
+ {
+  "id": "elig-49-employees",
+  "area": "eligibility",
+  "desc": "An employer with 49 employees is not FMLA-covered but the employee still gets CFRA.",
+  "source": "29 CFR 825.104(a); Gov. Code 12945.2(a), (b)(2), (b)(4); 2 CCR 11087(e), 11088(b); https://calcivilrights.ca.gov/family-medical-pregnancy-leave/",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 49,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-06-01",
+   "reason": "own_health",
+   "opts": {
+    "start": "2026-06-01",
+    "weeks": 12
+   },
+   "requested": "2026-06-01"
+  },
+  "expect": {
+   "elig": {
+    "cfra": true,
+    "fmla": false,
+    "fmlaCovered": false
+   },
+   "plan": {
+    "lawsInclude": [
+     "CFRA"
+    ],
+    "lawsExclude": [
+     "FMLA"
+    ],
+    "jobProtectedUntil": "2026-08-24"
+   }
+  }
+ },
+ {
+  "id": "elig-50-employees",
+  "area": "eligibility",
+  "desc": "An employer with 50 employees within 75 miles is FMLA-covered and the employee is FMLA-eligible.",
+  "source": "29 CFR 825.104(a), 825.110(a)(3)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 50,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-06-01",
+   "reason": "own_health",
+   "opts": {
+    "start": "2026-06-01",
+    "weeks": 12
+   },
+   "requested": "2026-06-01"
+  },
+  "expect": {
+   "elig": {
+    "cfra": true,
+    "fmla": true,
+    "fmlaCovered": true
+   },
+   "plan": {
+    "lawsInclude": [
+     "CFRA",
+     "FMLA"
+    ]
+   }
+  }
+ },
+ {
+  "id": "elig-75-mile-fail",
+  "area": "eligibility",
+  "desc": "With 50+ employees but fewer than 50 within 75 miles, the employer is FMLA-covered but the employee is not FMLA-eligible; CFRA has no 75-mile rule.",
+  "source": "29 CFR 825.104(a) (employer coverage), 825.110(a)(3), 825.111 (75-mile is an employee eligibility test); Gov. Code 12945.2 (no worksite test)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 60,
+    "within75": false,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-06-01",
+   "reason": "own_health",
+   "opts": {
+    "start": "2026-06-01",
+    "weeks": 12
+   },
+   "requested": "2026-06-01"
+  },
+  "expect": {
+   "elig": {
+    "cfra": true,
+    "fmla": false,
+    "fmlaCovered": true
+   },
+   "plan": {
+    "lawsInclude": [
+     "CFRA"
+    ],
+    "lawsExclude": [
+     "FMLA"
+    ],
+    "jobProtectedUntil": "2026-08-24"
+   }
+  }
+ },
+ {
+  "id": "elig-leap-year",
+  "area": "eligibility",
+  "desc": "Hired 2027-03-01 with leave starting 2028-02-29 is 365 days but not yet 12 calendar months, so CFRA does not apply yet.",
+  "source": "Gov. Code 12945.2(a), (b)(2), (b)(4); 2 CCR 11087(e), 11088(b); https://calcivilrights.ca.gov/family-medical-pregnancy-leave/; 29 CFR 825.110(b)",
+  "input": {
+   "employee": {
+    "hire": "2027-03-01",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2028-02-29",
+   "reason": "own_health",
+   "opts": {
+    "start": "2028-02-29",
+    "weeks": 4
+   },
+   "requested": "2028-02-29"
+  },
+  "expect": {
+   "elig": {
+    "cfra": false,
+    "fmla": false
+   }
+  }
+ },
+ {
+  "id": "elig-cfra-partly-used",
+  "area": "eligibility",
+  "desc": "Employee who already used 4 weeks of CFRA in the rolling 12 months has 8 weeks left.",
+  "source": "Gov. Code 12945.2(a) (12 workweeks in 12-month period); 2 CCR 11090(b)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 4,
+    "fmlaUsed": 4,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-06-01",
+   "reason": "own_health",
+   "opts": {
+    "start": "2026-06-01",
+    "weeks": 6
+   },
+   "requested": "2026-06-01"
+  },
+  "expect": {
+   "elig": {
+    "cfra": true,
+    "cfraRemainingWeeks": 8
+   },
+   "plan": {
+    "jobProtectedUntil": "2026-07-13"
+   }
+  }
+ },
+ {
+  "id": "elig-cfra-exhausted",
+  "area": "eligibility",
+  "desc": "Employee who used all 12 weeks of CFRA and FMLA has no job-protected leave left.",
+  "source": "Gov. Code 12945.2(a); 29 CFR 825.200(a)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 12,
+    "fmlaUsed": 12,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-06-01",
+   "reason": "own_health",
+   "opts": {
+    "start": "2026-06-01",
+    "weeks": 4
+   },
+   "requested": "2026-06-01"
+  },
+  "expect": {
+   "elig": {
+    "cfraRemainingWeeks": 0
+   },
+   "plan": {
+    "jobProtectedUntil": null,
+    "warnsAbout": [
+     "cfra_balance"
+    ],
+    "paysSDI": true
+   }
+  }
+ },
+ {
+  "id": "elig-not-consecutive-ok",
+  "area": "eligibility",
+  "desc": "Hired long ago with 2,080 hours is eligible for both laws with a full 12 weeks remaining.",
+  "source": "Gov. Code 12945.2(a), (b)(2), (b)(4); 2 CCR 11087(e), 11088(b); https://calcivilrights.ca.gov/family-medical-pregnancy-leave/; 29 CFR 825.104, 825.110, 825.111; https://www.dol.gov/agencies/whd/fmla",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2080,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-06-01",
+   "reason": "family_care",
+   "opts": {
+    "start": "2026-06-01",
+    "weeks": 4,
+    "relation": "parent"
+   },
+   "requested": "2026-06-01"
+  },
+  "expect": {
+   "elig": {
+    "cfra": true,
+    "fmla": true,
+    "cfraRemainingWeeks": 12
+   }
+  }
+ },
+ {
+  "id": "pdl-standard",
+  "area": "pdl",
+  "desc": "10 weeks of PDL then 12 weeks of CFRA bonding: PDL ends day 70, bonding runs 12 weeks after that, all job-protected.",
+  "source": "Gov. Code 12945(a)(1); 2 CCR 11035(f), 11042(a) (4 months = 17 1/3 weeks); 2 CCR 11093(c) (PDL and CFRA do not run concurrently; FMLA runs with PDL); Unemp. Ins. Code 2627 (7-day waiting period); https://edd.ca.gov/en/disability/About_DI/; Unemp. Ins. Code 3301 (8 weeks in 12 months, no waiting period since 2018), 3302; https://edd.ca.gov/en/disability/paid-family-leave/",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-03-02",
+   "reason": "pregnancy_bonding",
+   "opts": {
+    "start": "2026-03-02",
+    "disWeeks": 10,
+    "bondWeeks": 12
+   },
+   "requested": "2026-02-02"
+  },
+  "expect": {
+   "elig": {
+    "pdl": true,
+    "cfra": true,
+    "fmla": true
+   },
+   "plan": {
+    "lawsInclude": [
+     "PDL",
+     "CFRA",
+     "FMLA"
+    ],
+    "paysSDI": true,
+    "sdiPayStart": "2026-03-09",
+    "paysPFL": true,
+    "pflWeeks": 8,
+    "pdlEnd": "2026-05-11",
+    "pflEnd": "2026-07-06",
+    "end": "2026-08-03",
+    "jobProtectedUntil": "2026-08-03"
+   }
+  }
+ },
+ {
+  "id": "pdl-over-4-months",
+  "area": "pdl",
+  "desc": "Requesting 20 weeks of pregnancy disability caps PDL at 17.33 weeks (121 days) and bonding starts after that.",
+  "source": "Gov. Code 12945(a)(1); 2 CCR 11035(f), 11042(a) (4 months = 17 1/3 weeks); 2 CCR 11093(c) (PDL and CFRA do not run concurrently; FMLA runs with PDL)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-03-02",
+   "reason": "pregnancy_bonding",
+   "opts": {
+    "start": "2026-03-02",
+    "disWeeks": 20,
+    "bondWeeks": 12
+   },
+   "requested": "2026-02-02"
+  },
+  "expect": {
+   "plan": {
+    "pdlEnd": "2026-07-01",
+    "end": "2026-09-23",
+    "jobProtectedUntil": "2026-09-23",
+    "pflEnd": "2026-08-26",
+    "warnsAbout": [
+     "pdl_over_4_months"
+    ]
+   }
+  }
+ },
+ {
+  "id": "pdl-exactly-4-months",
+  "area": "pdl",
+  "desc": "Exactly 17.33 weeks of PDL ends 121 days after start.",
+  "source": "Gov. Code 12945(a)(1); 2 CCR 11035(f), 11042(a) (4 months = 17 1/3 weeks); 2 CCR 11093(c) (PDL and CFRA do not run concurrently; FMLA runs with PDL)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-03-02",
+   "reason": "pregnancy_bonding",
+   "opts": {
+    "start": "2026-03-02",
+    "disWeeks": 17.33,
+    "bondWeeks": 6
+   },
+   "requested": "2026-02-02"
+  },
+  "expect": {
+   "plan": {
+    "pdlEnd": "2026-07-01",
+    "end": "2026-08-12",
+    "jobProtectedUntil": "2026-08-12"
+   }
+  }
+ },
+ {
+  "id": "pdl-no-cfra-new-hire",
+  "area": "pdl",
+  "desc": "A 6-month employee at a 20-person employer gets PDL (no service requirement) but bonding is not CFRA-protected.",
+  "source": "Gov. Code 12945(a)(1); 2 CCR 11035(f), 11042(a) (4 months = 17 1/3 weeks); 2 CCR 11093(c) (PDL and CFRA do not run concurrently; FMLA runs with PDL); Gov. Code 12945.2(a)",
+  "input": {
+   "employee": {
+    "hire": "2025-09-01",
+    "hours12": 900,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 20,
+    "within75": false,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-03-02",
+   "reason": "pregnancy_bonding",
+   "opts": {
+    "start": "2026-03-02",
+    "disWeeks": 8,
+    "bondWeeks": 10
+   },
+   "requested": "2026-02-02"
+  },
+  "expect": {
+   "elig": {
+    "pdl": true,
+    "cfra": false,
+    "fmla": false
+   },
+   "plan": {
+    "lawsInclude": [
+     "PDL"
+    ],
+    "lawsExclude": [
+     "CFRA",
+     "FMLA"
+    ],
+    "pdlEnd": "2026-04-27",
+    "jobProtectedUntil": "2026-04-27",
+    "end": "2026-07-06",
+    "paysPFL": true,
+    "pflWeeks": 8,
+    "warnsAbout": [
+     "not_cfra_eligible"
+    ]
+   }
+  }
+ },
+ {
+  "id": "pdl-low-hours",
+  "area": "pdl",
+  "desc": "PDL has no hours requirement: 1,000 hours at a 100-person employer gets PDL but no CFRA or FMLA.",
+  "source": "Gov. Code 12945(a)(1); 2 CCR 11035(f), 11042(a) (4 months = 17 1/3 weeks); 2 CCR 11093(c) (PDL and CFRA do not run concurrently; FMLA runs with PDL); 2 CCR 11035 (no length-of-service requirement)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 1000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-03-02",
+   "reason": "pregnancy_bonding",
+   "opts": {
+    "start": "2026-03-02",
+    "disWeeks": 6,
+    "bondWeeks": 6
+   },
+   "requested": "2026-02-02"
+  },
+  "expect": {
+   "elig": {
+    "pdl": true,
+    "cfra": false,
+    "fmla": false
+   },
+   "plan": {
+    "pdlEnd": "2026-04-13",
+    "jobProtectedUntil": "2026-04-13",
+    "paysSDI": true
+   }
+  }
+ },
+ {
+  "id": "pdl-4-employees",
+  "area": "pdl",
+  "desc": "At a 4-employee employer there is no PDL or CFRA, but SDI and PFL still pay.",
+  "source": "Gov. Code 12945(a)(1); 2 CCR 11035(f), 11042(a) (4 months = 17 1/3 weeks); 2 CCR 11093(c) (PDL and CFRA do not run concurrently; FMLA runs with PDL); Unemp. Ins. Code 2627 (7-day waiting period); https://edd.ca.gov/en/disability/About_DI/; Unemp. Ins. Code 3301 (8 weeks in 12 months, no waiting period since 2018), 3302; https://edd.ca.gov/en/disability/paid-family-leave/",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 4,
+    "within75": false,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-03-02",
+   "reason": "pregnancy_bonding",
+   "opts": {
+    "start": "2026-03-02",
+    "disWeeks": 6,
+    "bondWeeks": 8
+   },
+   "requested": "2026-02-02"
+  },
+  "expect": {
+   "elig": {
+    "pdl": false,
+    "cfra": false
+   },
+   "plan": {
+    "jobProtectedUntil": null,
+    "paysSDI": true,
+    "paysPFL": true,
+    "sdiPayStart": "2026-03-09",
+    "lawsExclude": [
+     "PDL",
+     "CFRA",
+     "FMLA"
+    ]
+   }
+  }
+ },
+ {
+  "id": "pdl-cfra-partly-used",
+  "area": "pdl",
+  "desc": "PDL does not use up CFRA, but an employee who used 6 CFRA weeks earlier this year only has 6 protected bonding weeks.",
+  "source": "Gov. Code 12945(a)(1); 2 CCR 11035(f), 11042(a) (4 months = 17 1/3 weeks); 2 CCR 11093(c) (PDL and CFRA do not run concurrently; FMLA runs with PDL); Gov. Code 12945.2(a)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 6,
+    "fmlaUsed": 6,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-03-02",
+   "reason": "pregnancy_bonding",
+   "opts": {
+    "start": "2026-03-02",
+    "disWeeks": 10,
+    "bondWeeks": 12
+   },
+   "requested": "2026-02-02"
+  },
+  "expect": {
+   "elig": {
+    "cfraRemainingWeeks": 6
+   },
+   "plan": {
+    "pdlEnd": "2026-05-11",
+    "jobProtectedUntil": "2026-06-22",
+    "end": "2026-08-03",
+    "warnsAbout": [
+     "cfra_balance"
+    ]
+   }
+  }
+ },
+ {
+  "id": "pdl-tasks",
+  "area": "pdl",
+  "desc": "Pregnancy leave requested on a Thursday before Thanksgiving: notice skips the two company holidays and cert is 15 calendar days out.",
+  "source": "29 CFR 825.300(b) (eligibility notice within 5 business days), 825.300(d) (designation within 5 business days), 825.305(b) (at least 15 calendar days for certification); 2 CCR 11091(b)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2027-01-04",
+   "reason": "pregnancy_bonding",
+   "opts": {
+    "start": "2027-01-04",
+    "disWeeks": 6,
+    "bondWeeks": 12
+   },
+   "requested": "2026-11-19"
+  },
+  "expect": {
+   "tasks": {
+    "notice": "2026-11-30",
+    "cert": "2026-12-04"
+   }
+  }
+ },
+ {
+  "id": "pdl-sdi-start",
+  "area": "pdl",
+  "desc": "SDI for pregnancy disability starts paying on day 8 after a 7-day waiting period.",
+  "source": "Unemp. Ins. Code 2627 (7-day waiting period); https://edd.ca.gov/en/disability/About_DI/",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-09-14",
+   "reason": "pregnancy_bonding",
+   "opts": {
+    "start": "2026-09-14",
+    "disWeeks": 10,
+    "bondWeeks": 8
+   },
+   "requested": "2026-08-14"
+  },
+  "expect": {
+   "plan": {
+    "paysSDI": true,
+    "sdiPayStart": "2026-09-21",
+    "pdlEnd": "2026-11-23",
+    "pflWeeks": 8,
+    "pflEnd": "2027-01-18",
+    "end": "2027-01-18"
+   }
+  }
+ },
+ {
+  "id": "own-6-weeks",
+  "area": "own_health",
+  "desc": "Six weeks of own serious health condition leave is fully CFRA and FMLA protected and paid by SDI from day 8, not PFL.",
+  "source": "Gov. Code 12945.2(a), (b)(2), (b)(4); 2 CCR 11087(e), 11088(b); https://calcivilrights.ca.gov/family-medical-pregnancy-leave/; Unemp. Ins. Code 2627 (7-day waiting period); https://edd.ca.gov/en/disability/About_DI/",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-04-06",
+   "reason": "own_health",
+   "opts": {
+    "start": "2026-04-06",
+    "weeks": 6
+   },
+   "requested": "2026-03-30"
+  },
+  "expect": {
+   "plan": {
+    "lawsInclude": [
+     "CFRA",
+     "FMLA"
+    ],
+    "lawsExclude": [
+     "PDL"
+    ],
+    "paysSDI": true,
+    "paysPFL": false,
+    "sdiPayStart": "2026-04-13",
+    "end": "2026-05-18",
+    "jobProtectedUntil": "2026-05-18"
+   }
+  }
+ },
+ {
+  "id": "own-16-weeks",
+  "area": "own_health",
+  "desc": "Requesting 16 weeks exceeds the 12-week CFRA entitlement, so protection ends at 12 weeks.",
+  "source": "Gov. Code 12945.2(a); 29 CFR 825.200",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-04-06",
+   "reason": "own_health",
+   "opts": {
+    "start": "2026-04-06",
+    "weeks": 16
+   },
+   "requested": "2026-03-30"
+  },
+  "expect": {
+   "plan": {
+    "end": "2026-07-27",
+    "jobProtectedUntil": "2026-06-29",
+    "warnsAbout": [
+     "cfra_balance"
+    ]
+   }
+  }
+ },
+ {
+  "id": "own-partial-balance",
+  "area": "own_health",
+  "desc": "With 9 CFRA weeks already used, a 6-week request is protected for only 3 weeks.",
+  "source": "Gov. Code 12945.2(a); 2 CCR 11090",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 9,
+    "fmlaUsed": 9,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-04-06",
+   "reason": "own_health",
+   "opts": {
+    "start": "2026-04-06",
+    "weeks": 6
+   },
+   "requested": "2026-03-30"
+  },
+  "expect": {
+   "elig": {
+    "cfraRemainingWeeks": 3
+   },
+   "plan": {
+    "end": "2026-05-18",
+    "jobProtectedUntil": "2026-04-27",
+    "warnsAbout": [
+     "cfra_balance"
+    ]
+   }
+  }
+ },
+ {
+  "id": "own-small-employer-cfra-only",
+  "area": "own_health",
+  "desc": "At a 10-person employer, own health leave is CFRA only.",
+  "source": "Gov. Code 12945.2(a), (b)(2), (b)(4); 2 CCR 11087(e), 11088(b); https://calcivilrights.ca.gov/family-medical-pregnancy-leave/; 29 CFR 825.104",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 10,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-04-06",
+   "reason": "own_health",
+   "opts": {
+    "start": "2026-04-06",
+    "weeks": 12
+   },
+   "requested": "2026-03-30"
+  },
+  "expect": {
+   "plan": {
+    "lawsInclude": [
+     "CFRA"
+    ],
+    "lawsExclude": [
+     "FMLA",
+     "PDL"
+    ],
+    "jobProtectedUntil": "2026-06-29",
+    "sdiPayStart": "2026-04-13"
+   }
+  }
+ },
+ {
+  "id": "fam-parent",
+  "area": "family_care",
+  "desc": "Caring for a parent is covered by CFRA, FMLA and PFL; SDI does not pay.",
+  "source": "Gov. Code 12945.2(b) (child, parent, parent-in-law, grandparent, grandchild, sibling, spouse, domestic partner, designated person); 2 CCR 11087; 29 CFR 825.102 (spouse, parent, son or daughter), 825.122; https://www.dol.gov/agencies/whd/fact-sheets/28f-fmla-qualifying-reasons; Unemp. Ins. Code 3301 (8 weeks in 12 months, no waiting period since 2018), 3302; https://edd.ca.gov/en/disability/paid-family-leave/",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-08-03",
+   "reason": "family_care",
+   "opts": {
+    "start": "2026-08-03",
+    "weeks": 6,
+    "relation": "parent"
+   },
+   "requested": "2026-07-27"
+  },
+  "expect": {
+   "plan": {
+    "lawsInclude": [
+     "CFRA",
+     "FMLA"
+    ],
+    "paysPFL": true,
+    "paysSDI": false,
+    "pflWeeks": 6,
+    "pflEnd": "2026-09-14",
+    "end": "2026-09-14",
+    "jobProtectedUntil": "2026-09-14"
+   }
+  }
+ },
+ {
+  "id": "fam-inlaw",
+  "area": "family_care",
+  "desc": "Caring for a parent-in-law is covered by CFRA and PFL but not FMLA.",
+  "source": "Gov. Code 12945.2(b) (child, parent, parent-in-law, grandparent, grandchild, sibling, spouse, domestic partner, designated person); 2 CCR 11087; 29 CFR 825.102 (spouse, parent, son or daughter), 825.122; https://www.dol.gov/agencies/whd/fact-sheets/28f-fmla-qualifying-reasons; Unemp. Ins. Code 3302 (PFL family members)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-08-03",
+   "reason": "family_care",
+   "opts": {
+    "start": "2026-08-03",
+    "weeks": 6,
+    "relation": "inlaw"
+   },
+   "requested": "2026-07-27"
+  },
+  "expect": {
+   "plan": {
+    "lawsInclude": [
+     "CFRA"
+    ],
+    "lawsExclude": [
+     "FMLA"
+    ],
+    "paysPFL": true,
+    "jobProtectedUntil": "2026-09-14"
+   }
+  }
+ },
+ {
+  "id": "fam-grandparent",
+  "area": "family_care",
+  "desc": "Caring for a grandparent is covered by CFRA and PFL but not FMLA.",
+  "source": "Gov. Code 12945.2(b) (child, parent, parent-in-law, grandparent, grandchild, sibling, spouse, domestic partner, designated person); 2 CCR 11087; 29 CFR 825.102 (spouse, parent, son or daughter), 825.122; https://www.dol.gov/agencies/whd/fact-sheets/28f-fmla-qualifying-reasons; Unemp. Ins. Code 3302 (PFL family members)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-08-03",
+   "reason": "family_care",
+   "opts": {
+    "start": "2026-08-03",
+    "weeks": 6,
+    "relation": "grandparent"
+   },
+   "requested": "2026-07-27"
+  },
+  "expect": {
+   "plan": {
+    "lawsInclude": [
+     "CFRA"
+    ],
+    "lawsExclude": [
+     "FMLA"
+    ],
+    "paysPFL": true,
+    "jobProtectedUntil": "2026-09-14"
+   }
+  }
+ },
+ {
+  "id": "fam-sibling",
+  "area": "family_care",
+  "desc": "Caring for a sibling is covered by CFRA and PFL but not FMLA.",
+  "source": "Gov. Code 12945.2(b) (child, parent, parent-in-law, grandparent, grandchild, sibling, spouse, domestic partner, designated person); 2 CCR 11087; 29 CFR 825.102 (spouse, parent, son or daughter), 825.122; https://www.dol.gov/agencies/whd/fact-sheets/28f-fmla-qualifying-reasons; Unemp. Ins. Code 3302 (PFL family members)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-08-03",
+   "reason": "family_care",
+   "opts": {
+    "start": "2026-08-03",
+    "weeks": 6,
+    "relation": "sibling"
+   },
+   "requested": "2026-07-27"
+  },
+  "expect": {
+   "plan": {
+    "lawsInclude": [
+     "CFRA"
+    ],
+    "lawsExclude": [
+     "FMLA"
+    ],
+    "paysPFL": true,
+    "jobProtectedUntil": "2026-09-14"
+   }
+  }
+ },
+ {
+  "id": "fam-grandchild",
+  "area": "family_care",
+  "desc": "Caring for a grandchild is covered by CFRA and PFL but not FMLA.",
+  "source": "Gov. Code 12945.2(b) (child, parent, parent-in-law, grandparent, grandchild, sibling, spouse, domestic partner, designated person); 2 CCR 11087; 29 CFR 825.102 (spouse, parent, son or daughter), 825.122; https://www.dol.gov/agencies/whd/fact-sheets/28f-fmla-qualifying-reasons; Unemp. Ins. Code 3302 (PFL family members)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-08-03",
+   "reason": "family_care",
+   "opts": {
+    "start": "2026-08-03",
+    "weeks": 6,
+    "relation": "grandchild"
+   },
+   "requested": "2026-07-27"
+  },
+  "expect": {
+   "plan": {
+    "lawsInclude": [
+     "CFRA"
+    ],
+    "lawsExclude": [
+     "FMLA"
+    ],
+    "paysPFL": true,
+    "jobProtectedUntil": "2026-09-14"
+   }
+  }
+ },
+ {
+  "id": "fam-partner",
+  "area": "family_care",
+  "desc": "Caring for a registered domestic partner is covered by CFRA and PFL but not FMLA.",
+  "source": "Gov. Code 12945.2(b) (child, parent, parent-in-law, grandparent, grandchild, sibling, spouse, domestic partner, designated person); 2 CCR 11087; 29 CFR 825.102 (spouse, parent, son or daughter), 825.122; https://www.dol.gov/agencies/whd/fact-sheets/28f-fmla-qualifying-reasons; Unemp. Ins. Code 3302 (PFL family members)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-08-03",
+   "reason": "family_care",
+   "opts": {
+    "start": "2026-08-03",
+    "weeks": 6,
+    "relation": "partner"
+   },
+   "requested": "2026-07-27"
+  },
+  "expect": {
+   "plan": {
+    "lawsInclude": [
+     "CFRA"
+    ],
+    "lawsExclude": [
+     "FMLA"
+    ],
+    "paysPFL": true,
+    "jobProtectedUntil": "2026-09-14"
+   }
+  }
+ },
+ {
+  "id": "fam-spouse",
+  "area": "family_care",
+  "desc": "Caring for a spouse is covered by CFRA, FMLA and PFL.",
+  "source": "Gov. Code 12945.2(b) (child, parent, parent-in-law, grandparent, grandchild, sibling, spouse, domestic partner, designated person); 2 CCR 11087; 29 CFR 825.102 (spouse, parent, son or daughter), 825.122; https://www.dol.gov/agencies/whd/fact-sheets/28f-fmla-qualifying-reasons",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-08-03",
+   "reason": "family_care",
+   "opts": {
+    "start": "2026-08-03",
+    "weeks": 6,
+    "relation": "spouse"
+   },
+   "requested": "2026-07-27"
+  },
+  "expect": {
+   "plan": {
+    "lawsInclude": [
+     "CFRA",
+     "FMLA"
+    ],
+    "paysPFL": true
+   }
+  }
+ },
+ {
+  "id": "fam-child",
+  "area": "family_care",
+  "desc": "Caring for a child is covered by CFRA, FMLA and PFL.",
+  "source": "Gov. Code 12945.2(b) (child, parent, parent-in-law, grandparent, grandchild, sibling, spouse, domestic partner, designated person); 2 CCR 11087; 29 CFR 825.102 (spouse, parent, son or daughter), 825.122; https://www.dol.gov/agencies/whd/fact-sheets/28f-fmla-qualifying-reasons",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-08-03",
+   "reason": "family_care",
+   "opts": {
+    "start": "2026-08-03",
+    "weeks": 6,
+    "relation": "child"
+   },
+   "requested": "2026-07-27"
+  },
+  "expect": {
+   "plan": {
+    "lawsInclude": [
+     "CFRA",
+     "FMLA"
+    ],
+    "paysPFL": true
+   }
+  }
+ },
+ {
+  "id": "fam-designated-2026",
+  "area": "family_care",
+  "desc": "Caring for a designated person in 2026 is CFRA-protected but PFL does not pay until July 1, 2028, and FMLA does not apply.",
+  "source": "Gov. Code 12945.2(b) (child, parent, parent-in-law, grandparent, grandchild, sibling, spouse, domestic partner, designated person); 2 CCR 11087; SB 590 (2025), Unemp. Ins. Code 3302 designated person effective July 1, 2028; https://www.californiaworkplacelawblog.com/2025/10/articles/disability-and-leave/senate-bill-590-californias-state-paid-family-leave-extended-to-cover-leave-for-designated-persons/",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-08-03",
+   "reason": "family_care",
+   "opts": {
+    "start": "2026-08-03",
+    "weeks": 6,
+    "relation": "designated"
+   },
+   "requested": "2026-07-27"
+  },
+  "expect": {
+   "plan": {
+    "lawsInclude": [
+     "CFRA"
+    ],
+    "lawsExclude": [
+     "FMLA"
+    ],
+    "paysPFL": false,
+    "jobProtectedUntil": "2026-09-14",
+    "warnsAbout": [
+     "designated_no_pfl"
+    ]
+   }
+  }
+ },
+ {
+  "id": "fam-designated-2028",
+  "area": "family_care",
+  "desc": "Caring for a designated person with leave starting after July 1, 2028 is paid by PFL.",
+  "source": "SB 590 (2025), Unemp. Ins. Code 3302 designated person effective July 1, 2028; https://www.californiaworkplacelawblog.com/2025/10/articles/disability-and-leave/senate-bill-590-californias-state-paid-family-leave-extended-to-cover-leave-for-designated-persons/",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2028-07-10",
+   "reason": "family_care",
+   "opts": {
+    "start": "2028-07-10",
+    "weeks": 4,
+    "relation": "designated"
+   },
+   "requested": "2028-07-03"
+  },
+  "expect": {
+   "plan": {
+    "lawsInclude": [
+     "CFRA"
+    ],
+    "lawsExclude": [
+     "FMLA"
+    ],
+    "paysPFL": true,
+    "pflWeeks": 4
+   }
+  },
+  "ambiguous": "Depends on whether the engine models the July 1, 2028 effective date; EDD may also decide eligibility by claim effective date, not leave start."
+ },
+ {
+  "id": "fam-designated-2027-12",
+  "area": "family_care",
+  "desc": "Designated-person leave starting December 2027 still gets no PFL.",
+  "source": "SB 590 (2025), Unemp. Ins. Code 3302 designated person effective July 1, 2028; https://www.californiaworkplacelawblog.com/2025/10/articles/disability-and-leave/senate-bill-590-californias-state-paid-family-leave-extended-to-cover-leave-for-designated-persons/",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2027-12-06",
+   "reason": "family_care",
+   "opts": {
+    "start": "2027-12-06",
+    "weeks": 4,
+    "relation": "designated"
+   },
+   "requested": "2027-11-29"
+  },
+  "expect": {
+   "plan": {
+    "paysPFL": false,
+    "warnsAbout": [
+     "designated_no_pfl"
+    ]
+   }
+  }
+ },
+ {
+  "id": "fam-10-weeks-pfl-cap",
+  "area": "family_care",
+  "desc": "A 10-week family care leave gets at most 8 weeks of PFL.",
+  "source": "Unemp. Ins. Code 3301 (8 weeks in 12 months, no waiting period since 2018), 3302; https://edd.ca.gov/en/disability/paid-family-leave/",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-08-03",
+   "reason": "family_care",
+   "opts": {
+    "start": "2026-08-03",
+    "weeks": 10,
+    "relation": "parent"
+   },
+   "requested": "2026-07-27"
+  },
+  "expect": {
+   "plan": {
+    "pflWeeks": 8,
+    "pflEnd": "2026-09-28",
+    "end": "2026-10-12",
+    "jobProtectedUntil": "2026-10-12"
+   }
+  }
+ },
+ {
+  "id": "fam-inlaw-small-employer",
+  "area": "family_care",
+  "desc": "Parent-in-law care at an 8-person employer is CFRA-protected with no FMLA.",
+  "source": "Gov. Code 12945.2(b) (child, parent, parent-in-law, grandparent, grandchild, sibling, spouse, domestic partner, designated person); 2 CCR 11087; 29 CFR 825.104",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 8,
+    "within75": false,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-08-03",
+   "reason": "family_care",
+   "opts": {
+    "start": "2026-08-03",
+    "weeks": 12,
+    "relation": "inlaw"
+   },
+   "requested": "2026-07-27"
+  },
+  "expect": {
+   "elig": {
+    "cfra": true,
+    "fmlaCovered": false
+   },
+   "plan": {
+    "lawsInclude": [
+     "CFRA"
+    ],
+    "lawsExclude": [
+     "FMLA"
+    ],
+    "jobProtectedUntil": "2026-10-26"
+   }
+  }
+ },
+ {
+  "id": "bond-12-weeks",
+  "area": "bonding",
+  "desc": "12 weeks of baby bonding is CFRA and FMLA protected with 8 weeks of PFL starting at leave start.",
+  "source": "Gov. Code 12945.2(b)(4)(A); 29 CFR 825.120; Unemp. Ins. Code 3301 (8 weeks in 12 months, no waiting period since 2018), 3302; https://edd.ca.gov/en/disability/paid-family-leave/",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-10-05",
+   "reason": "bonding",
+   "opts": {
+    "start": "2026-10-05",
+    "weeks": 12
+   },
+   "requested": "2026-09-04"
+  },
+  "expect": {
+   "plan": {
+    "lawsInclude": [
+     "CFRA",
+     "FMLA"
+    ],
+    "lawsExclude": [
+     "PDL"
+    ],
+    "paysPFL": true,
+    "paysSDI": false,
+    "pflWeeks": 8,
+    "pflEnd": "2026-11-30",
+    "end": "2026-12-28",
+    "jobProtectedUntil": "2026-12-28"
+   }
+  }
+ },
+ {
+  "id": "bond-small-employer",
+  "area": "bonding",
+  "desc": "Bonding at a 10-person employer is CFRA-protected only.",
+  "source": "Gov. Code 12945.2; 29 CFR 825.104",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 10,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-10-05",
+   "reason": "bonding",
+   "opts": {
+    "start": "2026-10-05",
+    "weeks": 12
+   },
+   "requested": "2026-09-04"
+  },
+  "expect": {
+   "plan": {
+    "lawsInclude": [
+     "CFRA"
+    ],
+    "lawsExclude": [
+     "FMLA"
+    ],
+    "jobProtectedUntil": "2026-12-28"
+   }
+  }
+ },
+ {
+  "id": "bond-not-eligible",
+  "area": "bonding",
+  "desc": "An employee with 1,000 hours has no job-protected bonding leave but PFL still pays.",
+  "source": "Gov. Code 12945.2(a); Unemp. Ins. Code 3301 (8 weeks in 12 months, no waiting period since 2018), 3302; https://edd.ca.gov/en/disability/paid-family-leave/",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 1000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-10-05",
+   "reason": "bonding",
+   "opts": {
+    "start": "2026-10-05",
+    "weeks": 8
+   },
+   "requested": "2026-09-04"
+  },
+  "expect": {
+   "elig": {
+    "cfra": false,
+    "fmla": false
+   },
+   "plan": {
+    "jobProtectedUntil": null,
+    "paysPFL": true,
+    "pflWeeks": 8,
+    "warnsAbout": [
+     "not_cfra_eligible"
+    ]
+   }
+  }
+ },
+ {
+  "id": "bond-5-weeks",
+  "area": "bonding",
+  "desc": "A 5-week bonding leave gets 5 weeks of PFL.",
+  "source": "Unemp. Ins. Code 3301 (8 weeks in 12 months, no waiting period since 2018), 3302; https://edd.ca.gov/en/disability/paid-family-leave/",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-10-05",
+   "reason": "bonding",
+   "opts": {
+    "start": "2026-10-05",
+    "weeks": 5
+   },
+   "requested": "2026-09-04"
+  },
+  "expect": {
+   "plan": {
+    "pflWeeks": 5,
+    "pflEnd": "2026-11-09",
+    "end": "2026-11-09"
+   }
+  }
+ },
+ {
+  "id": "ber-30-days",
+  "area": "bereavement",
+  "desc": "Employee hired exactly 30 days before leave start is eligible for bereavement leave.",
+  "source": "Gov. Code 12945.7 (5+ employees, employed 30 days, 5 days, documentation within 30 days of first day of leave)",
+  "input": {
+   "employee": {
+    "hire": "2026-05-02",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-06-01",
+   "reason": "bereavement",
+   "opts": {
+    "start": "2026-06-01",
+    "days": 5,
+    "relation": "parent"
+   },
+   "requested": "2026-06-01"
+  },
+  "expect": {
+   "elig": {
+    "bereavement": true
+   }
+  },
+  "ambiguous": "'Employed for at least 30 days prior to commencement' read as start minus hire >= 30 calendar days."
+ },
+ {
+  "id": "ber-29-days",
+  "area": "bereavement",
+  "desc": "Employee hired 29 days before leave start is not yet eligible for bereavement leave.",
+  "source": "Gov. Code 12945.7 (5+ employees, employed 30 days, 5 days, documentation within 30 days of first day of leave)",
+  "input": {
+   "employee": {
+    "hire": "2026-05-03",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-06-01",
+   "reason": "bereavement",
+   "opts": {
+    "start": "2026-06-01",
+    "days": 5,
+    "relation": "parent"
+   },
+   "requested": "2026-06-01"
+  },
+  "expect": {
+   "elig": {
+    "bereavement": false
+   },
+   "plan": {
+    "jobProtectedUntil": null,
+    "warnsAbout": [
+     "under_30_days"
+    ]
+   }
+  }
+ },
+ {
+  "id": "ber-5-days",
+  "area": "bereavement",
+  "desc": "Five bereavement days starting Monday run Monday to Friday.",
+  "source": "Gov. Code 12945.7 (5+ employees, employed 30 days, 5 days, documentation within 30 days of first day of leave)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-06-01",
+   "reason": "bereavement",
+   "opts": {
+    "start": "2026-06-01",
+    "days": 5,
+    "relation": "parent"
+   },
+   "requested": "2026-06-01"
+  },
+  "expect": {
+   "elig": {
+    "bereavement": true
+   },
+   "plan": {
+    "end": "2026-06-06",
+    "jobProtectedUntil": "2026-06-06"
+   }
+  }
+ },
+ {
+  "id": "ber-7-days",
+  "area": "bereavement",
+  "desc": "Seven bereavement days exceeds the 5 required days, so protection ends after the 5th workday.",
+  "source": "Gov. Code 12945.7 (5+ employees, employed 30 days, 5 days, documentation within 30 days of first day of leave)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-06-01",
+   "reason": "bereavement",
+   "opts": {
+    "start": "2026-06-01",
+    "days": 7,
+    "relation": "parent"
+   },
+   "requested": "2026-06-01"
+  },
+  "expect": {
+   "plan": {
+    "jobProtectedUntil": "2026-06-06",
+    "warnsAbout": [
+     "over_5_days"
+    ]
+   }
+  },
+  "ambiguous": "Whether plan.end should cover all 7 requested days is a product choice, so it is not asserted."
+ },
+ {
+  "id": "ber-weekend-start",
+  "area": "bereavement",
+  "desc": "Bereavement starting on a Saturday begins counting on Monday.",
+  "source": "Gov. Code 12945.7 (5+ employees, employed 30 days, 5 days, documentation within 30 days of first day of leave)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-06-06",
+   "reason": "bereavement",
+   "opts": {
+    "start": "2026-06-06",
+    "days": 3,
+    "relation": "parent"
+   },
+   "requested": "2026-06-05"
+  },
+  "expect": {
+   "plan": {
+    "end": "2026-06-11",
+    "jobProtectedUntil": "2026-06-11"
+   }
+  }
+ },
+ {
+  "id": "ber-thanksgiving",
+  "area": "bereavement",
+  "desc": "Five bereavement days from the Wednesday before Thanksgiving skip Thursday and Friday company holidays.",
+  "source": "Gov. Code 12945.7 (5+ employees, employed 30 days, 5 days, documentation within 30 days of first day of leave)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-11-25",
+   "reason": "bereavement",
+   "opts": {
+    "start": "2026-11-25",
+    "days": 5,
+    "relation": "parent"
+   },
+   "requested": "2026-11-24"
+  },
+  "expect": {
+   "plan": {
+    "end": "2026-12-04",
+    "jobProtectedUntil": "2026-12-04"
+   },
+   "tasks": {
+    "confirm": "2026-11-30",
+    "doc": "2026-12-25"
+   }
+  }
+ },
+ {
+  "id": "ber-4-employees",
+  "area": "bereavement",
+  "desc": "A 4-employee employer is not required to give bereavement leave.",
+  "source": "Gov. Code 12945.7 (5+ employees, employed 30 days, 5 days, documentation within 30 days of first day of leave)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 4,
+    "within75": false,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-06-01",
+   "reason": "bereavement",
+   "opts": {
+    "start": "2026-06-01",
+    "days": 5,
+    "relation": "parent"
+   },
+   "requested": "2026-06-01"
+  },
+  "expect": {
+   "elig": {
+    "bereavement": false
+   },
+   "plan": {
+    "jobProtectedUntil": null
+   }
+  }
+ },
+ {
+  "id": "ber-christmas-tasks",
+  "area": "bereavement",
+  "desc": "Bereavement requested the Wednesday before Christmas: confirm skips Dec 25 and the weekend.",
+  "source": "Gov. Code 12945.7 (5+ employees, employed 30 days, 5 days, documentation within 30 days of first day of leave); product task convention",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-12-28",
+   "reason": "bereavement",
+   "opts": {
+    "start": "2026-12-28",
+    "days": 3,
+    "relation": "parent"
+   },
+   "requested": "2026-12-23"
+  },
+  "expect": {
+   "tasks": {
+    "confirm": "2026-12-28",
+    "doc": "2027-01-27"
+   },
+   "plan": {
+    "end": "2026-12-31"
+   }
+  }
+ },
+ {
+  "id": "ber-inlaw",
+  "area": "bereavement",
+  "desc": "Death of a parent-in-law qualifies for bereavement leave.",
+  "source": "Gov. Code 12945.7 (5+ employees, employed 30 days, 5 days, documentation within 30 days of first day of leave) (family member per 12945.2: includes parent-in-law)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-06-01",
+   "reason": "bereavement",
+   "opts": {
+    "start": "2026-06-01",
+    "days": 5,
+    "relation": "inlaw"
+   },
+   "requested": "2026-06-01"
+  },
+  "expect": {
+   "elig": {
+    "bereavement": true
+   }
+  }
+ },
+ {
+  "id": "repro-5-days",
+  "area": "repro",
+  "desc": "Five reproductive loss days for an eligible employee are fully protected.",
+  "source": "Gov. Code 12945.6 (5+ employees, employed 30 days, up to 5 days per event, 20 days max in 12 months)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-06-08",
+   "reason": "repro",
+   "opts": {
+    "start": "2026-06-08",
+    "days": 5
+   },
+   "requested": "2026-06-08"
+  },
+  "expect": {
+   "elig": {
+    "bereavement": true
+   },
+   "plan": {
+    "end": "2026-06-13",
+    "jobProtectedUntil": "2026-06-13"
+   }
+  }
+ },
+ {
+  "id": "repro-at-cap",
+  "area": "repro",
+  "desc": "With 15 days used, 5 more days reaches exactly the 20-day cap and is fully protected.",
+  "source": "Gov. Code 12945.6 (5+ employees, employed 30 days, up to 5 days per event, 20 days max in 12 months)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 15,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-06-08",
+   "reason": "repro",
+   "opts": {
+    "start": "2026-06-08",
+    "days": 5
+   },
+   "requested": "2026-06-08"
+  },
+  "expect": {
+   "plan": {
+    "jobProtectedUntil": "2026-06-13"
+   }
+  }
+ },
+ {
+  "id": "repro-over-cap",
+  "area": "repro",
+  "desc": "With 17 days used, only 3 of 5 requested days are protected under the 20-day cap.",
+  "source": "Gov. Code 12945.6 (5+ employees, employed 30 days, up to 5 days per event, 20 days max in 12 months)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 17,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-06-08",
+   "reason": "repro",
+   "opts": {
+    "start": "2026-06-08",
+    "days": 5
+   },
+   "requested": "2026-06-08"
+  },
+  "expect": {
+   "plan": {
+    "jobProtectedUntil": "2026-06-11",
+    "warnsAbout": [
+     "repro_cap"
+    ]
+   }
+  }
+ },
+ {
+  "id": "repro-cap-exhausted",
+  "area": "repro",
+  "desc": "With 20 days used in the last 12 months, no reproductive loss days remain protected.",
+  "source": "Gov. Code 12945.6 (5+ employees, employed 30 days, up to 5 days per event, 20 days max in 12 months)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 20,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-06-08",
+   "reason": "repro",
+   "opts": {
+    "start": "2026-06-08",
+    "days": 3
+   },
+   "requested": "2026-06-08"
+  },
+  "expect": {
+   "plan": {
+    "jobProtectedUntil": null,
+    "warnsAbout": [
+     "repro_cap"
+    ]
+   }
+  }
+ },
+ {
+  "id": "repro-7-days",
+  "area": "repro",
+  "desc": "Seven reproductive loss days exceeds the 5-day per-event limit.",
+  "source": "Gov. Code 12945.6 (5+ employees, employed 30 days, up to 5 days per event, 20 days max in 12 months)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-06-08",
+   "reason": "repro",
+   "opts": {
+    "start": "2026-06-08",
+    "days": 7
+   },
+   "requested": "2026-06-08"
+  },
+  "expect": {
+   "plan": {
+    "jobProtectedUntil": "2026-06-13",
+    "warnsAbout": [
+     "over_5_days"
+    ]
+   }
+  }
+ },
+ {
+  "id": "repro-29-days",
+  "area": "repro",
+  "desc": "Employee hired 29 days before start is not yet eligible for reproductive loss leave.",
+  "source": "Gov. Code 12945.6 (5+ employees, employed 30 days, up to 5 days per event, 20 days max in 12 months)",
+  "input": {
+   "employee": {
+    "hire": "2026-05-10",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-06-08",
+   "reason": "repro",
+   "opts": {
+    "start": "2026-06-08",
+    "days": 5
+   },
+   "requested": "2026-06-08"
+  },
+  "expect": {
+   "elig": {
+    "bereavement": false
+   },
+   "plan": {
+    "warnsAbout": [
+     "under_30_days"
+    ]
+   }
+  }
+ },
+ {
+  "id": "repro-july4-tasks",
+  "area": "repro",
+  "desc": "Repro loss requested Thursday July 2, 2026: confirm skips the July 3 company holiday and weekend.",
+  "source": "Gov. Code 12945.6 (5+ employees, employed 30 days, up to 5 days per event, 20 days max in 12 months); product task convention",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-07-06",
+   "reason": "repro",
+   "opts": {
+    "start": "2026-07-06",
+    "days": 2
+   },
+   "requested": "2026-07-02"
+  },
+  "expect": {
+   "tasks": {
+    "confirm": "2026-07-07"
+   },
+   "plan": {
+    "end": "2026-07-08"
+   }
+  }
+ },
+ {
+  "id": "sick-day-89",
+  "area": "sick",
+  "desc": "On the 89th day of employment the employee cannot yet use sick leave.",
+  "source": "Labor Code 246(c) (use beginning 90th day of employment), 246(d) (employer may limit use to 40 hours or 5 days per year, as amended by SB 616); https://www.dir.ca.gov/dlse/Paid_Sick_Leave.htm",
+  "input": {
+   "employee": {
+    "hire": "2026-01-08",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 24,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-04-06",
+   "reason": "sick",
+   "opts": {
+    "start": "2026-04-06",
+    "hours": 8
+   },
+   "requested": "2026-04-06"
+  },
+  "expect": {
+   "elig": {
+    "sick": false
+   },
+   "plan": {
+    "warnsAbout": [
+     "sick_not_yet"
+    ]
+   }
+  },
+  "ambiguous": "Hire date counted as day 1, so the 90th day is hire + 89 days. An implementation that requires 90 elapsed days would be one day late."
+ },
+ {
+  "id": "sick-day-90",
+  "area": "sick",
+  "desc": "On the 90th day of employment (hire + 89 days) the employee may use accrued sick leave.",
+  "source": "Labor Code 246(c) (use beginning 90th day of employment), 246(d) (employer may limit use to 40 hours or 5 days per year, as amended by SB 616); https://www.dir.ca.gov/dlse/Paid_Sick_Leave.htm",
+  "input": {
+   "employee": {
+    "hire": "2026-01-08",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 24,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-04-07",
+   "reason": "sick",
+   "opts": {
+    "start": "2026-04-07",
+    "hours": 8
+   },
+   "requested": "2026-04-07"
+  },
+  "expect": {
+   "elig": {
+    "sick": true
+   }
+  },
+  "ambiguous": "Same day-counting reading as sick-day-89."
+ },
+ {
+  "id": "sick-40-cap",
+  "area": "sick",
+  "desc": "With 60 hours banked, only 40 hours are usable this year, so a 48-hour request is over the limit.",
+  "source": "Labor Code 246(c) (use beginning 90th day of employment), 246(d) (employer may limit use to 40 hours or 5 days per year, as amended by SB 616); https://www.dir.ca.gov/dlse/Paid_Sick_Leave.htm",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 60,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-03-02",
+   "reason": "sick",
+   "opts": {
+    "start": "2026-03-02",
+    "hours": 48
+   },
+   "requested": "2026-03-02"
+  },
+  "expect": {
+   "elig": {
+    "sick": true
+   },
+   "plan": {
+    "warnsAbout": [
+     "sick_over_available"
+    ]
+   }
+  }
+ },
+ {
+  "id": "sick-partly-used",
+  "area": "sick",
+  "desc": "30 hours banked and 16 used this year leaves 24 usable hours; a 24-hour request over Thanksgiving spans 3 business days.",
+  "source": "Labor Code 246(c) (use beginning 90th day of employment), 246(d) (employer may limit use to 40 hours or 5 days per year, as amended by SB 616); https://www.dir.ca.gov/dlse/Paid_Sick_Leave.htm",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 30,
+    "sickUsedYr": 16,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-11-25",
+   "reason": "sick",
+   "opts": {
+    "start": "2026-11-25",
+    "hours": 24
+   },
+   "requested": "2026-11-24"
+  },
+  "expect": {
+   "elig": {
+    "sick": true
+   },
+   "plan": {
+    "end": "2026-12-02"
+   }
+  }
+ },
+ {
+  "id": "sick-year-used-up",
+  "area": "sick",
+  "desc": "An employee who already used 40 hours this year has no usable sick leave left.",
+  "source": "Labor Code 246(c) (use beginning 90th day of employment), 246(d) (employer may limit use to 40 hours or 5 days per year, as amended by SB 616); https://www.dir.ca.gov/dlse/Paid_Sick_Leave.htm",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 20,
+    "sickUsedYr": 40,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-09-14",
+   "reason": "sick",
+   "opts": {
+    "start": "2026-09-14",
+    "hours": 8
+   },
+   "requested": "2026-09-14"
+  },
+  "expect": {
+   "elig": {
+    "sick": false
+   },
+   "plan": {
+    "warnsAbout": [
+     "sick_over_available"
+    ]
+   }
+  },
+  "ambiguous": "The law lets an employer cap use at 40 hours or 5 days; if 5 days is more hours for this employee, some use could still be allowed."
+ },
+ {
+  "id": "sick-tiny-employer",
+  "area": "sick",
+  "desc": "Paid sick leave applies to every employer size, including 3 employees.",
+  "source": "Labor Code 246(c) (use beginning 90th day of employment), 246(d) (employer may limit use to 40 hours or 5 days per year, as amended by SB 616); https://www.dir.ca.gov/dlse/Paid_Sick_Leave.htm",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 3,
+    "within75": false,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-03-02",
+   "reason": "sick",
+   "opts": {
+    "start": "2026-03-02",
+    "hours": 8
+   },
+   "requested": "2026-03-02"
+  },
+  "expect": {
+   "elig": {
+    "sick": true,
+    "cfra": false,
+    "bereavement": false
+   }
+  }
+ },
+ {
+  "id": "sick-record-task",
+  "area": "sick",
+  "desc": "Sick leave requested Thursday July 2, 2026 must be recorded within 3 business days, skipping July 3.",
+  "source": "Labor Code 247.5, 246(i) (recordkeeping); product task convention",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-07-06",
+   "reason": "sick",
+   "opts": {
+    "start": "2026-07-06",
+    "hours": 12
+   },
+   "requested": "2026-07-02"
+  },
+  "expect": {
+   "tasks": {
+    "record": "2026-07-08"
+   },
+   "plan": {
+    "end": "2026-07-08"
+   }
+  }
+ },
+ {
+  "id": "sick-over-balance",
+  "area": "sick",
+  "desc": "A 16-hour request with only 10 hours banked exceeds what is available.",
+  "source": "Labor Code 246(c) (use beginning 90th day of employment), 246(d) (employer may limit use to 40 hours or 5 days per year, as amended by SB 616); https://www.dir.ca.gov/dlse/Paid_Sick_Leave.htm",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 10,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-05-04",
+   "reason": "sick",
+   "opts": {
+    "start": "2026-05-04",
+    "hours": 16
+   },
+   "requested": "2026-05-04"
+  },
+  "expect": {
+   "plan": {
+    "warnsAbout": [
+     "sick_over_available"
+    ]
+   }
+  }
+ },
+ {
+  "id": "wba-mid",
+  "area": "benefit",
+  "desc": "A $15,000 high quarter is in the 90% band.",
+  "source": "EDD Paid Family Leave benefit amounts (2026 table: 90% to $16,279.90, flat $1,127 to $20,931.30, then 70%, max $1,765): https://edd.ca.gov/en/disability/Calculating_PFL_Benefit_Payment_Amounts",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-05-04",
+   "reason": "own_health",
+   "opts": {
+    "start": "2026-05-04",
+    "weeks": 4
+   },
+   "requested": "2026-05-04"
+  },
+  "expect": {
+   "benefit": {
+    "amount": 1038.46,
+    "rate": 0.9,
+    "capped": false
+   },
+   "plan": {
+    "paysSDI": true
+   }
+  }
+ },
+ {
+  "id": "wba-band-edge",
+  "area": "benefit",
+  "desc": "At the top of the 90% band ($16,279.90 high quarter) the benefit is 90% of weekly wages.",
+  "source": "EDD Paid Family Leave benefit amounts (2026 table: 90% to $16,279.90, flat $1,127 to $20,931.30, then 70%, max $1,765): https://edd.ca.gov/en/disability/Calculating_PFL_Benefit_Payment_Amounts",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 16279.9
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-05-04",
+   "reason": "own_health",
+   "opts": {
+    "start": "2026-05-04",
+    "weeks": 4
+   },
+   "requested": "2026-05-04"
+  },
+  "expect": {
+   "benefit": {
+    "amount": 1127.07,
+    "rate": 0.9,
+    "capped": false
+   },
+   "plan": {
+    "paysSDI": true
+   }
+  }
+ },
+ {
+  "id": "wba-band-plus-1c",
+  "area": "benefit",
+  "desc": "One cent above the 90% band, the 2026 table pays the flat middle amount (about $1,127).",
+  "source": "EDD Paid Family Leave benefit amounts (2026 table: 90% to $16,279.90, flat $1,127 to $20,931.30, then 70%, max $1,765): https://edd.ca.gov/en/disability/Calculating_PFL_Benefit_Payment_Amounts",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 16279.91
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-05-04",
+   "reason": "own_health",
+   "opts": {
+    "start": "2026-05-04",
+    "weeks": 4
+   },
+   "requested": "2026-05-04"
+  },
+  "expect": {
+   "benefit": {
+    "amount": 1127.07,
+    "rate": null,
+    "capped": false
+   },
+   "plan": {
+    "paysSDI": true
+   }
+  }
+ },
+ {
+  "id": "wba-max",
+  "area": "benefit",
+  "desc": "A $40,000 high quarter is capped at the $1,765 2026 maximum.",
+  "source": "Unemp. Ins. Code 2655 (as amended by SB 951); EDD 2026 max WBA $1,765 https://edd.ca.gov/siteassets/files/about_edd/quick-stats/max-weekly-benefit-amount-2026.pdf; DE 2588 https://edd.ca.gov/siteassets/files/pdf_pub_ctr/de2588.pdf",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 40000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-05-04",
+   "reason": "own_health",
+   "opts": {
+    "start": "2026-05-04",
+    "weeks": 4
+   },
+   "requested": "2026-05-04"
+  },
+  "expect": {
+   "benefit": {
+    "amount": 1765.0,
+    "rate": 0.7,
+    "capped": true
+   },
+   "plan": {
+    "paysSDI": true
+   }
+  }
+ },
+ {
+  "id": "wba-just-under-max",
+  "area": "benefit",
+  "desc": "A $32,760 high quarter pays $1,764.00, just under the cap.",
+  "source": "Unemp. Ins. Code 2655 (as amended by SB 951); EDD 2026 max WBA $1,765 https://edd.ca.gov/siteassets/files/about_edd/quick-stats/max-weekly-benefit-amount-2026.pdf; DE 2588 https://edd.ca.gov/siteassets/files/pdf_pub_ctr/de2588.pdf",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 32760
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-05-04",
+   "reason": "own_health",
+   "opts": {
+    "start": "2026-05-04",
+    "weeks": 4
+   },
+   "requested": "2026-05-04"
+  },
+  "expect": {
+   "benefit": {
+    "amount": 1764.0,
+    "rate": 0.7,
+    "capped": false
+   },
+   "plan": {
+    "paysSDI": true
+   }
+  }
+ },
+ {
+  "id": "wba-just-over-max",
+  "area": "benefit",
+  "desc": "A $32,779 high quarter computes to $1,765.03 and is capped at $1,765.",
+  "source": "Unemp. Ins. Code 2655 (as amended by SB 951); EDD 2026 max WBA $1,765 https://edd.ca.gov/siteassets/files/about_edd/quick-stats/max-weekly-benefit-amount-2026.pdf; DE 2588 https://edd.ca.gov/siteassets/files/pdf_pub_ctr/de2588.pdf",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 32779
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-05-04",
+   "reason": "own_health",
+   "opts": {
+    "start": "2026-05-04",
+    "weeks": 4
+   },
+   "requested": "2026-05-04"
+  },
+  "expect": {
+   "benefit": {
+    "amount": 1765.0,
+    "rate": 0.7,
+    "capped": true
+   },
+   "plan": {
+    "paysSDI": true
+   }
+  }
+ },
+ {
+  "id": "wba-min",
+  "area": "benefit",
+  "desc": "A $500 high quarter computes below $50 and is raised to the $50 minimum.",
+  "source": "Unemp. Ins. Code 2655 (as amended by SB 951); EDD 2026 max WBA $1,765 https://edd.ca.gov/siteassets/files/about_edd/quick-stats/max-weekly-benefit-amount-2026.pdf; DE 2588 https://edd.ca.gov/siteassets/files/pdf_pub_ctr/de2588.pdf",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 500
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-05-04",
+   "reason": "own_health",
+   "opts": {
+    "start": "2026-05-04",
+    "weeks": 4
+   },
+   "requested": "2026-05-04"
+  },
+  "expect": {
+   "benefit": {
+    "amount": 50.0,
+    "rate": 0.9
+   },
+   "plan": {
+    "paysSDI": true
+   }
+  }
+ },
+ {
+  "id": "task-own-thanksgiving",
+  "area": "tasks",
+  "desc": "Own-health leave requested Thursday Nov 19, 2026: notice in 5 business days skips Thanksgiving holidays; cert 15 calendar days.",
+  "source": "29 CFR 825.300(b) (eligibility notice within 5 business days), 825.300(d) (designation within 5 business days), 825.305(b) (at least 15 calendar days for certification); 2 CCR 11091(b)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-12-07",
+   "reason": "own_health",
+   "opts": {
+    "start": "2026-12-07",
+    "weeks": 4
+   },
+   "requested": "2026-11-19"
+  },
+  "expect": {
+   "tasks": {
+    "notice": "2026-11-30",
+    "cert": "2026-12-04"
+   }
+  }
+ },
+ {
+  "id": "task-bond-christmas",
+  "area": "tasks",
+  "desc": "Bonding requested Monday Dec 21, 2026: designate notice in 5 business days skips Christmas.",
+  "source": "29 CFR 825.300(b) (eligibility notice within 5 business days), 825.300(d) (designation within 5 business days), 825.305(b) (at least 15 calendar days for certification); 2 CCR 11091(b)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2027-01-11",
+   "reason": "bonding",
+   "opts": {
+    "start": "2027-01-11",
+    "weeks": 8
+   },
+   "requested": "2026-12-21"
+  },
+  "expect": {
+   "tasks": {
+    "designate": "2026-12-29"
+   }
+  }
+ },
+ {
+  "id": "task-family-july4",
+  "area": "tasks",
+  "desc": "Family care requested Thursday July 2, 2026: notice skips the July 3 observed holiday.",
+  "source": "29 CFR 825.300(b) (eligibility notice within 5 business days), 825.300(d) (designation within 5 business days), 825.305(b) (at least 15 calendar days for certification); 2 CCR 11091(b)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-07-20",
+   "reason": "family_care",
+   "opts": {
+    "start": "2026-07-20",
+    "weeks": 4,
+    "relation": "parent"
+   },
+   "requested": "2026-07-02"
+  },
+  "expect": {
+   "tasks": {
+    "notice": "2026-07-10",
+    "cert": "2026-07-17"
+   }
+  }
+ },
+ {
+  "id": "task-saturday-request",
+  "area": "tasks",
+  "desc": "A need learned on Saturday June 6, 2026 starts counting business days on Monday.",
+  "source": "29 CFR 825.300(b) (eligibility notice within 5 business days), 825.300(d) (designation within 5 business days), 825.305(b) (at least 15 calendar days for certification); 2 CCR 11091(b)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-06-15",
+   "reason": "own_health",
+   "opts": {
+    "start": "2026-06-15",
+    "weeks": 4
+   },
+   "requested": "2026-06-06"
+  },
+  "expect": {
+   "tasks": {
+    "notice": "2026-06-12",
+    "cert": "2026-06-21"
+   }
+  }
+ },
+ {
+  "id": "task-newyear",
+  "area": "tasks",
+  "desc": "Own-health leave requested Wednesday Dec 30, 2026: notice skips Jan 1, 2027.",
+  "source": "29 CFR 825.300(b) (eligibility notice within 5 business days), 825.300(d) (designation within 5 business days), 825.305(b) (at least 15 calendar days for certification); 2 CCR 11091(b)",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2027-01-18",
+   "reason": "own_health",
+   "opts": {
+    "start": "2027-01-18",
+    "weeks": 4
+   },
+   "requested": "2026-12-30"
+  },
+  "expect": {
+   "tasks": {
+    "notice": "2027-01-07",
+    "cert": "2027-01-14"
+   }
+  }
+ },
+ {
+  "id": "wba-70-start",
+  "area": "benefit",
+  "desc": "From $20,931.31 high quarter, the 2026 table pays 70% of weekly wages.",
+  "source": "EDD Paid Family Leave benefit amounts (2026 table: 90% to $16,279.90, flat $1,127 to $20,931.30, then 70%, max $1,765): https://edd.ca.gov/en/disability/Calculating_PFL_Benefit_Payment_Amounts",
+  "input": {
+   "employee": {
+    "hire": "2023-01-09",
+    "hours12": 2000,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 40,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 20931.31
+   },
+   "company": {
+    "headcount": 100,
+    "within75": true,
+    "holidays": [
+     "2026-01-01",
+     "2026-05-25",
+     "2026-07-03",
+     "2026-09-07",
+     "2026-11-26",
+     "2026-11-27",
+     "2026-12-25",
+     "2027-01-01"
+    ],
+    "band90": 16279.9,
+    "wbaMax": 1765,
+    "wbaMin": 50,
+    "band70": 20931.3
+   },
+   "today": "2026-05-04",
+   "reason": "own_health",
+   "opts": {
+    "start": "2026-05-04",
+    "weeks": 4
+   },
+   "requested": "2026-05-04"
+  },
+  "expect": {
+   "benefit": {
+    "amount": 1127.07,
+    "rate": 0.7,
+    "capped": false
+   }
+  }
+ }
+]
