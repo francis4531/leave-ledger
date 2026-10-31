@@ -28,6 +28,14 @@
 
 **Answer:** Done.
 
+### 4. Interviews
+
+**Question:** Kill criteria check is Nov 23. Ask each interviewee what they use for payroll; if most say Gusto, that confirms decision 2.
+
+**Status:** Decided · Oct 30, 2026 · Site admin
+
+**Answer:** Understood.  Will do.
+
 ## Week 1 · The Bet
 
 ### 1. Confirm the archetype
