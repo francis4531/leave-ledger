@@ -341,7 +341,7 @@ async function route_(req, store, env) {
     const linkCode = R.kind === "preview" && R.s && R.s.t ? R.id : null;
     const spaces = await spacesFor(store, R.user, linkCode);
     const pending = R.user ? await listPending(store, R.user) : [];
-    return json({ mode: "feedback", google: googleOn(env), user: R.user ? { email: R.user.email, name: R.user.name, hd: R.user.hd } : null, current: R.kind ? { ...spaceInfo(R), persona: !!R.acct } : null, spaces, pending, create: canCreate(env, R.user, spaces) });
+    return json({ mode: "feedback", google: googleOn(env), admin: !!(R.user && isAdminEmail(env, R.user.email)), user: R.user ? { email: R.user.email, name: R.user.name, hd: R.user.hd } : null, current: R.kind ? { ...spaceInfo(R), persona: !!R.acct } : null, spaces, pending, create: canCreate(env, R.user, spaces) });
   }
   if ((route === "org/accept" || route === "org/decline") && req.method === "POST") {
     if (!R.user) return err("Sign in with Google first.", 401);
@@ -446,9 +446,11 @@ async function route_(req, store, env) {
   if (route === "strategy" || route === "strategy/decision") {
     let who = null, canEdit = false;
     if (FB) {
+      // The site admin: signed in to the inbox, or signed in to the app with a Google account listed in LL_ADMIN_EMAILS.
       const adm = adminSession(req, env);
-      if (!adm) return err("Not found", 404); // prospects never learn the page exists
-      who = adm.em || "Admin"; canEdit = true;
+      const gAdmin = R.user && isAdminEmail(env, R.user.email) ? R.user.email : null;
+      if (!adm && !gAdmin) return err("Not found", 404); // prospects never learn the page exists
+      who = gAdmin || adm.em || "Admin"; canEdit = true;
     } else {
       if (!R.acct) return err("Signed out", 401);
       who = R.acct.email; canEdit = R.acct.role === "hr";

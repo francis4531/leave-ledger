@@ -639,7 +639,7 @@ function renderHome(root) {
   root.innerHTML = `<section class="login">
     <div class="panel welcome" style="gap:14px">
       <div><h1>Hi ${esc(u.name.split(" ")[0])}</h1><p class="lede" style="margin-top:6px">Signed in as ${esc(u.email)}.</p></div>
-      <div class="btns"><button class="btn sm" data-signout>Sign out</button></div>
+      <div class="btns">${ME.admin ? `<a class="btn sm" style="text-decoration:none;color:inherit" href="/inbox">Inbox</a><a class="btn sm" style="text-decoration:none;color:inherit" href="/strategy">Strategy</a>` : ""}<button class="btn sm" data-signout>Sign out</button></div>
       ${err ? `<p class="err" role="alert">${esc(err)}</p>` : ""}
       <p class="small muted"><a href="/privacy">Privacy</a></p>
     </div>
