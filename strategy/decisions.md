@@ -20,6 +20,14 @@
 
 **Answer:** Gusto is a partner.  Without an established distribution network, reaching tiny companies will be cost prohibitive.
 
+### 3. Turn on the Copilot
+
+**Question:** Add `ANTHROPIC_API_KEY` in Netlify and run `scripts/eval-intake.mjs`. The first accuracy score goes into `02-the-moat/kill-switch.md` and feeds Week 4.
+
+**Status:** Decided · Oct 30, 2026 · Site admin
+
+**Answer:** Done.
+
 ## Week 1 · The Bet
 
 ### 1. Confirm the archetype
