@@ -12,6 +12,14 @@
 
 **Answer:** Our price and our notice clock is our edge.   To be tested in the interviews.
 
+### 2. Gusto: partner or competitor?
+
+**Question:** The defense assumes a Gusto app directory listing. Is that the distribution bet, or should the first channel be bookkeepers and PEOs?
+
+**Status:** Decided · Oct 30, 2026 · Site admin
+
+**Answer:** Gusto is a partner.  Without an established distribution network, reaching tiny companies will be cost prohibitive.
+
 ## Week 1 · The Bet
 
 ### 1. Confirm the archetype
