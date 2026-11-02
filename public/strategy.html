@@ -303,6 +303,7 @@ async function load() {
     </section>
     <section class="track" aria-label="Six weeks">${mods.map((m, i) => `<button class="wk ${i === current ? "now" : ""}" data-go="m${m.n}"><span class="n">Week ${m.n}${i === current ? " · now" : ""}</span><span class="t">${esc(m.key)}</span><span class="sub">${esc(m.weekLabel)}</span><span class="pill ${m.status.cls}">${esc(m.status.t)}</span></button>`).join("")}</section>
     <section class="panel" id="decPanel"></section>
+    ${F["product-decisions.md"] ? `<section class="panel"><details class="pd"><summary><h2 style="display:inline">Product decisions</h2> <span class="sub">Outside the course schedule</span></summary><div class="md">${md(F["product-decisions.md"].replace(/^# .*\n/, ""))}</div></details></section>` : ""}
     <div class="grid">
       <section class="panel"><div class="head"><h2>Modules</h2><span class="sub">Tap a week to open it</span></div>${mods.map((m, i) => pane(m, i === current)).join("")}</section>
       <div style="display:flex;flex-direction:column;gap:20px;min-width:0">

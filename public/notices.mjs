@@ -164,3 +164,34 @@ export function managerNotice(kind, { emp, mgr, co, start, end, protectedLeave, 
   ];
   return { subject, body: lines.join("\n") };
 }
+
+/* ---------- A copy for legal ----------
+   HR approves first, then can send legal a plain summary of what was decided and why: the leave, the dates,
+   each eligibility test and its result, the letters sent and their delivery record. HR's own choice to share. */
+export function legalSummary(c, emp, co, P, dates, hr) {
+  const yes = (b) => (b ? "Yes" : "No"), L = [];
+  const segs = (cls) => P.segs.filter((s) => s.cls === cls);
+  const span = (cls) => { const x = segs(cls); return x.length ? `${fmt(x[0].start)} to ${fmt(addDays(x[x.length - 1].end, -1))}` : null; };
+  L.push(`Company: ${co.name}`, `Prepared by: ${hr} on ${fmt(c.approvedOn || dates.today)}`, "");
+  L.push(`Employee: ${emp.name}, ${emp.role}, hired ${fmt(emp.hire)}`, `Hours worked in the last 12 months: ${Number(emp.hours12).toLocaleString("en-US")}${emp.hoursEst ? " (estimated)" : ""}`);
+  L.push(`Leave: ${REASONS[c.reason].hr}${c.opts.relation && REASONS[c.reason].rel ? `, ${relName(c.opts.relation)}` : ""}`, `Requested: ${fmt(c.requested)}`, `Dates: ${fmt(dates.start)} to ${fmt(addDays(dates.end, -1))}`);
+  L.push(`Approved: ${c.approvedOn ? `${fmt(c.approvedOn)} by ${c.approvedBy || hr}` : "Not yet"}`, "");
+  L.push("Eligibility");
+  const block = (name, b, cite) => { if (!b) return; L.push(`- ${name}: ${b.ok ? "qualifies" : "does not qualify"}${cite ? ` (${cite})` : ""}`); for (const x of b.checks || []) L.push(`    ${x.ok ? "[x]" : "[ ]"} ${x.t}`); };
+  const el = P.el;
+  if (c.reason === "pregnancy_bonding") block("Pregnancy Disability Leave", el.pdl, RULES.pdl.cite);
+  if (["pregnancy_bonding", "own_health", "family_care", "bonding"].includes(c.reason)) { block("CFRA", el.cfra, RULES.cfra.cite); if (el.fmla.covered) block("FMLA", el.fmla, RULES.fmla.cite); }
+  if (["bereavement", "repro"].includes(c.reason)) block(c.reason === "repro" ? "Reproductive loss leave" : "Bereavement leave", el.short);
+  if (c.reason === "sick") block("Paid sick leave", el.sick, RULES.sick.cite);
+  L.push("", "Protected time and state pay");
+  for (const [cls, n] of [["pdl", "Pregnancy Disability Leave"], ["cfra", "CFRA"], ["fmla", "FMLA (runs at the same time)"], ["sdi", "State Disability Insurance"], ["pfl", "Paid Family Leave"]]) { const s = span(cls); if (s) L.push(`- ${n}: ${s}`); }
+  for (const w of P.warnings) L.push(`- Note: ${w.t}`);
+  L.push("", "Letters sent");
+  const notices = c.notices || [];
+  if (!notices.length) L.push("- None yet");
+  for (const n of notices) L.push(`- ${n.subject}: sent ${fmt(n.sentOn)} (${n.method === "app" ? "through Leave Ledger" : n.method})${n.emailStatus === "sent" ? `, emailed to ${n.emailTo}` : ""}${n.seenAt ? ", opened by the employee" : ""}${n.ackAt ? `, receipt confirmed ${n.ackAt.slice(0, 10)}` : ", receipt not confirmed"}`);
+  L.push("", "Steps for HR");
+  for (const t of c.tasks) L.push(`- ${t.done ? "[x]" : "[ ]"} ${t.label}${t.due ? ` (due ${fmt(t.due)})` : ""}${t.done && t.doneOn ? `, done ${fmt(t.doneOn)}` : ""}`);
+  L.push("", "This summary comes from Leave Ledger's rules engine and HR's records. It is not legal advice.");
+  return { subject: `Leave decision for legal review: ${emp.name}`, body: L.join("\n") };
+}

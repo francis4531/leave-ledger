@@ -167,15 +167,15 @@ function render() {
 
   <section class="panel">
     <h2>Company workspaces</h2>
-    <p class="small muted">Set up by invited users with Google sign-in. Made-up employee details only until the security review is done.</p>
+    <p class="small muted">Set up by invited users with Google sign-in. Made-up employee details only, except design partners you mark below once their checklist is done.</p>
     <div class="scroll"><table class="tbl">
       <thead><tr><th>Workspace</th><th>Status</th><th>Users</th><th>Employees</th><th>Leaves</th><th>Last active</th><th>Survey</th><th></th></tr></thead>
       <tbody>${(ST.orgs || []).length ? ST.orgs.map((o) => `<tr>
-        <td><b>${esc(o.name)}</b>${o.test ? ` <span class="pill warn">Test</span>` : ""}<div class="small muted">${esc(o.ownerEmail)}${o.domain ? ` · @${esc(o.domain)} only` : ""}</div><div class="small muted">Created ${when(o.created)}</div></td>
+        <td><b>${esc(o.name)}</b>${o.test ? ` <span class="pill warn">Test</span>` : ""}${o.partner ? ` <span class="pill ok">Design partner · real data</span>` : ""}<div class="small muted">${esc(o.ownerEmail)}${o.domain ? ` · @${esc(o.domain)} only` : ""}</div><div class="small muted">Created ${when(o.created)}</div></td>
         <td>${o.disabled ? `<span class="pill bad">Off</span>` : `<span class="pill ok">On</span>`}</td>
         <td>${o.joined} of ${o.users} signed in</td><td>${o.employees}</td><td>${o.cases}</td>
         <td>${o.activity ? when(o.activity.last) : "-"}</td><td>${o.survey ? `<span class="pill ok">Done</span>` : "-"}</td>
-        <td><div class="btns"><button class="btn sm" data-org="${o.id}" data-off="${o.disabled ? "0" : "1"}">${o.disabled ? "Turn on" : "Turn off"}</button><button class="btn sm" data-test-org="${o.id}" data-on="${o.test ? "0" : "1"}">${o.test ? "Not a test" : "Mark as test"}</button></div></td></tr>`).join("") : `<tr><td colspan="8" class="muted">No workspaces yet.</td></tr>`}</tbody>
+        <td><div class="btns"><button class="btn sm" data-org="${o.id}" data-off="${o.disabled ? "0" : "1"}">${o.disabled ? "Turn on" : "Turn off"}</button><button class="btn sm" data-test-org="${o.id}" data-on="${o.test ? "0" : "1"}">${o.test ? "Not a test" : "Mark as test"}</button><button class="btn sm" data-partner-org="${o.id}" data-on="${o.partner ? "0" : "1"}">${o.partner ? "End design partner" : "Make design partner"}</button></div></td></tr>`).join("") : `<tr><td colspan="8" class="muted">No workspaces yet.</td></tr>`}</tbody>
     </table></div>
   </section>
 
@@ -245,6 +245,10 @@ document.addEventListener("click", async (e) => {
       await api("admin/invite/update", { code: b.dataset.reset, resetData: true }); await refresh(); toast("Their copy is back to the sample data");
     }
     else if (b.dataset.testInvite) { await api("admin/invite/update", { code: b.dataset.testInvite, test: b.dataset.on === "1" }); await refresh(); toast(b.dataset.on === "1" ? "Marked as test" : "Counted again"); }
+    else if (b.dataset.partnerOrg) {
+      if (b.dataset.on === "1" && !confirm("Allow real employee data in this workspace? Only do this once the design partner checklist is done.")) return;
+      await api("admin/org/update", { id: b.dataset.partnerOrg, partner: b.dataset.on === "1" }); await refresh(); toast(b.dataset.on === "1" ? "Design partner: real data allowed" : "Back to made-up data only");
+    }
     else if (b.dataset.testOrg) { await api("admin/org/update", { id: b.dataset.testOrg, test: b.dataset.on === "1" }); await refresh(); toast(b.dataset.on === "1" ? "Marked as test" : "Counted again"); }
     else if (b.hasAttribute("data-showtest")) { SHOWTEST = !SHOWTEST; render(); }
     else if (b.dataset.org) { await api("admin/org/update", { id: b.dataset.org, disabled: b.dataset.off === "1" }); await refresh(); toast(b.dataset.off === "1" ? "Workspace turned off" : "Workspace turned on"); }

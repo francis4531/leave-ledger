@@ -591,3 +591,64 @@ describe("Clerk matches columns for an employee file", () => {
     assert.deepEqual(imp.body.data.importMaps["employee|login|began|boss"].map, { name: 0, email: 1, hire_date: 2, manager_name: 3 });
   });
 });
+
+describe("proof of delivery for letters", () => {
+  test("a letter sent through Leave Ledger records opening and receipt; only the employee can confirm", async () => {
+    const s = testSite(), hr = await signedIn(s, "grace@mesaverde.example");
+    const c = (await hr.get("/api/state")).body.data.cases.find((x) => x.empId === "e2");
+    const sent = await hr.post("/api/action", { type: "sendLetter", caseId: c.id, key: "notice", subject: "What you qualify for", body: "Dear Marcus, ...", method: "app" });
+    assert.equal(sent.status, 200);
+    const n0 = sent.body.data.cases.find((x) => x.id === c.id).notices.at(-1);
+    assert.equal(n0.method, "app"); assert.ok(!n0.emailStatus, "no real email on the test site"); assert.ok(!n0.seenAt && !n0.ackAt);
+    const idx = sent.body.data.cases.find((x) => x.id === c.id).notices.length - 1;
+    for (const who of ["ben@mesaverde.example", "mei@mesaverde.example", "grace@mesaverde.example"]) {
+      const o = await signedIn(s, who);
+      assert.equal((await o.post("/api/action", { type: "ackLetter", caseId: c.id, idx })).status, 403, `${who} cannot confirm for Marcus`);
+    }
+    const marcus = await signedIn(s, "marcus@mesaverde.example");
+    assert.equal((await marcus.post("/api/action", { type: "letterSeen", caseId: c.id, idx })).status, 200);
+    assert.equal((await marcus.post("/api/action", { type: "ackLetter", caseId: c.id, idx: 99 })).status, 400);
+    assert.equal((await marcus.post("/api/action", { type: "ackLetter", caseId: c.id, idx })).status, 200);
+    const n = (await hr.get("/api/state")).body.data.cases.find((x) => x.id === c.id).notices[idx];
+    assert.ok(n.seenAt && n.ackAt); assert.equal(n.ackBy, "Marcus Bell");
+  });
+});
+
+describe("a copy of the decision for legal", () => {
+  test("HR only, after approval, to the legal contact in Settings; the summary has the tests and letters", async () => {
+    const s = testSite(), hr = await signedIn(s, "grace@mesaverde.example");
+    const c = (await hr.get("/api/state")).body.data.cases.find((x) => x.empId === "e2");
+    assert.match((await hr.post("/api/action", { type: "sendToLegal", caseId: c.id })).body.error, /Approve/);
+    await hr.post("/api/action", { type: "approveCase", caseId: c.id, notify: false });
+    assert.match((await hr.post("/api/action", { type: "sendToLegal", caseId: c.id })).body.error, /Settings/);
+    assert.equal((await hr.post("/api/action", { type: "updateCompany", field: "legalEmail", value: "not an email" })).status, 400);
+    await hr.post("/api/action", { type: "updateCompany", field: "legalEmail", value: "counsel@lawfirm.example" });
+    const r = await hr.post("/api/action", { type: "sendToLegal", caseId: c.id });
+    assert.equal(r.status, 200);
+    assert.match(r.body.legal.body, /CFRA: qualifies/); assert.match(r.body.legal.body, /1,250 hours/); assert.match(r.body.legal.body, /Approved: /);
+    assert.equal(r.body.data.cases.find((x) => x.id === c.id).legalCopies.length, 1);
+    assert.equal((await (await signedIn(s, "mei@mesaverde.example")).post("/api/action", { type: "sendToLegal", caseId: c.id })).status, 403);
+  });
+});
+
+describe("design partners: real data in one workspace", () => {
+  test("only the site admin can switch it on; Clerk stays off until the AI agreement flag is set", async () => {
+    const p = preview();
+    await makeInvite(p, { name: "Sam", email: "sam@bayside.com" });
+    const sam = p.as({ ip: "3.3.3.3" }); await sam.google(ACCTS.sam);
+    const id = (await sam.post("/api/org/create", { name: "Bayside Dental", headcount: 18, start: "empty", agree: true })).body.id;
+    let st = (await sam.get("/api/state")).body;
+    assert.equal(st.space.realData, false); assert.equal(st.ai.on, true);
+    assert.equal((await sam.post("/api/admin/org/update", { id, partner: true })).status, 401, "not the admin");
+    const admin = await adminClient(p);
+    assert.equal((await admin.post("/api/admin/org/update", { id, partner: true })).status, 200);
+    st = (await sam.get("/api/state")).body;
+    assert.equal(st.space.realData, true); assert.equal(st.ai.on, false, "Clerk off with real data until the agreement");
+    assert.equal((await sam.post("/api/intake", { text: "My dad has surgery next week" })).status, 403);
+    const sam2 = client(p.store, { ...p.env, LL_AI_REAL_DATA_OK: "yes" }, { ip: "3.3.3.4" }); await sam2.google(ACCTS.sam);
+    assert.equal((await sam2.post("/api/space", { kind: "org", id })).status, 200);
+    assert.equal((await sam2.get("/api/state")).body.ai.on, true, "on once the agreement flag is set");
+    const list = (await admin.get("/api/admin/state")).body.orgs;
+    assert.equal(list.find((o) => o.id === id).partner, true);
+  });
+});

@@ -72,6 +72,16 @@ describe("test site", { skip }, () => {
     await p.click('[data-pick="marcus@mesaverde.example"]');
     await p.click(".letter-item summary");
     assert.match(await p.textContent(".letter-item"), /What you qualify for/);
+    await p.click("[data-ack-letter]");
+    await p.waitForSelector("text=You confirmed receiving this");
+    await p.click("[data-logout]");
+    await p.click('[data-pick="grace@mesaverde.example"]');
+    await p.click('[data-tab="cases"]');
+    await p.click('tr[data-open]:has-text("Marcus Bell")');
+    await p.click("[data-letter-view]");
+    await p.waitForSelector(".proof");
+    const proof = await p.textContent(".proof");
+    assert.match(proof, /Receipt confirmed/); assert.match(proof, /Marcus opened it/); assert.match(proof, /Marcus confirmed receiving it/);
     assert.deepEqual(errors, []);
   });
 

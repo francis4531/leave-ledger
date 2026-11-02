@@ -5,7 +5,7 @@ import crypto from "node:crypto";
 import * as E from "../../public/engine.mjs";
 import { eddIds } from "../../public/guide.mjs";
 import { checkRows } from "../../public/roster.mjs";
-import { managerNotice, sensitiveNote } from "../../public/notices.mjs";
+import { managerNotice, sensitiveNote, legalSummary } from "../../public/notices.mjs";
 import { mailOn, canEmail, sendMail } from "./mail.mjs";
 import { runColumnMap } from "./rostermap.mjs";
 import STRATEGY from "./strategy-data.mjs";
@@ -76,14 +76,16 @@ export function capsFor(kind, role) {
 
 // What the browser learns about Clerk: on or off, and a list price for the cost estimate. Never the supplier or model.
 const PRICES = { "claude-haiku-5-5": [0.10, 0.50] };
-function aiInfo(env) { const p = PRICES[env.LL_MODEL || DEFAULT_MODEL]; return { on: !!env.ANTHROPIC_API_KEY, price: p ? { input: p[0], output: p[1] } : null }; }
+// With real employee data, Clerk runs only once an AI agreement is in place (no keeping or training on the data): LL_AI_REAL_DATA_OK=yes.
+const aiRealOk = (env, space) => !(space && space.realData) || env.LL_AI_REAL_DATA_OK === "yes";
+function aiInfo(env, space) { const p = PRICES[env.LL_MODEL || DEFAULT_MODEL]; return { on: !!env.ANTHROPIC_API_KEY && aiRealOk(env, space), price: p ? { input: p[0], output: p[1] } : null }; }
 
 // Locking to a company domain is for a workspace set up for a real company (started empty) by an HR admin on Google Workspace.
 const lockAllowed = (R) => R.meta.start === "empty" && !!R.user.hd;
 
 export function viewFor(D, acct, today, env = {}, space = { kind: "test" }) {
   const me = D.employees.find((e) => e.id === acct.empId);
-  const out = { me: { email: acct.email, name: me.name, role: acct.role, label: acct.label, empId: me.id, views: VIEWS[acct.role] }, today, mode: isFeedback(env) ? "feedback" : "test", space, caps: capsFor(space.kind, acct.role), mail: { on: space.kind === "org" && mailOn(env) }, ai: aiInfo(env) };
+  const out = { me: { email: acct.email, name: me.name, role: acct.role, label: acct.label, empId: me.id, views: VIEWS[acct.role] }, today, mode: isFeedback(env) ? "feedback" : "test", space, caps: capsFor(space.kind, acct.role), mail: { on: space.kind === "org" && mailOn(env) }, ai: aiInfo(env, space) };
   if (acct.role === "hr") return { ...out, data: D };
   // Employees get their own cases without HR notes, the manager's flag note, or intake text someone else wrote.
   // Letter drafts stay with HR; employees see only the letters HR marked as sent.
@@ -185,6 +187,16 @@ function apply(D, acct, a, today, kind = "test") {
       if (a.intake) attachIntake(D, c, { intake: { ...a.intake, text: c.notes || a.intake.text } }, today, "manager");
       log(`Set leave type for ${emp(c.empId).name}: ${E.REASONS[c.reason].hr}`); return null;
     }
+    case "letterSeen":
+    case "ackLetter": {
+      // Proof of delivery: the employee opened the letter in Leave Ledger, and confirmed they received it.
+      const c = kase(a.caseId); if (!c || c.empId !== me) return "Not your leave";
+      const n = (c.notices || [])[a.idx]; if (!n || !Number.isInteger(a.idx)) return "Letter not found";
+      const now = new Date().toISOString();
+      if (!n.seenAt) n.seenAt = now;
+      if (a.type === "ackLetter" && !n.ackAt) { n.ackAt = now; n.ackBy = who; log(`${who} confirmed receiving "${n.subject}"`); }
+      return null;
+    }
     case "eddCheck": {
       // The employee ticks off EDD filing steps on their own leave; HR can tick them too.
       const c = kase(a.caseId); if (!c || c.reason === "unknown") return "Case not found";
@@ -215,6 +227,18 @@ function apply(D, acct, a, today, kind = "test") {
         log(`Told ${m.name} the dates for ${e.name}`);
       }
       return null;
+    }
+    case "sendToLegal": {
+      // After HR approves, HR can send legal a copy of the decision. Recorded on the leave either way.
+      if (!hr) return "HR only";
+      const c = kase(a.caseId); if (!c || c.reason === "unknown") return "Case not found";
+      if (!c.approvedOn) return "Approve the leave first";
+      const to = String(D.company.legalEmail || "").trim();
+      if (!to) return "Add your legal contact's email in Settings first";
+      const d = E.caseDates(c, D), msg = legalSummary(c, emp(c.empId), D.company, E.planFor(c, D), { ...d, today }, who);
+      c.legalCopies = [...(c.legalCopies || []), { at: new Date().toISOString(), by: who, to, delivery: "copy" }].slice(-20);
+      a._legal = { caseId: c.id, msg, to };
+      log(`Sent ${emp(c.empId).name}'s leave decision to legal`); return null;
     }
     case "importRoster": {
       // The server checks every row again; the browser preview is only a convenience.
@@ -283,8 +307,9 @@ function apply(D, acct, a, today, kind = "test") {
       c.drafts = c.drafts || {};
       if (a.type === "saveLetter") { c.drafts[a.key] = { subject, body, at: new Date().toISOString(), by: who }; return null; }
       const sentOn = /^\d{4}-\d{2}-\d{2}$/.test(a.sentOn || "") && a.sentOn <= today ? a.sentOn : today;
-      const method = ["email", "hand", "mail", "other"].includes(a.method) ? a.method : "email";
-      c.notices = [...(c.notices || []), { key: a.key, subject, body, sentOn, method, by: who, at: new Date().toISOString() }].slice(-50);
+      const method = ["app", "email", "hand", "mail", "other"].includes(a.method) ? a.method : "app";
+      c.notices = [...(c.notices || []), { key: a.key, subject, body, sentOn: method === "app" ? today : sentOn, method, by: who, at: new Date().toISOString() }].slice(-50);
+      if (method === "app") a._letterMail = { caseId: c.id, idx: c.notices.length - 1 };
       delete c.drafts[a.key];
       E.markTask(c, a.key, true, sentOn, D.company.holidays);
       log(`Sent "${subject}" to ${emp(c.empId).name}`); return null;
@@ -315,6 +340,8 @@ function apply(D, acct, a, today, kind = "test") {
       else if (f === "within75") co.within75 = !!a.value;
       else if (f === "wbaMax" || f === "band90") co[f] = Math.max(0, +a.value || 0);
       else if (f === "hris") co.hris = trim(a.value, 60);
+      else if (f === "legalEmail") { const v = trim(a.value, 120).trim().toLowerCase(); if (v && !EMAIL_RE.test(v)) return "Enter a valid email"; co.legalEmail = v; }
+      else if (f === "sickCity") { if (a.value && !E.LOCAL_SICK[a.value]) return "Pick a city from the list"; co.sickCity = a.value || ""; }
       else if (f === "holidays") co.holidays = (Array.isArray(a.value) ? a.value : []).filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s)).slice(0, 40);
       else return "Field not editable";
       log(`Changed company setting: ${f}`); return null;
@@ -393,7 +420,7 @@ async function resolve(req, store, env, today) {
   }
   return R;
 }
-const spaceInfo = (R) => R.kind === "org" ? { kind: "org", id: R.id, name: R.meta.name, domain: R.meta.domain, user: R.user.email } : R.kind === "preview" ? { kind: "preview", id: R.id, user: R.user ? R.user.email : null } : { kind: "test" };
+const spaceInfo = (R) => R.kind === "org" ? { kind: "org", id: R.id, name: R.meta.name, domain: R.meta.domain, user: R.user.email, realData: !!R.meta.realData } : R.kind === "preview" ? { kind: "preview", id: R.id, user: R.user ? R.user.email : null } : { kind: "test" };
 const surveyId = (R) => (R.kind === "org" ? "org:" + R.id : R.id);
 
 // The spaces a signed-in user can open: preview copies from invites, and company workspaces.
@@ -708,6 +735,7 @@ async function route_(req, store, env) {
   if ((route === "intake" || route === "roster/map") && req.method === "POST") {
     const body = await req.json().catch(() => ({}));
     if (route === "roster/map" && acct.role !== "hr") return err("HR only", 403);
+    if (!aiRealOk(env, spaceInfo(R))) return err("Clerk is off in this workspace. Fill in the form yourself.", 403);
     const D = await getD();
     const u = D.aiUsage && D.aiUsage.day === today ? D.aiUsage : { day: today, count: 0, by: {}, input: 0, output: 0, month: (D.aiUsage && D.aiUsage.month) || {} };
     const perUser = +(env.LL_AI_PER_USER_DAY || (FB ? 15 : 40)), perDay = +(FB ? env.LL_AI_PER_SPACE_DAY || env.LL_AI_PER_INVITE_DAY || 30 : env.LL_AI_DAY || 400);
@@ -738,6 +766,19 @@ async function route_(req, store, env) {
     const problem = apply(D, acct, a, today, R.kind);
     if (problem) return err(problem, problem === "HR only" || problem.startsWith("Not your") || problem.startsWith("Not available") ? 403 : 400);
     if (FB) touch(D, acct.email, "action", a.type);
+    if (a._legal) {
+      const c = D.cases.find((x) => x.id === a._legal.caseId), rec = c.legalCopies[c.legalCopies.length - 1];
+      if (canEmail(env, R.kind, a._legal.to)) { const r = await sendMail(env, { to: a._legal.to, subject: a._legal.msg.subject, text: a._legal.msg.body, replyTo: acct.email && !/\.example$/.test(acct.email) ? acct.email : undefined }); rec.delivery = r.status === "sent" ? "email" : "failed"; }
+    }
+    if (a._letterMail) {
+      // A letter sent through Leave Ledger is also emailed to the employee in a real workspace with email set up.
+      const c = D.cases.find((x) => x.id === a._letterMail.caseId), n = c.notices[a._letterMail.idx], e = D.employees.find((x) => x.id === c.empId);
+      const member = R.kind === "org" ? (R.meta.members || []).find((x) => x.empId === e.id) : null, to = e.email || (member && member.email) || "";
+      if (canEmail(env, R.kind, to)) {
+        const r = await sendMail(env, { to, subject: n.subject, text: n.body + `\n\nPlease confirm you received this letter in Leave Ledger: ${baseUrl(req, env)}`, replyTo: acct.email && !/\.example$/.test(acct.email) ? acct.email : undefined });
+        n.emailTo = to; n.emailAt = new Date().toISOString(); n.emailStatus = r.status === "sent" ? "sent" : "failed"; if (r.id) n.emailId = r.id;
+      }
+    }
     if (a._mail) {
       // Email the manager in a real workspace when email is set up; otherwise the notice waits on their My team page.
       const c = D.cases.find((x) => x.id === a._mail.caseId), n = c.mgrNotices[c.mgrNotices.length - 1];
@@ -750,7 +791,7 @@ async function route_(req, store, env) {
     }
     if (R.kind === "org" && a.type === "updateCompany" && a.field === "name") { R.meta.name = D.company.name; await saveOrg(store, R.meta); }
     await store.setJSON(R.key, D);
-    return json({ ...viewFor(D, acct, today, env, spaceInfo(R)), createdId: a._id || null, imported: a._import || null });
+    return json({ ...viewFor(D, acct, today, env, spaceInfo(R)), createdId: a._id || null, imported: a._import || null, legal: a._legal ? a._legal.msg : null });
   }
   return err("Not found", 404);
 }
@@ -808,7 +849,7 @@ async function handleAdmin(req, route, store, env, today) {
       const D = await store.get(orgDataKey(id), { type: "json" });
       orgs.push({ id, name: meta.name, ownerEmail: meta.ownerEmail, created: meta.created, disabled: !!meta.disabled, domain: meta.domain,
         users: meta.members.length, joined: meta.members.filter((m) => m.sub).length, employees: D ? D.employees.length : 0, cases: D ? D.cases.length : 0,
-        activity: D && D.activity ? D.activity : null, survey: !!sv.byInvite["org:" + id], test: !!meta.test });
+        activity: D && D.activity ? D.activity : null, survey: !!sv.byInvite["org:" + id], test: !!meta.test, partner: !!meta.realData, partnerSince: meta.partnerSince || null });
     }
     orgs.sort((a, b) => b.created.localeCompare(a.created));
     // Test copies (the admin's own trials) are left out of the survey numbers.
@@ -885,6 +926,8 @@ async function handleAdmin(req, route, store, env, today) {
     if (!meta) return err("Workspace not found", 404);
     if ("disabled" in body) meta.disabled = !!body.disabled;
     if ("test" in body) meta.test = !!body.test;
+    // Design partner: the site admin allows real employee data for this one workspace, once the bar in strategy/product-decisions.md is met.
+    if ("partner" in body) { meta.realData = !!body.partner; meta.partnerSince = body.partner ? today : null; meta.madeUpOnly = !body.partner; }
     await saveOrg(store, meta);
     return json({ ok: true });
   }

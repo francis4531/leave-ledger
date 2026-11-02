@@ -69,9 +69,30 @@ export const shiftOf = (emp) => Math.max(1, Math.min(24, +emp.shiftHours || 8));
 export const weeklyOf = (emp) => Math.max(1, Math.min(80, +emp.weeklyHours || 40));
 // Sick leave: the employer may limit yearly use to 40 hours or 5 days, whichever is more,
 // and the balance to 80 hours or 10 days, whichever is more (Lab. Code § 246, as amended by SB 616).
-export const sickUseCap = (emp) => Math.max(RULES.sick.use, 5 * shiftOf(emp));
-export const sickBalanceCap = (emp) => Math.max(RULES.sick.accrualCap, 10 * shiftOf(emp));
-export const sickUsable = (emp) => Math.min(emp.sick, Math.max(0, sickUseCap(emp) - emp.sickUsedYr));
+/* City paid sick leave laws. Each city sets a balance cap and sometimes a yearly use limit, often by employer size.
+   The employee gets whichever is more generous, the state rule or the city rule, for each limit.
+   use: null means the city lets employees use everything they have earned (no yearly limit).
+   Checked November 2026 against city notices and employer guides; where a source was unclear we chose the more
+   generous reading. Headcount is the company's total; Emeryville counts only employees in the city. */
+export const LOCAL_SICK = {
+  sf: { name: 'San Francisco', bal: (n) => (n < 10 ? 40 : 72), use: null, law: 'San Francisco Paid Sick Leave Ordinance' },
+  oakland: { name: 'Oakland', bal: (n) => (n < 10 ? 40 : 72), use: null, law: 'Oakland paid sick leave (Measure FF)' },
+  berkeley: { name: 'Berkeley', bal: (n) => (n < 25 ? 48 : 72), use: (n) => (n < 25 ? 48 : null), law: 'Berkeley Paid Sick Leave Ordinance' },
+  emeryville: { name: 'Emeryville', bal: (n) => (n <= 55 ? 48 : 72), use: (n) => (n <= 55 ? 48 : 72), law: 'Emeryville Paid Sick Leave Ordinance' },
+  la: { name: 'Los Angeles (city)', bal: () => 72, use: () => 48, law: 'Los Angeles Minimum Wage Ordinance, paid sick leave' },
+  lacounty: { name: 'Unincorporated Los Angeles County', bal: () => 72, use: () => 48, law: 'Los Angeles County paid sick leave' },
+  sandiego: { name: 'San Diego', bal: () => 80, use: () => 40, law: 'San Diego Earned Sick Leave Ordinance' },
+  santamonica: { name: 'Santa Monica', bal: (n) => (n <= 25 ? 40 : 72), use: null, law: 'Santa Monica paid sick leave' },
+};
+export const localSick = (co) => (co && LOCAL_SICK[co.sickCity]) || null;
+export const sickUseCap = (emp, co) => {
+  const st = Math.max(RULES.sick.use, 5 * shiftOf(emp)), L = localSick(co);
+  if (!L) return st;
+  const u = L.use ? L.use(co.headcount) : null;
+  return u === null ? Infinity : Math.max(st, u);
+};
+export const sickBalanceCap = (emp, co) => { const L = localSick(co); return Math.max(RULES.sick.accrualCap, 10 * shiftOf(emp), L ? L.bal(co.headcount) : 0); };
+export const sickUsable = (emp, co) => Math.min(emp.sick, Math.max(0, sickUseCap(emp, co) - emp.sickUsedYr));
 // Pregnancy leave: up to 4 months of the employee's normal schedule (17 1/3 weeks), so part-time
 // employees get proportionally fewer hours. Taken continuously, it spans the same calendar weeks.
 export const pdlHours = (emp) => Math.round(weeklyOf(emp) * RULES.pdl.weeks * 10) / 10;
@@ -83,7 +104,7 @@ export function eligibility(emp, co, start){
   // FMLA: the employer is covered at 50+ employees; the 75-mile test is part of the employee's eligibility.
   const cfraCo = co.headcount >= RULES.cfra.minCo, fmlaCo = co.headcount >= RULES.fmla.minCo, near = !!co.within75;
   // Sick leave can be used from the 90th day of employment, counting the hire date as day 1.
-  const sickDay = tenure >= RULES.sick.useAfter - 1, sickLeft = sickUsable(emp);
+  const sickDay = tenure >= RULES.sick.useAfter - 1, sickLeft = sickUsable(emp, co);
   const tenureTxt = tenure >= 365 ? `${(tenure/365).toFixed(1)} years` : `${Math.max(0,Math.floor(tenure/30.44))} months`;
   return {
     tenure,
@@ -214,11 +235,12 @@ export function buildPlan(emp, co, reason, o){
   else if (reason==='sick'){
     const days = Math.max(1, Math.ceil(o.hours/shiftOf(emp)));
     const sp = bizSpan(o.start, days, hol);
-    const avail = sickUsable(emp), cap = sickUseCap(emp);
+    const avail = sickUsable(emp, co), cap = sickUseCap(emp, co), L = localSick(co);
     seg('protect','short','Sick leave', sp.start, sp.end, `${o.hours} hours`);
     seg('pay','sick','Paid from sick balance', sp.start, sp.end, `${Math.min(o.hours, avail)} of ${o.hours} hours paid`);
     if (!el.sick.ok) P.warnings.push({bad:true, t:'Employee can start using sick leave on day 90 of employment.'});
-    if (o.hours > avail) P.warnings.push({t:`Only ${avail} hours are usable (balance ${emp.sick}, ${emp.sickUsedYr} of ${cap} used this year). The rest may be unpaid or PTO.`});
+    if (o.hours > avail) P.warnings.push({t:`Only ${avail} hours are usable (balance ${emp.sick}${cap === Infinity ? '' : `, ${emp.sickUsedYr} of ${cap} used this year`}). The rest may be unpaid or PTO.`});
+    if (L) P.facts.push({t:`${L.name} rules apply: balance can reach ${L.bal(co.headcount)} hours${cap === Infinity ? ', with no yearly use limit' : `, and up to ${cap} hours can be used a year`}.`, c:L.law});
     P.facts.push({t:'Usable for the employee or a family member, including kin care. Do not require a doctor note as a condition of using it.', c:RULES.sick.cite});
     P.facts.push({t:'Pay at the regular rate by the next regular payday, and show the balance on the pay stub.', c:'Lab. Code §§ 246(i), 246(l)'});
     P.end = sp.end;
@@ -264,7 +286,7 @@ export function sampleData(TODAY){
   const T = n => addDays(TODAY, n);
   const company = {name:'Mesa Verde Coffee Roasters', city:'Oakland, CA', headcount:38, within75:true,
     holidays:['2026-11-26','2026-11-27','2026-12-25','2027-01-01','2027-01-18','2027-02-15','2027-05-31'],
-    band90:PAY2026.band90, band70:PAY2026.band70, wbaMax:PAY2026.wbaMax, wbaMin:PAY2026.wbaMin, hrContact:'Grace Okafor'};
+    band90:PAY2026.band90, band70:PAY2026.band70, wbaMax:PAY2026.wbaMax, wbaMin:PAY2026.wbaMin, hrContact:'Grace Okafor', sickCity:'oakland'};
   const employees = [
     {id:'e1', name:'Priya Raman', role:'Roaster', hire:'2023-03-14', hours12:1980, cfraUsed:0, fmlaUsed:0, sick:32, sickUsedYr:8, reproUsed:0, hiQuarter:17550, mgr:'e9'},
     {id:'e2', name:'Marcus Bell', role:'Barista lead', hire:'2025-08-04', hours12:1410, cfraUsed:0, fmlaUsed:0, sick:24, sickUsedYr:16, reproUsed:0, hiQuarter:13200, mgr:'e10'},

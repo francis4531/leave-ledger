@@ -1,9 +1,9 @@
 import {
-  addDays, diffDays, fmt, fmtS, money, esc, plural, RULES, REASONS, REL, relName, sickUseCap, sickBalanceCap, sickUsable, shiftOf, weeklyOf, pdlHours,
+  addDays, diffDays, fmt, fmtS, money, esc, plural, RULES, REASONS, REL, relName, sickUseCap, sickBalanceCap, sickUsable, shiftOf, weeklyOf, pdlHours, LOCAL_SICK, localSick,
   weeklyBenefit, eligibility, buildPlan, makeTasks,
   planFor as planForD, caseDates as caseDatesD, caseStatus as caseStatusD,
 } from "./engine.mjs";
-import { LETTERS, hasLetter, draftLetter, managerNotice, sensitiveNote, nextWorkday } from "./notices.mjs";
+import { LETTERS, hasLetter, draftLetter, managerNotice, sensitiveNote, nextWorkday, legalSummary } from "./notices.mjs";
 import { COLUMNS, FIELDS, templateCSV, parseGrid, gridFromRows, autoMap, missingFields, applyMap, columnProfile, headerSig, checkRows, HR_SYSTEMS } from "./roster.mjs";
 import { LEAVES, RIGHTS, EDD, eddSteps } from "./guide.mjs";
 
@@ -52,6 +52,7 @@ const TABS = {
 };
 // The server says what this user can do (S.caps); tabs and buttons follow it.
 const CAP = (k) => !!(S && S.caps && S.caps[k]);
+const REAL = () => !!(S && S.space && S.space.realData);
 const SAMPLE = () => !!(S && S.space && S.space.kind === "preview");
 const tabsFor = (role) => TABS[role].filter(([k]) => (k !== "access" || CAP("users")) && (k !== "settings" || CAP("settings")));
 const viewOf = () => (UI.tab === "myleave" ? "emp" : S.me.role === "mgr" ? "mgr" : S.me.role === "hr" ? "hr" : "emp");
@@ -183,6 +184,7 @@ function lawRows() {
     ["Federal FMLA", "FMLA", c50, `Runs at the same time as the state leaves.${c50 && !co.within75 ? " Employees qualify only if 50 or more employees work within 75 miles of their worksite." : ""}`, "Starts at 50 employees"],
     ["State pay while out", "SDI and PFL", true, "The state pays about 70 to 90% of wages, up to $1,765 a week in 2026. The employer does not pay this.", ""],
     ["Paid sick leave", "", true, "40 hours or 5 days a year, whichever is more, for the employee or a sick family member.", ""],
+    ...(localSick(co) ? [[`${localSick(co).name} sick leave`, "City", true, `Balance can reach ${localSick(co).bal(co.headcount)} hours. ${localSick(co).use && localSick(co).use(co.headcount) !== null ? `Up to ${localSick(co).use(co.headcount)} hours can be used a year.` : "No yearly use limit: employees can use all they have earned."} Employees get whichever is more generous, the city or the state rule.`, ""]] : []),
     ["Bereavement leave", "", c5, "5 days for each family death, within 3 months.", "Applies at 5 or more employees"],
     ["Reproductive loss leave", "", c5, "5 days per loss, up to 20 a year. No documentation.", "Applies at 5 or more employees"],
   ];
@@ -219,7 +221,7 @@ function copilotBox() {
   return `<div class="copilot">
     <div class="cp-h"><span class="spark" aria-hidden="true">✦</span><b>Tell us in your own words</b><span class="pill acc">Clerk</span></div>
     <textarea id="rq-text" data-ai-text rows="3" placeholder="For example: My dad is having knee surgery on Nov 12 and I need to help him for about 3 weeks.">${esc(A.text)}</textarea>
-    <span class="hint">English or Spanish is fine. You do not need to name a diagnosis. AI reads this to fill in the form, and HR sees it too.</span>
+    <span class="hint">English or Spanish is fine. You do not need to name a diagnosis. Clerk sends your words to our AI provider to fill in the form; they are not used to train AI. HR sees them too.</span>
     <div class="btns"><button class="btn" data-intake ${A.busy ? "disabled" : ""}>${A.busy ? "Reading it now" : d ? "Read it again" : "Fill in the form for me"}</button></div>
     ${A.error ? `<p class="err" role="alert">${esc(A.error)}</p>` : ""}${note}
   </div>
@@ -381,7 +383,7 @@ function wizardView() {
       ${wba && (p.pays.sdi || p.pays.pfl) ? `<li>The state may pay you about <b>${money(wba.amount)} a week</b>${p.pays.sdi ? ", after a 7-day wait" : ""}. EDD decides the final amount.</li>` : ""}
       ${["own_health", "family_care", "bonding"].includes(W.need) && !p.el.cfra.ok ? `<li>You may not qualify for job-protected family leave yet. It needs 12 months here and 1,250 hours worked in the last year. HR will confirm, and state pay can still apply.</li>` : ""}
       ${W.need === "pregnancy_bonding" && W.bond && !p.el.cfra.ok ? `<li>Your pregnancy leave is protected from day one. Bonding time after it may not be job protected yet, because that needs 12 months and 1,250 hours. State pay can still apply.</li>` : ""}
-      ${W.need === "sick" ? `<li>You have about <b>${plural(Math.floor(sickUsable(me)), "hour")}</b> of sick leave you can use now.</li>` : ""}</ul>
+      ${W.need === "sick" ? `<li>You have about <b>${plural(Math.floor(sickUsable(me, co)), "hour")}</b> of sick leave you can use now.</li>` : ""}</ul>
     ${E3 ? `<p class="small muted">After you send it, your leave page will walk you through filing with EDD: ${E3.claims.map((x) => `${esc(x.title)}, between ${fmtS(x.window.from)} and ${fmtS(x.window.to)}`).join("; ")}.</p>` : ""}
     <p class="small muted">Nothing is sent yet. On the next screen you can check the request, then send it to HR. Your manager only ever sees the dates.</p>
     <div class="btns">${back}<button class="btn primary" data-wiz-use>Use this for my request</button></div></section>`;
@@ -417,33 +419,45 @@ function openLetter(caseId, key) {
   const c = D().cases.find((x) => x.id === caseId); if (!c) return;
   const e = emp(c.empId), draft = (c.drafts || {})[key] || draftLetter(key, c, e, D().company, c.reason === "unknown" ? { el: null } : planFor(c), TODAY, S.me.name);
   if (!draft) return;
-  UI.letter = { caseId, key, subject: draft.subject, body: draft.body, sentOn: TODAY, method: "email", view: null, saved: !!(c.drafts || {})[key] };
+  UI.letter = { caseId, key, subject: draft.subject, body: draft.body, sentOn: TODAY, method: "app", view: null, saved: !!(c.drafts || {})[key] };
   UI.tab = "cases"; UI.caseId = caseId;
 }
-const METHODS = { email: "Email", hand: "In person", mail: "Mail", other: "Other" };
+const METHODS = { app: "Through Leave Ledger", email: "Email I sent myself", hand: "In person", mail: "Mail", other: "Other" };
+const tstamp = (iso) => iso ? new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" }) + " PT" : "";
+// Proof of delivery: every step from sending to the employee confirming receipt, with times.
+function deliveryTrail(n, e) {
+  const nm = first(e.name), rows = [];
+  rows.push([true, `Sent ${n.method === "app" ? "through Leave Ledger" : (METHODS[n.method] || n.method).toLowerCase()} by ${n.by}`, n.at ? tstamp(n.at) : fmt(n.sentOn)]);
+  if (n.method === "app") rows.push(n.emailStatus === "sent" ? [true, `Emailed to ${n.emailTo}`, tstamp(n.emailAt)] : n.emailStatus === "failed" ? [false, `Email to ${n.emailTo} did not go through`, tstamp(n.emailAt)] : [null, S.space.kind === "org" ? (S.mail && S.mail.on ? `No email on file for ${nm}, so only in Leave Ledger` : "Shown in Leave Ledger (email not set up)") : "Shown in Leave Ledger (sample data, no real email)", ""]);
+  rows.push(n.seenAt ? [true, `${nm} opened it in Leave Ledger`, tstamp(n.seenAt)] : [false, `${nm} has not opened it yet`, ""]);
+  rows.push(n.ackAt ? [true, `${nm} confirmed receiving it`, tstamp(n.ackAt)] : [false, "Receipt not confirmed yet", ""]);
+  return rows;
+}
+const trailHTML = (n, e) => `<ol class="trail">${deliveryTrail(n, e).map(([ok, t, w]) => `<li class="${ok === true ? "ok" : ok === false ? "no" : ""}"><span class="dot" aria-hidden="true">${ok === true ? "✓" : ok === false ? "" : "·"}</span><span>${esc(t)}</span>${w ? `<span class="small muted">${esc(w)}</span>` : ""}</li>`).join("")}</ol>`;
+const proofPill = (n) => n.ackAt ? pill("✓ Receipt confirmed", "ok") : n.seenAt ? pill("Opened, not confirmed", "warn") : pill("Not opened yet", "");
 function letterPanel(c) {
   const L = UI.letter; if (!L || L.caseId !== c.id) return "";
   const e = emp(c.empId);
   if (L.view != null) {
     const n = (c.notices || [])[L.view]; if (!n) return "";
     return `<section class="panel letter" aria-label="Sent letter"><div class="panel-h"><h3>${esc(n.subject)}</h3><button class="btn sm" data-letter-close>Close</button></div>
-      <p class="small muted">Sent to ${esc(e.name)} on ${fmt(n.sentOn)} · ${esc(METHODS[n.method] || n.method)} · by ${esc(n.by)}. ${esc(first(e.name))} can read this copy on their own leave page.</p>
+      <div class="proof"><div class="panel-h"><b>Proof of delivery</b>${proofPill(n)}</div>${trailHTML(n, e)}</div>
       <div class="letter-text">${esc(n.body)}</div>
       <div class="btns"><button class="btn sm" data-letter-copy>Copy</button><button class="btn sm" data-letter-print>Print</button></div></section>`;
   }
   return `<section class="panel letter" aria-label="Letter to ${esc(e.name)}"><div class="panel-h"><h3>${esc(LETTERS[L.key])} · to ${esc(e.name)}</h3><button class="btn sm" data-letter-close>Close</button></div>
-    <p class="small muted">A first draft from the details of this leave. Read it, change anything that is not right, then send it by email or print it. Leave Ledger does not send it for you yet.</p>
+    <p class="small muted">A first draft from the details of this leave. Read it and change anything that is not right. Send it through Leave Ledger to get proof of delivery: ${esc(first(e.name))} reads it on their leave page${S.space.kind === "org" && S.mail && S.mail.on ? " and gets it by email" : ""}, and confirms receipt.</p>
     <div class="field"><label for="lt-subject">Subject</label><input type="text" id="lt-subject" value="${esc(L.subject)}" maxlength="200"></div>
     <div class="field"><label for="lt-body">Letter</label><textarea id="lt-body" class="letter-edit" rows="18">${esc(L.body)}</textarea></div>
     <div class="btns"><button class="btn sm" data-letter-save>${L.saved ? "Save changes" : "Save draft"}</button><button class="btn sm" data-letter-copy>Copy</button><button class="btn sm" data-letter-print>Print</button><button class="btn sm" data-letter-reset>Start over</button></div>
-    <div class="sendrow"><div class="field"><label for="lt-on">Sent on</label><input type="date" id="lt-on" value="${esc(L.sentOn)}" max="${TODAY}"></div>
+    <div class="sendrow">${L.method === "app" ? "" : `<div class="field"><label for="lt-on">Sent on</label><input type="date" id="lt-on" value="${esc(L.sentOn)}" max="${TODAY}"></div>`}
       <div class="field"><label for="lt-how">How</label><select id="lt-how">${Object.entries(METHODS).map(([k, v]) => `<option value="${k}" ${L.method === k ? "selected" : ""}>${v}</option>`).join("")}</select></div>
-      <button class="btn primary" data-letter-send>Mark as sent</button></div>
-    <p class="small muted">Marking it sent completes this step, keeps a copy on the leave, and shows it to ${esc(first(e.name))}.</p></section>`;
+      <button class="btn primary" data-letter-send>${L.method === "app" ? "Send" : "Mark as sent"}</button></div>
+    <p class="small muted">${L.method === "app" ? "Sending completes this step and keeps a copy with a delivery record." : `Marking it sent completes this step and keeps a copy. ${esc(first(e.name))} can still confirm receipt on their leave page.`}</p></section>`;
 }
 function lettersSent(c) {
   const list = c.notices || []; if (!list.length) return "";
-  return `<section class="panel"><h3>Letters sent</h3><div class="queue">${list.map((n, i) => `<div class="qrow" style="grid-template-columns:minmax(0,1fr) auto"><div><div class="t" style="font-weight:500">${esc(n.subject)}</div><div class="s">${fmt(n.sentOn)} · ${esc(METHODS[n.method] || n.method)}</div></div><button class="btn sm" data-letter-view="${c.id}|${i}">View</button></div>`).reverse().join("")}</div></section>`;
+  return `<section class="panel"><h3>Letters sent</h3><div class="queue">${list.map((n, i) => `<div class="qrow" style="grid-template-columns:minmax(0,1fr) auto"><div><div class="t" style="font-weight:500">${esc(n.subject)}</div><div class="s">${fmt(n.sentOn)} · ${esc(METHODS[n.method] || n.method)}</div><div style="margin-top:4px">${proofPill(n)}</div></div><button class="btn sm" data-letter-view="${c.id}|${i}">View</button></div>`).reverse().join("")}</div></section>`;
 }
 function readLetterFields() {
   const L = UI.letter; if (!L) return;
@@ -455,7 +469,7 @@ function readLetterFields() {
 }
 function letterText() {
   const L = UI.letter, c = D().cases.find((x) => x.id === L.caseId);
-  if (L.view != null) { const n = c.notices[L.view]; return { subject: n.subject, body: n.body }; }
+  if (L.view != null) { const n = c.notices[L.view], e = emp(c.empId); return { subject: n.subject, body: n.body + "\n\n\nProof of delivery\n" + deliveryTrail(n, e).map(([ok, t, w]) => `${ok === true ? "[x]" : "[ ]"} ${t}${w ? " · " + w : ""}`).join("\n") }; }
   return { subject: L.subject, body: L.body };
 }
 function printLetter() {
@@ -528,7 +542,7 @@ function importPanel() {
     <div class="imp-hris"><div><b>Connect your HR or payroll system</b><p class="small muted" style="margin:2px 0 0">Automatic sync is on the way, so new hires, managers and hours stay current without uploads. Which one do you use?</p></div>
       <select aria-label="Your HR or payroll system" data-co="hris"><option value="">Choose one</option>${HR_SYSTEMS.map((h) => `<option ${co.hris === h ? "selected" : ""}>${esc(h)}</option>`).join("")}</select></div>
     ${co.hris ? `<p class="small muted">Thanks. We will let you know when ${esc(co.hris)} sync is ready. Until then, upload a file.</p>` : ""}
-    <div class="note-box">Made-up details only for now, as agreed when this workspace was set up. Real employee information comes after our security review.</div>
+${REAL() ? "" : `<div class="note-box">Made-up details only for now, as agreed when this workspace was set up. Real employee information comes after our security review.</div>`}
     <ol class="imp-steps">
       <li><b>Export your employee list</b> from your HR or payroll system, as Excel or CSV. Any layout works: we match the columns, and you check them. Keeping employees in a spreadsheet instead? <button class="linkish" data-imp-template>Download our template</button>.
         <details class="more"><summary class="small">What Leave Ledger needs</summary><p class="small" style="margin:6px 0">Needed: name, work email and hire date. Helpful: job title, manager, weekly hours, hours worked in the last 12 months, sick hours and highest quarter wages. Without hours worked, we estimate them from weekly hours.</p><table class="cols small"><tbody>${COLUMNS.map((c) => `<tr><td><code>${c.label}</code>${c.req ? " <b>needed</b>" : ""}</td><td>${esc(c.help)}</td></tr>`).join("")}</tbody></table></details></li>
@@ -587,10 +601,21 @@ function approvalPanel(c) {
     return `<section class="panel"><div class="status-banner ok" role="status" style="margin-bottom:8px"><span class="sb-ic" aria-hidden="true">✓</span><div><div class="sb-t">Approved on ${fmtS(c.approvedOn)}</div><div class="small">${esc(first(e.name))} sees "Confirmed by HR" on their leave page.</div></div></div>
       <p class="small" style="margin:0">${esc(c.approvedBy || "HR")} approved this on ${fmt(c.approvedOn)}.${last ? ` ${esc(first(m ? m.name : "The manager"))} was told the dates ${fmt(last.sentOn)}, ${how(last)}.` : m ? ` ${esc(m.name)} has not been told the dates.` : ""}</p>
       ${m && (moved || !last) ? `<div class="infobox" style="margin-top:8px">${moved ? `The dates changed after ${esc(first(m.name))} was told.` : ""} <button class="btn sm" data-appr-open="${c.id}" data-appr-kind="update">${last ? "Send the new dates" : "Tell the manager the dates"}</button></div>` : ""}
-      ${UI.appr.caseId === c.id ? approveForm(c, e, m, "update") : ""}${viewList}</section>`;
+      ${UI.appr.caseId === c.id ? approveForm(c, e, m, "update") : ""}${viewList}
+      ${legalBox(c)}</section>`;
   }
   return `<section class="panel appr"><h3>Approve this leave</h3>
     ${UI.appr.caseId === c.id ? approveForm(c, e, m, "approved") : `<p class="small muted" style="margin:0 0 8px">When you approve, ${m ? `${esc(m.name)} gets the dates and nothing else: not the reason, the type of leave, pay or anything medical.` : "you can tell the manager the dates. No manager is on file yet; pick one on the Employees tab."}</p><button class="btn primary" data-appr-open="${c.id}" data-appr-kind="approved">Approve</button>`}</section>`;
+}
+// HR signs off first; then a copy of the decision can go to legal.
+function legalBox(c) {
+  const co = D().company, sent = c.legalCopies || [], last = sent[sent.length - 1];
+  const how = (x) => x.delivery === "email" ? `emailed to ${esc(x.to)}` : x.delivery === "failed" ? "the email did not go through; copy it below" : "copied for you to send";
+  return `<div class="legalbox"><div class="panel-h"><b>Copy for legal</b>${last ? pill("Sent " + fmtS(last.at.slice(0, 10)), "ok") : ""}</div>
+    ${co.legalEmail ? `<p class="small muted" style="margin:0 0 8px">${last ? `Last sent ${tstamp(last.at)} by ${esc(last.by)}, ${how(last)}.` : `Send ${esc(co.legalEmail)} a summary: the dates, each eligibility test and its result, the letters and their delivery record.`}</p>
+      <div class="btns"><button class="btn sm" data-legal="${c.id}">${last ? "Send an updated copy" : "Send a copy to legal"}</button><button class="btn sm" data-legal-preview="${c.id}">${UI.legalView === c.id ? "Hide" : "See what is sent"}</button></div>
+      ${UI.legalView === c.id ? `<div class="letter-text" style="margin-top:8px">${esc((() => { const m = legalSummary(c, emp(c.empId), co, planFor(c), { ...caseDates(c), today: TODAY }, S.me.name); return m.subject + "\n\n" + m.body; })())}</div><div class="btns"><button class="btn sm" data-legal-copy="${c.id}">Copy</button></div>` : ""}`
+      : `<p class="small muted" style="margin:0">Add your legal contact's email in Settings to send them a copy of decisions.</p>`}</div>`;
 }
 function approveForm(c, e, m, kind) {
   const A = UI.appr, d = caseDates(c), P = planFor(c);
@@ -623,7 +648,7 @@ function addEmployeePanel() {
   if (UI.imp.open) return importPanel();
   if (!A.open) return `<div class="btns"><button class="btn primary" data-addemp-open>Add an employee</button><button class="btn" data-imp-open>Import from a file</button></div>`;
   return `<section class="panel" data-form="addEmp"><h3>Add an employee</h3>
-    <div class="note-box">Made-up details only for now. Do not enter real employee names or health information.</div>
+${REAL() ? "" : `<div class="note-box">Made-up details only for now. Do not enter real employee names or health information.</div>`}
     <div class="row"><div class="field"><label for="ae-name">Name</label><input type="text" id="ae-name" data-bind="name" value="${esc(A.name)}" maxlength="80"></div>
       <div class="field"><label for="ae-email">Work email</label><input type="email" id="ae-email" data-bind="email" value="${esc(A.email)}" maxlength="120"></div>
       <div class="field"><label for="ae-role">Job title</label><input type="text" id="ae-role" data-bind="role" value="${esc(A.role)}" maxlength="80"></div>
@@ -678,6 +703,8 @@ function hrSettings() {
     <div class="field"><label for="co-name">Company name</label><input type="text" id="co-name" value="${esc(co.name)}" data-co="name"></div>
     <div class="field"><label for="co-hc">Number of employees</label><input type="number" id="co-hc" min="1" value="${co.headcount}" data-co="headcount" data-num><span class="hint">Count everyone, full and part time. Try 50 to see federal FMLA switch on.</span></div>
     <label class="check"><input type="checkbox" id="co-75" ${co.within75 ? "checked" : ""} data-co="within75">At least 50 employees work within 75 miles of each other</label>
+    <div class="field"><label for="co-legal">Legal contact email</label><input type="email" id="co-legal" value="${esc(co.legalEmail || "")}" data-co="legalEmail" placeholder="counsel@lawfirm.com"><span class="hint">After you approve a leave, you can send this contact a summary of the decision.</span></div>
+    <div class="field"><label for="co-city">City where most employees work</label><select id="co-city" data-co="sickCity"><option value="">Elsewhere in California (state rules)</option>${Object.entries(LOCAL_SICK).map(([k, L]) => `<option value="${k}" ${co.sickCity === k ? "selected" : ""}>${esc(L.name)}</option>`).join("")}</select><span class="hint">These cities give more paid sick leave than the state. Pick the city if employees work there at least 2 hours a week.</span></div>
     <div class="field"><label for="co-hol">Company holidays</label><input type="text" id="co-hol" value="${esc(co.holidays.join(", "))}" data-co="holidays"><span class="hint">Dates as yyyy-mm-dd, separated by commas. Deadlines skip these days.</span></div>
   </section><section class="panel">
     <h3>State pay estimates</h3>
@@ -711,12 +738,12 @@ function previewHTML(p, reason) {
 function empView() {
   const e = emp(S.me.empId), co = D().company, el = eligibility(e, co, TODAY), f = UI.req, R = REASONS[f.reason];
   const mine = D().cases.filter((c) => c.empId === e.id && c.reason !== "unknown");
-  const avail = sickUsable(e);
+  const avail = sickUsable(e, co);
   const wba = weeklyBenefit(e, co);
   const p = buildPlan(e, co, f.reason, optsFrom(f));
   return `<div class="head"><div class="person">${avatar(e, "lg")}<div><h2 class="greet">Hi ${esc(first(e.name))}</h2><p class="muted">Your time off, your requests, and what to do next.</p></div></div></div>
   <section class="panel"><h3>What you have</h3><div class="balance">
-    <div><span class="label">Sick leave</span><span class="v">${e.sick} hours</span><div class="meter"><span style="width:${Math.min(100, (e.sick / sickBalanceCap(e)) * 100)}%"></span></div><span class="small muted">${avail} you can use this year</span></div>
+    <div><span class="label">Sick leave</span><span class="v">${e.sick} hours</span><div class="meter"><span style="width:${Math.min(100, (e.sick / sickBalanceCap(e, co)) * 100)}%"></span></div><span class="small muted">${avail} you can use this year</span></div>
     <div><span class="label">Family and medical leave</span><span class="v">${el.cfra.ok ? plural(el.cfra.remaining, "week") : "Not yet"}</span><div class="meter"><span style="width:${el.cfra.ok ? (el.cfra.remaining / 12) * 100 : 0}%"></span></div><span class="small muted">${el.cfra.ok ? "Your job is held for you" : "After 12 months and 1,250 hours"}</span></div>
     ${mine.some((c) => c.reason === "pregnancy_bonding") ? `<div><span class="label">Pregnancy leave</span><span class="v">Up to 4 months</span><span class="small muted">From your first day</span></div>` : ""}
     <div><span class="label">Bereavement</span><span class="v">${el.short.ok ? "5 days" : "After 30 days"}</span><span class="small muted">For each family loss</span></div>
@@ -776,7 +803,8 @@ function empCase(c) {
   <div><div class="label" style="margin-bottom:8px">What happens next</div><ol class="steps">${steps.map((x) => `<li><span>${x}</span></li>`).join("")}</ol></div>
   ${p.warnings.length ? `<div class="infobox">HR will go over a few details of this request with you before confirming dates.</div>` : ""}
   ${eddPanel(c, p, true)}
-  ${(c.notices || []).length ? `<div><div class="label" style="margin-bottom:8px">Letters from HR</div><div class="stack" style="gap:8px">${c.notices.slice().reverse().map((n) => `<details class="more letter-item"><summary>${esc(n.subject)} <span class="muted small">· ${fmt(n.sentOn)}</span></summary><div class="letter-text">${esc(n.body)}</div></details>`).join("")}</div></div>` : ""}</section>`;
+  ${(c.notices || []).length ? `<div><div class="label" style="margin-bottom:8px">Letters from HR</div><div class="stack" style="gap:8px">${c.notices.map((n, i) => [n, i]).reverse().map(([n, i]) => `<details class="more letter-item" data-letter-seen="${c.id}|${i}" ${n.seenAt ? "data-seen" : ""} ${OPEN_LETTERS.has(c.id + "|" + i) ? "open" : ""}><summary>${esc(n.subject)} <span class="muted small">· ${fmt(n.sentOn)}</span> ${n.ackAt ? pill("✓ Received", "ok") : pill("Please read and confirm", "warn")}</summary><div class="letter-text">${esc(n.body)}</div>
+      <div class="btns" style="margin-top:8px">${n.ackAt ? `<span class="small muted">You confirmed receiving this on ${esc(tstamp(n.ackAt))}.</span>` : `<button class="btn primary sm" data-ack-letter="${c.id}|${i}">I received this letter</button><span class="small muted">This tells HR you have it. It does not mean you agree with it.</span>`}</div></details>`).join("")}</div></div>` : ""}</section>`;
 }
 
 /* ---------- Manager ---------- */
@@ -926,7 +954,7 @@ function renderNow() {
   const v = viewOf();
   const html = FB() && UI.survey.open ? surveyView() : UI.tab === "guide" ? guideView() : v === "emp" ? empView() : v === "mgr" ? mgrView() : { overview: hrOverview, cases: hrCases, plan: hrPlan, employees: hrEmployees, access: hrUsers, settings: hrSettings }[UI.tab]();
   const foot = FB()
-    ? `<span>${ORG() ? "Early preview workspace. Use made-up employee details only." : "Early preview with a made-up company."} Rules checked October 2026 for California employers. Not legal advice. <a href="/privacy">Privacy</a></span>${UI.survey.open ? "" : `<button class="btn sm" data-survey>${UI.survey.done ? "Edit your survey answers" : "Take the 2-minute survey"}</button>`}`
+    ? `<span>${ORG() ? (REAL() ? "Design partner workspace." : "Early preview workspace. Use made-up employee details only.") : "Early preview with a made-up company."} Rules checked October 2026 for California employers. Not legal advice. <a href="/privacy">Privacy</a></span>${UI.survey.open ? "" : `<button class="btn sm" data-survey>${UI.survey.done ? "Edit your survey answers" : "Take the 2-minute survey"}</button>`}`
     : `<span>Test site with a made-up company. Rules checked October 2026 for California employers. Not legal advice.</span><a href="/strategy">Product strategy progress</a>`;
   document.getElementById("root").innerHTML = `<main>${surveyBanner()}${html}<div class="foot">${foot}</div></main>`;
   if (focusId) { const el = document.getElementById(focusId); if (el) el.focus(); }
@@ -1229,6 +1257,15 @@ document.addEventListener("click", async (ev) => {
   if (b.dataset.change) { await act({ type: "updateCase", caseId: b.dataset.change, opts: readChange() }, "New dates saved. Deadlines updated."); return; }
   if (b.dataset.returned) { await act({ type: "markReturned", caseId: b.dataset.returned, on: document.getElementById("ce-back")?.value }, "Marked as returned"); return; }
   if (b.dataset.unreturn) { await act({ type: "markReturned", caseId: b.dataset.unreturn, on: null }, "Return undone"); return; }
+  if (b.dataset.legal) {
+    const j = await act({ type: "sendToLegal", caseId: b.dataset.legal });
+    if (j) { const c = D().cases.find((x) => x.id === b.dataset.legal), last = c.legalCopies[c.legalCopies.length - 1];
+      if (last.delivery !== "email" && j.legal) { try { await navigator.clipboard.writeText(j.legal.subject + "\n\n" + j.legal.body); } catch (e) {} toast("Copied. Paste it into an email to legal."); } else toast("Sent to legal"); }
+    return;
+  }
+  if (b.dataset.legalPreview) { UI.legalView = UI.legalView === b.dataset.legalPreview ? null : b.dataset.legalPreview; render(); return; }
+  if (b.dataset.legalCopy) { const c = D().cases.find((x) => x.id === b.dataset.legalCopy), m = legalSummary(c, emp(c.empId), D().company, planFor(c), { ...caseDates(c), today: TODAY }, S.me.name); try { await navigator.clipboard.writeText(m.subject + "\n\n" + m.body); toast("Copied"); } catch (e) { toast("Select the text and copy it"); } return; }
+  if (b.dataset.ackLetter) { const [caseId, i] = b.dataset.ackLetter.split("|"); act({ type: "ackLetter", caseId, idx: +i }, "Thanks. HR can see you received it."); return; }
   if (b.dataset.openLetters) { ev.preventDefault(); const sec = b.closest(".panel"); const det = sec && sec.querySelector(".letter-item"); if (det) { det.open = true; det.scrollIntoView({ behavior: "smooth", block: "center" }); } return; }
   if (b.hasAttribute("data-imp-open")) { UI.imp = { open: true, rows: null, raw: null, grid: null, map: {}, error: "", file: "", busy: false }; UI.addEmp.open = false; render(); return; }
   if (b.hasAttribute("data-imp-close")) { UI.imp.open = false; render(); return; }
@@ -1433,6 +1470,15 @@ function bind(el) {
   if (!["flag", "wiz"].includes(form.dataset.form)) render(); // re-rendering on blur would swallow the next click
 }
 
+// Opening a letter on the employee's leave page records that it was read (once). No re-render, so the letter stays open.
+const OPEN_LETTERS = new Set(); // letters the employee has open stay open when the page redraws
+document.addEventListener("toggle", (ev) => {
+  const d = ev.target; if (!d.dataset || !d.dataset.letterSeen) return;
+  if (d.open) OPEN_LETTERS.add(d.dataset.letterSeen); else OPEN_LETTERS.delete(d.dataset.letterSeen);
+  if (!d.open || d.hasAttribute("data-seen")) return;
+  d.setAttribute("data-seen", ""); const [caseId, i] = d.dataset.letterSeen.split("|");
+  api("action", { type: "letterSeen", caseId, idx: +i }).then((j) => accept(j)).catch(() => {});
+}, true);
 window.matchMedia("(max-width:640px)").addEventListener("change", () => { if (S) render(); });
 // Pick up changes from other test users when the tab comes back into view.
 document.addEventListener("visibilitychange", async () => {
