@@ -4,6 +4,9 @@
 import crypto from "node:crypto";
 import * as E from "../../public/engine.mjs";
 import { eddIds } from "../../public/guide.mjs";
+import { checkRows } from "../../public/roster.mjs";
+import { managerNotice, sensitiveNote } from "../../public/notices.mjs";
+import { mailOn, canEmail, sendMail } from "./mail.mjs";
 import STRATEGY from "./strategy-data.mjs";
 import { runIntake, validate as validateDraft, changedFields, DEFAULT_MODEL } from "./intake.mjs";
 import { DKEY, loadDecisions, cleanDecision, mirrorToGitHub } from "./decisions.mjs";
@@ -72,18 +75,20 @@ export function capsFor(kind, role) {
 
 export function viewFor(D, acct, today, env = {}, space = { kind: "test" }) {
   const me = D.employees.find((e) => e.id === acct.empId);
-  const out = { me: { email: acct.email, name: me.name, role: acct.role, label: acct.label, empId: me.id, views: VIEWS[acct.role] }, today, mode: isFeedback(env) ? "feedback" : "test", space, caps: capsFor(space.kind, acct.role), ai: { on: !!env.ANTHROPIC_API_KEY, model: env.LL_MODEL || DEFAULT_MODEL } };
+  const out = { me: { email: acct.email, name: me.name, role: acct.role, label: acct.label, empId: me.id, views: VIEWS[acct.role] }, today, mode: isFeedback(env) ? "feedback" : "test", space, caps: capsFor(space.kind, acct.role), mail: { on: space.kind === "org" && mailOn(env) }, ai: { on: !!env.ANTHROPIC_API_KEY, model: env.LL_MODEL || DEFAULT_MODEL } };
   if (acct.role === "hr") return { ...out, data: D };
   // Employees get their own cases without HR notes, the manager's flag note, or intake text someone else wrote.
   // Letter drafts stay with HR; employees see only the letters HR marked as sent.
-  const own = D.cases.filter((c) => c.empId === me.id && c.reason !== "unknown").map(({ hrNote, notes, intake, drafts, ...c }) => (intake && intake.source === "employee" ? { ...c, intake } : c));
+  const own = D.cases.filter((c) => c.empId === me.id && c.reason !== "unknown").map(({ hrNote, notes, intake, drafts, mgrNotices, ...c }) => (intake && intake.source === "employee" ? { ...c, intake } : c));
   const data = { company: D.company, employees: [me], cases: own, team: [], teamCases: [] };
   if (acct.role === "mgr") {
     data.team = D.employees.filter((e) => e.mgr === me.id).map((e) => ({ id: e.id, name: e.name, role: e.role }));
     data.teamCases = D.cases.filter((c) => data.team.some((t) => t.id === c.empId)).map((c) => {
       const d = E.caseDates(c, D);
       const st = c.reason === "unknown" ? { t: "Sent to HR", cls: "warn" } : E.caseStatus(c, D, today);
-      return { id: c.id, empId: c.empId, start: d.start, end: d.end, status: st, coverage: c.coverage, flagged: c.reason === "unknown" };
+      // Only what California lets a manager know: dates, status, coverage, and the notices HR sent this manager.
+      const notices = (c.mgrNotices || []).filter((n) => n.to === me.id).map(({ subject, body, sentOn, delivery }) => ({ subject, body, sentOn, delivery }));
+      return { id: c.id, empId: c.empId, start: d.start, end: d.end, status: st, coverage: c.coverage, flagged: c.reason === "unknown", approved: !!c.approvedOn, notices };
     });
   }
   return { ...out, data };
@@ -181,6 +186,55 @@ function apply(D, acct, a, today, kind = "test") {
       if (a.done) c.edd[a.step] = today; else delete c.edd[a.step];
       return null;
     }
+    case "approveCase":
+    case "notifyManager": {
+      // Approving a leave can tell the manager the dates. The notice is built here, from a fixed template,
+      // so it never carries the reason. HR may add a short note, which is checked for words that give the reason away.
+      if (!hr) return "HR only";
+      const c = kase(a.caseId); if (!c || c.reason === "unknown") return "Case not found";
+      if (a.type === "approveCase" && c.approvedOn) return "This leave is already approved";
+      if (a.type === "notifyManager" && !c.approvedOn) return "Approve the leave first";
+      const note = trim(a.note, 400).trim(), bad = sensitiveNote(note);
+      if (bad) return `Leave "${bad}" out of the note. The manager may know the dates, not the reason.`;
+      const e = emp(c.empId), m = e && e.mgr ? emp(e.mgr) : null;
+      if (a.type === "notifyManager" && !m) return "No manager on file. Pick one on the Employees tab.";
+      if (a.type === "approveCase") { c.approvedOn = today; c.approvedBy = who; log(`Approved ${e.name}'s leave`); }
+      if (m && (a.type === "notifyManager" || a.notify !== false)) {
+        const d = E.caseDates(c, D), P = E.planFor(c, D);
+        const msg = managerNotice(a.type === "approveCase" ? "approved" : "update", { emp: e, mgr: m, co: D.company, start: d.start, end: d.end, protectedLeave: P.segs.some((x) => x.lane === "protect" && x.cls !== "none"), hr: who, note });
+        c.mgrNotices = [...(c.mgrNotices || []), { kind: a.type === "approveCase" ? "approved" : "update", to: m.id, ...msg, start: d.start, end: d.end, sentOn: today, by: who, delivery: "app" }].slice(-20);
+        a._mail = { caseId: c.id, to: m.id };
+        log(`Told ${m.name} the dates for ${e.name}`);
+      }
+      return null;
+    }
+    case "importRoster": {
+      // The server checks every row again; the browser preview is only a convenience.
+      if (!hr) return "HR only";
+      if (!Array.isArray(a.rows) || a.rows.length > 1000) return "Bad file";
+      const rows = a.rows.map((r) => Object.fromEntries(Object.entries(r && typeof r === "object" ? r : {}).filter(([k, v]) => typeof k === "string" && k.length < 40 && ["string", "number"].includes(typeof v)).map(([k, v]) => [k, String(v).slice(0, 200)])));
+      const checked = checkRows(rows, D.employees, today);
+      const ids = new Map();
+      for (const r of checked.filter((x) => x.action === "add")) {
+        const id = "e" + crypto.randomBytes(4).toString("hex"); ids.set("row:" + r.line, id);
+        D.employees.push({ id, name: r.data.name, email: r.data.email, role: r.data.role || "Employee", hire: r.data.hire, hours12: r.data.hours12 ?? 0, hoursEst: !!r.data.hoursEst, cfraUsed: 0, fmlaUsed: 0, sick: r.data.sick ?? 0, sickUsedYr: 0, reproUsed: 0, hiQuarter: r.data.hiQuarter ?? 0, shiftHours: r.data.shiftHours ?? 8, weeklyHours: r.data.weeklyHours ?? 40, mgr: null });
+      }
+      for (const r of checked.filter((x) => x.action === "update")) {
+        const e = emp(r.match), d = r.data;
+        Object.assign(e, { name: d.name, email: d.email, hire: d.hire });
+        if (d.role) e.role = d.role;
+        for (const k of ["weeklyHours", "shiftHours", "sick", "hiQuarter"]) if (d[k] != null) e[k] = d[k];
+        if (d.hours12 != null) { e.hours12 = d.hours12; e.hoursEst = !!d.hoursEst; }
+      }
+      for (const r of checked.filter((x) => x.action !== "skip" && x.data.mgr !== undefined)) {
+        const e = emp(r.match || ids.get("row:" + r.line)); const mid = r.data.mgr ? ids.get(r.data.mgr) || r.data.mgr : null;
+        e.mgr = mid; if (mid) emp(mid).isMgr = true;
+      }
+      const n = (k) => checked.filter((x) => x.action === k).length;
+      a._import = { added: n("add"), updated: n("update"), skipped: n("skip") };
+      log(`Imported employees: ${a._import.added} added, ${a._import.updated} updated`);
+      return null;
+    }
     case "updateCase": {
       // New dates or length. Steps already done stay done; open deadlines move with the new plan.
       if (!hr) return "HR only";
@@ -232,6 +286,7 @@ function apply(D, acct, a, today, kind = "test") {
       if (["hours12", "sick", "sickUsedYr", "cfraUsed", "hiQuarter"].includes(a.field)) e[a.field] = Math.max(0, Math.min(1e6, +a.value || 0));
       else if (a.field === "shiftHours") e.shiftHours = Math.max(1, Math.min(24, +a.value || 8));
       else if (a.field === "weeklyHours") e.weeklyHours = Math.max(1, Math.min(80, +a.value || 40));
+      else if (a.field === "email") { const v = trim(a.value, 120).trim().toLowerCase(); if (v && !EMAIL_RE.test(v)) return "Enter a valid email"; if (v && D.employees.some((x) => x.id !== e.id && x.email === v)) return "Another employee has that email"; e.email = v; }
       else if (a.field === "name" || a.field === "role") { const v = trim(a.value, 80).trim(); if (!v) return "Enter a value"; e[a.field] = v; }
       else if (a.field === "hire") { if (!/^\d{4}-\d{2}-\d{2}$/.test(a.value || "") || a.value > today) return "Pick a hire date on or before today"; e.hire = a.value; }
       else if (a.field === "mgr") { if (a.value && (!emp(a.value) || a.value === e.id)) return "Pick a manager"; e.mgr = a.value || null; if (a.value) emp(a.value).isMgr = true; }
@@ -245,6 +300,7 @@ function apply(D, acct, a, today, kind = "test") {
       else if (f === "headcount") co.headcount = Math.max(1, Math.min(100000, Math.round(+a.value || 1)));
       else if (f === "within75") co.within75 = !!a.value;
       else if (f === "wbaMax" || f === "band90") co[f] = Math.max(0, +a.value || 0);
+      else if (f === "hris") co.hris = trim(a.value, 60);
       else if (f === "holidays") co.holidays = (Array.isArray(a.value) ? a.value : []).filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s)).slice(0, 40);
       else return "Field not editable";
       log(`Changed company setting: ${f}`); return null;
@@ -258,7 +314,10 @@ function apply(D, acct, a, today, kind = "test") {
       if (e.mgr && !emp(e.mgr)) return "Pick a manager";
       const n = (v, hi) => Math.max(0, Math.min(hi, Math.round(+v || 0)));
       const id = "e" + crypto.randomBytes(4).toString("hex");
-      D.employees.push({ id, name, role: trim(e.role, 80).trim() || "Employee", hire: e.hire, hours12: n(e.hours12, 4000), cfraUsed: 0, fmlaUsed: 0, sick: n(e.sick, 400), sickUsedYr: 0, reproUsed: 0, hiQuarter: n(e.hiQuarter, 1e6), shiftHours: Math.max(1, Math.min(24, +e.shiftHours || 8)), weeklyHours: Math.max(1, Math.min(80, +e.weeklyHours || 40)), mgr: e.mgr || null });
+      const email = trim(e.email, 120).trim().toLowerCase();
+      if (email && !EMAIL_RE.test(email)) return "Enter a valid email";
+      if (email && D.employees.some((x) => x.email === email)) return "Another employee has that email";
+      D.employees.push({ id, name, email, role: trim(e.role, 80).trim() || "Employee", hire: e.hire, hours12: n(e.hours12, 4000), cfraUsed: 0, fmlaUsed: 0, sick: n(e.sick, 400), sickUsedYr: 0, reproUsed: 0, hiQuarter: n(e.hiQuarter, 1e6), shiftHours: Math.max(1, Math.min(24, +e.shiftHours || 8)), weeklyHours: Math.max(1, Math.min(80, +e.weeklyHours || 40)), mgr: e.mgr || null });
       if (e.mgr) emp(e.mgr).isMgr = true;
       log(`Added ${name}`); a._id = id; return null;
     }
@@ -662,9 +721,19 @@ async function route_(req, store, env) {
     const problem = apply(D, acct, a, today, R.kind);
     if (problem) return err(problem, problem === "HR only" || problem.startsWith("Not your") || problem.startsWith("Not available") ? 403 : 400);
     if (FB) touch(D, acct.email, "action", a.type);
+    if (a._mail) {
+      // Email the manager in a real workspace when email is set up; otherwise the notice waits on their My team page.
+      const c = D.cases.find((x) => x.id === a._mail.caseId), n = c.mgrNotices[c.mgrNotices.length - 1];
+      const m = D.employees.find((x) => x.id === a._mail.to), member = R.kind === "org" ? (R.meta.members || []).find((x) => x.empId === m.id) : null;
+      const to = m.email || (member && member.email) || "";
+      if (canEmail(env, R.kind, to)) {
+        const r = await sendMail(env, { to, subject: n.subject, text: n.body + `\n\nYou can also read this in Leave Ledger: ${baseUrl(req, env)}`, replyTo: acct.email && !/\.example$/.test(acct.email) ? acct.email : undefined });
+        n.delivery = r.status === "sent" ? "email" : "failed"; n.toEmail = to;
+      }
+    }
     if (R.kind === "org" && a.type === "updateCompany" && a.field === "name") { R.meta.name = D.company.name; await saveOrg(store, R.meta); }
     await store.setJSON(R.key, D);
-    return json({ ...viewFor(D, acct, today, env, spaceInfo(R)), createdId: a._id || null });
+    return json({ ...viewFor(D, acct, today, env, spaceInfo(R)), createdId: a._id || null, imported: a._import || null });
   }
   return err("Not found", 404);
 }

@@ -494,3 +494,75 @@ describe("EDD filing checklist", () => {
     assert.ok(!r.body.data.cases.find((c) => c.id === mine.id).edd["pfl-account"], "unticked");
   });
 });
+
+describe("approving a leave and telling the manager", () => {
+  test("HR approves; only that manager gets the dates; the employee never sees the message", async () => {
+    const s = testSite();
+    const hr = await signedIn(s, "grace@mesaverde.example");
+    const marcusCase = (await hr.get("/api/state")).body.data.cases.find((c) => c.empId === "e2");
+    for (const who of ["marcus@mesaverde.example", "mei@mesaverde.example"]) {
+      const c = await signedIn(s, who);
+      assert.equal((await c.post("/api/action", { type: "approveCase", caseId: marcusCase.id })).status, 403, `${who} cannot approve`);
+    }
+    assert.equal((await hr.post("/api/action", { type: "approveCase", caseId: marcusCase.id, note: "He is caring for his dad" })).status, 400, "family details are caught too");
+    const s2 = testSite(), hr2 = await signedIn(s2, "grace@mesaverde.example");
+    const bad = await hr2.post("/api/action", { type: "approveCase", caseId: marcusCase.id, note: "back after the surgery" });
+    assert.equal(bad.status, 400); assert.match(bad.body.error, /surgery/);
+    const ok = await hr2.post("/api/action", { type: "approveCase", caseId: marcusCase.id, note: "A temp starts Monday" });
+    assert.equal(ok.status, 200);
+    assert.equal((await hr2.post("/api/action", { type: "approveCase", caseId: marcusCase.id })).status, 400, "only once");
+
+    const mei = await signedIn(s2, "mei@mesaverde.example");
+    const tc = (await mei.get("/api/state")).body.data.teamCases.find((c) => c.empId === "e2");
+    assert.equal(tc.approved, true); assert.equal(tc.notices.length, 1);
+    assert.match(tc.notices[0].body, /A temp starts Monday/);
+    assert.ok(!/family|care|parent|CFRA|PFL/i.test(tc.notices[0].subject + tc.notices[0].body.replace("health or family matters", "")), "no reason in the message");
+    const dana = await signedIn(s2, "dana@mesaverde.example");
+    assert.ok(!(await dana.get("/api/state")).body.data.teamCases.some((c) => c.empId === "e2"), "other managers see nothing");
+    const marcus = await signedIn(s2, "marcus@mesaverde.example");
+    const own = (await marcus.get("/api/state")).body.data.cases.find((c) => c.id === marcusCase.id);
+    assert.ok(own.approvedOn); assert.ok(!("mgrNotices" in own), "employee does not get the manager's copy");
+
+    assert.equal((await hr2.post("/api/action", { type: "updateCase", caseId: marcusCase.id, opts: { start: "2026-11-18", weeks: 6 } })).status, 200);
+    assert.equal((await hr2.post("/api/action", { type: "notifyManager", caseId: marcusCase.id })).status, 200);
+    const again = (await mei.get("/api/state")).body.data.teamCases.find((c) => c.empId === "e2");
+    assert.equal(again.notices.length, 2); assert.match(again.notices[1].subject, /^Updated dates/);
+  });
+  test("the test site and sample copies never send real email", async () => {
+    const store = memoryStore(), env = { ...TEST_ENV, LL_RESEND_API_KEY: "re_x", LL_MAIL_FROM: "a@b.co" };
+    let calls = 0; const f = globalThis.fetch; globalThis.fetch = async (...a) => (String(a[0]).includes("resend") ? (calls++, new Response("{}")) : f(...a));
+    try {
+      const c = client(store, env); await c.post("/api/login", { email: "grace@mesaverde.example", password: "test-pass-123" });
+      const id = (await c.get("/api/state")).body.data.cases.find((x) => x.empId === "e2").id;
+      assert.equal((await c.post("/api/action", { type: "approveCase", caseId: id })).status, 200);
+      assert.equal(calls, 0);
+    } finally { globalThis.fetch = f; }
+  });
+});
+
+describe("importing employees from a file", () => {
+  test("HR imports; the server checks every row again; others cannot import", async () => {
+    const s = testSite(), hr = await signedIn(s, "grace@mesaverde.example");
+    const rows = [
+      { name: "Jamie Rivera", email: "jamie@x.co", hire_date: "2021-03-15", manager_name: "Dana Ortiz", hours_worked_last_12_months: "2000" },
+      { name: "Sam Patel", email: "sam@x.co", hire_date: "2024-08-05", manager_name: "Jamie Rivera" },
+      { name: "Ben Whitaker", email: "ben@mesaverde.example", hire_date: "2024-05-20", job_title: "Head roaster", weekly_hours: "32" },
+      { name: "Bad", email: "nope", hire_date: "2030-01-01" },
+      { name: "<script>", email: "x@y.co", hire_date: "2020-01-01", constructor: "x", __proto__: { evil: 1 } },
+    ];
+    const r = await hr.post("/api/action", { type: "importRoster", rows });
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.body.imported, { added: 3, updated: 1, skipped: 1 });
+    const E = r.body.data.employees, by = (n) => E.find((e) => e.name === n);
+    assert.equal(by("Jamie Rivera").mgr, "e9");
+    assert.equal(by("Sam Patel").mgr, by("Jamie Rivera").id, "manager added in the same file");
+    assert.ok(by("Sam Patel").hoursEst);
+    assert.equal(by("Ben Whitaker").role, "Head roaster"); assert.equal(by("Ben Whitaker").weeklyHours, 32); assert.equal(E.filter((e) => e.name === "Ben Whitaker").length, 1);
+    assert.ok(E.find((e) => e.name === "<script>"), "stored as text; the page escapes it");
+    for (const who of ["ben@mesaverde.example", "dana@mesaverde.example"]) {
+      const c = await signedIn(s, who);
+      assert.equal((await c.post("/api/action", { type: "importRoster", rows })).status, 403);
+    }
+    assert.equal((await hr.post("/api/action", { type: "importRoster", rows: "nope" })).status, 400);
+  });
+});

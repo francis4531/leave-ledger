@@ -116,6 +116,39 @@ describe("test site", { skip }, () => {
     assert.deepEqual(errors, []);
   });
 
+  test("HR imports employees from the template, approves a leave, and the manager gets only the dates", async () => {
+    const { p, errors } = await page();
+    await p.goto(S.base);
+    await p.fill("#lg-pw", "test-pass-123");
+    await p.click('[data-pick="grace@mesaverde.example"]');
+    await p.click('[data-tab="employees"]');
+    await p.click("[data-imp-open]");
+    const { templateCSV } = await import("../../public/roster.mjs");
+    await p.setInputFiles("#imp-file", { name: "team.csv", mimeType: "text/csv", buffer: Buffer.from(templateCSV()) });
+    await p.waitForSelector(".imp-sum");
+    assert.match(await p.textContent(".imp-sum"), /3 new employees/);
+    await p.click("[data-imp-go]");
+    await p.waitForSelector("text=Imported: 3 added");
+    assert.ok(await p.$("text=jamie.rivera@example.com"), "new employee listed with email");
+
+    await p.click('[data-tab="cases"]');
+    await p.click('tr[data-open]:has-text("Marcus Bell")');
+    await p.click("[data-appr-open]");
+    await p.fill("#ap-note", "after the surgery");
+    assert.ok(await p.$eval("[data-appr-go]", (x) => x.disabled), "a note with the reason cannot be sent");
+    await p.fill("#ap-note", "A temp starts Monday.");
+    await p.click("[data-appr-go]");
+    await p.waitForSelector("text=Approved Nov");
+    await p.click("[data-logout]");
+    await p.click('[data-pick="mei@mesaverde.example"]');
+    await p.click("text=Message from HR");
+    const text = await p.textContent("main");
+    assert.match(text, /approved time off for Marcus Bell/);
+    assert.match(text, /A temp starts Monday/);
+    for (const w of ["Care for", "Family and medical", "CFRA", "Paid Family Leave", "surgery"]) assert.ok(!text.includes(w), `manager must not see "${w}"`);
+    assert.deepEqual(errors, []);
+  });
+
   test("every HR screen opens without errors", async () => {
     const { p, errors } = await page();
     await p.goto(S.base);

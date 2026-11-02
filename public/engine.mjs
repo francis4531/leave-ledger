@@ -277,6 +277,8 @@ export function sampleData(TODAY){
     {id:'e9', name:'Dana Ortiz', role:'Roastery lead', hire:'2018-09-04', hours12:2100, cfraUsed:0, fmlaUsed:0, sick:64, sickUsedYr:8, reproUsed:0, hiQuarter:26300, mgr:null, isMgr:true},
     {id:'e10', name:'Mei Lin', role:'Café manager', hire:'2020-04-01', hours12:2080, cfraUsed:0, fmlaUsed:0, sick:48, sickUsedYr:0, reproUsed:0, hiQuarter:22400, mgr:null, isMgr:true}
   ];
+  // Made-up work emails, used for the manager notice and to match rows on a roster import.
+  employees.forEach(e => { e.email = e.name.split(' ')[0].normalize('NFD').replace(/[^A-Za-z]/g,'').toLowerCase() + '@mesaverde.example'; });
   const D = {company, employees, cases:[]};
   const mk = (id, empId, reason, requested, opts, source) => {
     const emp = employees.find(e=>e.id===empId);
@@ -287,10 +289,12 @@ export function sampleData(TODAY){
   const done = (c, key, on) => { const t=c.tasks.find(x=>x.key===key); if(!t) return; t.done=true; t.doneOn=on; if(key==='cert'){ const d=c.tasks.find(x=>x.after==='cert'); if(d) d.due=addBiz(on,5,company.holidays);} };
   const a = mk('c1','e1','pregnancy_bonding',T(-16),{start:T(-5),disWeeks:10,bondWeeks:12},'employee');
   ['notice','brochure','benefits'].forEach(k=>done(a,k,T(-13))); done(a,'cert',T(-9)); done(a,'designate',T(-7));
+  a.approvedOn = T(-7); a.approvedBy = 'Grace Okafor';
   a.coverage = 'Ben covers Tuesday to Thursday roasts. Temp roaster starts the week of the 9th.';
   const b = mk('c2','e2','family_care',T(-2),{start:T(10),weeks:6,relation:'parent'},'employee');
   const c = mk('c3','e4','own_health',T(-20),{start:T(-14),weeks:6},'hr');
   ['notice','brochure','benefits'].forEach(k=>done(c,k,T(-17))); done(c,'cert',T(-9));
+  c.approvedOn = T(-9); c.approvedBy = 'Grace Okafor';
   c.coverage = 'Dana takes the three largest wholesale accounts. Others on hold.';
   mk('c4','e6','bereavement',T(-1),{start:T(1),days:5,relation:'grandparent'},'employee');
   mk('c5','e3','bonding',TODAY,{start:T(21),weeks:8},'employee');

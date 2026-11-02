@@ -117,3 +117,50 @@ export function draftLetter(key, c, emp, co, P, today, hr) {
   }
   return null;
 }
+
+/* ---------- The manager's notice ----------
+   California keeps the reason for leave private: medical information (Civil Code 56.20), the CFRA rule
+   against asking about a diagnosis, and the confidentiality rules for bereavement and reproductive loss leave
+   (Gov. Code 12945.7, 12945.6). So the manager gets the dates, the expected return, and what not to do.
+   Never the leave type, the reason, pay, eligibility or anything medical. */
+const DAYNAME = (s) => new Date(s + "T00:00:00Z").toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" });
+const longDate = (s) => `${DAYNAME(s)}, ${fmt(s)}`;
+// The next workday on or after a date (weekends and company holidays skipped).
+export function nextWorkday(s, hol = []) { let d = s; for (let i = 0; i < 14; i++) { const w = new Date(d + "T00:00:00Z").getUTCDay(); if (w !== 0 && w !== 6 && !hol.includes(d)) return d; d = addDays(d, 1); } return s; }
+
+// Words that would give away the reason. HR's optional note is checked for these before it goes to a manager.
+const SENSITIVE = /\b(pregnan\w*|baby|birth|matern\w*|patern\w*|adopt\w*|foster\w*|bond\w*|miscarr\w*|stillbirth|ivf|fertility|surrogac\w*|surg\w*|cancer|chemo\w*|diagnos\w*|illness|ill|sick|disab\w*|medical|doctor|hospital\w*|therapy|mental|depress\w*|anxiety|injur\w*|condition|health|died|death|funeral|bereave\w*|passed away|grief|cfra|fmla|pdl|sdi|pfl|edd|dad|mom|father|mother|parents?|sons?|daughters?|wife|husband|spouse|child|children|kids?|grand\w+|siblings?|brother|sister|caring|caregiv\w*)\b/i;
+export const sensitiveNote = (t) => { const m = String(t || "").match(SENSITIVE); return m ? m[0] : null; };
+
+// kind: "approved" for the first notice, "update" when the dates change later.
+export function managerNotice(kind, { emp, mgr, co, start, end, protectedLeave, hr, note }) {
+  const name = first(emp.name), full = emp.name;
+  const lastDay = addDays(end, -1), back = nextWorkday(end, co.holidays || []);
+  const oneDay = start === lastDay;
+  const subject = kind === "update" ? `Updated dates: ${full} is out ${fmt(start)}${oneDay ? "" : ` to ${fmt(lastDay)}`}` : `${full} will be out ${fmt(start)}${oneDay ? "" : ` to ${fmt(lastDay)}`}`;
+  const lines = [
+    `Hi ${first(mgr.name)},`,
+    "",
+    kind === "update" ? `HR has updated the dates for ${full}'s approved time off. Please use these dates from now on.` : `HR has approved time off for ${full}.`,
+    "",
+    oneDay ? `Out: ${longDate(start)}` : `Out: ${longDate(start)} through ${longDate(lastDay)}`,
+    `Expected back: ${longDate(back)}`,
+    ...(protectedLeave ? ["", `${name}'s job is protected while away. ${name} comes back to the same job, or one just like it, with the same pay.`] : []),
+    "",
+    "What to do now",
+    `- Plan coverage for these dates. You can write the plan on your My team page in Leave Ledger.`,
+    `- If the team asks, say ${name} is out and when ${name} is expected back. That is all anyone needs.`,
+    "",
+    "Please do not",
+    `- Ask ${name}, or anyone else, why ${name} is out, or about health or family matters. Send any questions to HR.`,
+    `- Ask ${name} to work while away. If something urgent comes up, like a password or where a file is, check with HR first.`,
+    `- Count this time against ${name} in attendance, reviews, schedules or promotions.`,
+    "",
+    `The reason for this time off stays with HR, as California law requires. ${kind === "update" ? "" : "If the dates change, HR will let you know."}`.trim(),
+    ...(note ? ["", `Note from HR: ${note}`] : []),
+    "",
+    `${hr || co.hrContact || "HR"}`,
+    co.name,
+  ];
+  return { subject, body: lines.join("\n") };
+}

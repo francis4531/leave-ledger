@@ -3,7 +3,8 @@ import {
   weeklyBenefit, eligibility, buildPlan, makeTasks,
   planFor as planForD, caseDates as caseDatesD, caseStatus as caseStatusD,
 } from "./engine.mjs";
-import { LETTERS, hasLetter, draftLetter } from "./notices.mjs";
+import { LETTERS, hasLetter, draftLetter, managerNotice, sensitiveNote } from "./notices.mjs";
+import { COLUMNS, templateCSV, parseTable, checkRows, HR_SYSTEMS } from "./roster.mjs";
 import { LEAVES, RIGHTS, EDD, eddSteps } from "./guide.mjs";
 
 /* ---------- State ---------- */
@@ -26,7 +27,9 @@ const UI = {
   home: { busy: false, error: "", form: { name: "", city: "", headcount: 20, jobTitle: "", start: "sample", lockDomain: false, agree: false } },
   users: { list: null, domain: null, canLock: false, myDomain: null, email: "", role: "emp", empId: "", busy: false, error: "" },
   letter: null,          // {caseId, key, subject, body, sentOn, method, view: index of a sent letter}
-  addEmp: { open: false, name: "", role: "", hire: "", hours12: 1000, sick: 24, hiQuarter: 12000, shiftHours: 8, weeklyHours: 40, mgr: "", error: "" },
+  imp: { open: false, rows: null, raw: null, missing: [], error: "", file: "", busy: false },
+  appr: { caseId: null, notify: true, note: "" },
+  addEmp: { open: false, name: "", email: "", role: "", hire: "", hours12: 1000, sick: 24, hiQuarter: 12000, shiftHours: 8, weeklyHours: 40, mgr: "", error: "" },
 };
 const store = {
   get(k, s = localStorage) { try { return s.getItem(k); } catch (e) { return null; } },
@@ -64,7 +67,7 @@ async function api(path, body) {
   return j;
 }
 function accept(j) {
-  S = { me: j.me, today: j.today, data: j.data, ai: j.ai || { on: false }, space: j.space || { kind: "test" }, caps: j.caps || {} }; TODAY = j.today;
+  S = { me: j.me, today: j.today, data: j.data, ai: j.ai || { on: false }, space: j.space || { kind: "test" }, caps: j.caps || {}, mail: j.mail || { on: false } }; TODAY = j.today;
   if (j.mode) MODE = j.mode;
   if (!UI.tab || !tabsFor(S.me.role).some(([k]) => k === UI.tab)) UI.tab = tabsFor(S.me.role)[0][0];
   if (!UI.planner.start) UI.planner.start = addDays(TODAY, 14);
@@ -469,7 +472,7 @@ function hrCase(c) {
   }
   return `<div class="head"><div><button class="linkish" data-back>← All leaves</button><div class="person" style="margin-top:10px">${avatar(e, "lg")}<div><h2>${esc(e.name)}</h2><p class="muted">${esc(e.role)} · hired ${fmt(e.hire)} · asked ${fmt(c.requested)}</p></div></div></div>${pill(s.t, s.cls)}</div>
   <div class="grid2"><div class="stack">${letterPanel(c)}${body}</div>
-  <div class="stack"><section class="panel"><h3>Steps for HR</h3><div class="queue">${items}</div></section>
+  <div class="stack">${approvalPanel(c)}<section class="panel"><h3>Steps for HR</h3><div class="queue">${items}</div></section>
   ${lettersSent(c)}
   <section class="panel"><h3>Manager's coverage plan</h3><p class="small ${c.coverage ? "" : "muted"}">${esc(c.coverage || "Nothing yet. The manager adds this from their own view.")}</p></section>
   <section class="panel"><div class="field"><label for="hrnote">Private HR notes</label><textarea id="hrnote" data-casenote="${c.id}" placeholder="Only HR sees this. Saves when you click away.">${esc(c.hrNote || "")}</textarea></div></section>
@@ -499,12 +502,93 @@ function hrPlan() {
 }
 
 /* ---------- HR: Employees ---------- */
+/* ---------- HR: import employees from a file ---------- */
+function importPanel() {
+  const I = UI.imp, co = D().company, emps = D().employees;
+  const mgrName = (r) => { const m = r.data.mgr; if (m === undefined) return r.data.mgrName || r.data.mgrEmail ? "Unchanged" : ""; if (m === null) return "None"; if (String(m).startsWith("row:")) { const x = I.rows.find((y) => "row:" + y.line === m); return x ? x.data.name : ""; } return emp(m)?.name || ""; };
+  const n = (k) => (I.rows || []).filter((r) => r.action === k).length;
+  const pillFor = { add: pill("New", "ok"), update: pill("Update", "acc"), skip: pill("Not imported", "bad") };
+  return `<section class="panel" data-form="imp"><div class="panel-h"><h3>Import employees</h3><button class="btn sm" data-imp-close>Close</button></div>
+    <div class="imp-hris"><div><b>Connect your HR or payroll system</b><p class="small muted" style="margin:2px 0 0">Automatic sync is on the way, so new hires, managers and hours stay current without uploads. Which one do you use?</p></div>
+      <select aria-label="Your HR or payroll system" data-co="hris"><option value="">Choose one</option>${HR_SYSTEMS.map((h) => `<option ${co.hris === h ? "selected" : ""}>${esc(h)}</option>`).join("")}</select></div>
+    ${co.hris ? `<p class="small muted">Thanks. We will let you know when ${esc(co.hris)} sync is ready. Until then, upload a file.</p>` : ""}
+    <div class="note-box">Made-up details only for now, as agreed when this workspace was set up. Real employee information comes after our security review.</div>
+    <ol class="imp-steps">
+      <li><b>Download the template</b> and fill in one row per employee. Most HR and payroll systems can export these columns.
+        <div class="btns" style="margin-top:8px"><button class="btn" data-imp-template>Download template (CSV)</button></div>
+        <details class="more"><summary class="small">What each column means</summary><table class="cols small"><tbody>${COLUMNS.map((c) => `<tr><td><code>${c.label}</code>${c.req ? " <b>required</b>" : ""}</td><td>${esc(c.help)}</td></tr>`).join("")}</tbody></table></details></li>
+      <li><b>Upload it.</b> Save from Excel or Google Sheets as CSV. Employees already here are matched by email and updated; nobody is removed.
+        <div class="field" style="margin-top:8px"><input type="file" id="imp-file" accept=".csv,.tsv,.txt,text/csv,text/plain" data-imp-file aria-label="Employee file"></div>
+        <details class="more"><summary class="small">Or paste rows copied from a spreadsheet</summary><textarea id="imp-paste" rows="5" placeholder="Copy the header row and the employee rows, then paste here"></textarea><div class="btns"><button class="btn sm" data-imp-paste>Check these rows</button></div></details></li>
+    </ol>
+    ${I.error ? `<p class="err" role="alert">${esc(I.error)}</p>` : ""}
+    ${I.rows ? `<div class="imp-sum"><b>${esc(I.file || "Pasted rows")}</b>: ${plural(n("add"), "new employee")}, ${plural(n("update"), "update")}${n("skip") ? `, <span class="bad-t">${plural(n("skip"), "row")} with problems</span>` : ""}.</div>
+      <div class="tw"><table class="cards"><thead><tr><th>Row</th><th>Employee</th><th>Hired</th><th>Manager</th><th>Result</th></tr></thead><tbody>
+      ${I.rows.map((r) => `<tr><td data-l="Row" class="small mono">${r.line}</td><td class="full"><b>${esc(r.data.name || "(no name)")}</b><div class="small muted">${esc(r.data.email || "")}${r.data.role ? " · " + esc(r.data.role) : ""}</div></td><td data-l="Hired" class="small">${r.data.hire ? fmt(r.data.hire) : ""}</td><td data-l="Manager" class="small">${esc(mgrName(r))}</td>
+        <td class="full">${pillFor[r.action]}${[...r.errors.map((x) => `<div class="small bad-t">${esc(x)}</div>`), ...r.warnings.map((x) => `<div class="small muted">${esc(x)}</div>`)].join("")}</td></tr>`).join("")}
+      </tbody></table></div>
+      <div class="btns"><button class="btn primary" data-imp-go ${n("add") + n("update") && !I.busy ? "" : "disabled"}>Import ${plural(n("add") + n("update"), "employee")}</button><span class="small muted">Rows with problems are left out. Fix them and upload again.</span></div>` : ""}
+  </section>`;
+}
+function readRoster(text, name) {
+  const t = parseTable(text);
+  if (!t.header.length) { UI.imp = { ...UI.imp, rows: null, error: "That file is empty." }; return; }
+  if (t.missing.length) { UI.imp = { ...UI.imp, rows: null, error: `The file needs these columns: ${t.missing.join(", ")}. Start from the template.` }; return; }
+  if (!t.rows.length) { UI.imp = { ...UI.imp, rows: null, error: "The file has a header row but no employees." }; return; }
+  if (t.rows.length > 1000) { UI.imp = { ...UI.imp, rows: null, error: "That is more than 1,000 rows. Split it into smaller files." }; return; }
+  UI.imp = { ...UI.imp, raw: t.rows, rows: checkRows(t.rows, D().employees, TODAY), file: name, error: "" };
+}
+
+/* ---------- HR: approve a leave and tell the manager ---------- */
+function approvalPanel(c) {
+  if (c.reason === "unknown") return "";
+  const e = emp(c.empId), m = e.mgr ? emp(e.mgr) : null, d = caseDates(c), sent = c.mgrNotices || [], last = sent[sent.length - 1];
+  const how = (n) => n.delivery === "email" ? `by email${n.toEmail ? " to " + esc(n.toEmail) : ""}` : n.delivery === "failed" ? "in Leave Ledger (the email did not go through)" : "on their My team page";
+  const viewList = sent.length ? `<details class="more"><summary class="small">Messages to ${esc(m ? first(m.name) : "the manager")} (${sent.length})</summary>${sent.slice().reverse().map((n) => `<div class="small muted" style="margin-top:8px">${fmt(n.sentOn)} · ${how(n)}</div><div class="letter-text">${esc(n.subject)}\n\n${esc(n.body)}</div>`).join("")}</details>` : "";
+  if (c.approvedOn) {
+    const moved = last && (last.start !== d.start || last.end !== d.end);
+    return `<section class="panel"><div class="panel-h"><h3>Approved</h3>${pill("Approved " + fmtS(c.approvedOn), "ok")}</div>
+      <p class="small" style="margin:0">${esc(c.approvedBy || "HR")} approved this on ${fmt(c.approvedOn)}.${last ? ` ${esc(first(m ? m.name : "The manager"))} was told the dates ${fmt(last.sentOn)}, ${how(last)}.` : m ? ` ${esc(m.name)} has not been told the dates.` : ""}</p>
+      ${m && (moved || !last) ? `<div class="infobox" style="margin-top:8px">${moved ? `The dates changed after ${esc(first(m.name))} was told.` : ""} <button class="btn sm" data-appr-open="${c.id}" data-appr-kind="update">${last ? "Send the new dates" : "Tell the manager the dates"}</button></div>` : ""}
+      ${UI.appr.caseId === c.id ? approveForm(c, e, m, "update") : ""}${viewList}</section>`;
+  }
+  return `<section class="panel appr"><h3>Approve this leave</h3>
+    ${UI.appr.caseId === c.id ? approveForm(c, e, m, "approved") : `<p class="small muted" style="margin:0 0 8px">When you approve, ${m ? `${esc(m.name)} gets the dates and nothing else: not the reason, the type of leave, pay or anything medical.` : "you can tell the manager the dates. No manager is on file yet; pick one on the Employees tab."}</p><button class="btn primary" data-appr-open="${c.id}" data-appr-kind="approved">Approve</button>`}</section>`;
+}
+function approveForm(c, e, m, kind) {
+  const A = UI.appr, d = caseDates(c), P = planFor(c);
+  const msg = m ? managerNotice(kind, { emp: e, mgr: m, co: D().company, start: d.start, end: d.end, protectedLeave: P.segs.some((x) => x.lane === "protect" && x.cls !== "none"), hr: S.me.name, note: A.note.trim() }) : null;
+  const bad = sensitiveNote(A.note);
+  const delivery = !m ? "" : S.space.kind !== "org" ? `Sample data: ${esc(first(m.name))} reads this on their My team page. No real email is sent.`
+    : S.mail && S.mail.on ? (m.email ? `Emailed to ${esc(m.email)} and shown on ${esc(first(m.name))}'s My team page.` : `${esc(m.name)} has no email on file, so this shows on their My team page only.`)
+    : `Email sending is not set up yet, so ${esc(first(m.name))} reads this on their My team page.`;
+  return `<div class="appr-form">
+    ${m ? `${kind === "approved" ? `<label class="check"><input type="checkbox" id="ap-notify" ${A.notify ? "checked" : ""}> Tell ${esc(m.name)} the dates</label>` : ""}
+      ${kind === "update" || A.notify ? `<div class="mailprev"><div class="small muted">To: ${esc(m.name)}${m.email ? ` &lt;${esc(m.email)}&gt;` : ""}</div><div class="small"><b>${esc(msg.subject)}</b></div><div class="letter-text">${esc(msg.body)}</div></div>
+      <div class="field"><label for="ap-note">Add a note (optional)</label><textarea id="ap-note" rows="2" maxlength="400" placeholder="For example: A temp starts Monday. I will send you the agency contact.">${esc(A.note)}</textarea><span class="hint ${bad ? "bad-t" : ""}">${bad ? `Take out "${esc(bad)}". The manager may know the dates, not the reason.` : "Keep it to logistics. No reason, health or family details."}</span></div>
+      <p class="small muted">${delivery}</p>` : ""}` : `<p class="small muted">No manager on file, so nobody is told. You can pick a manager on the Employees tab and send the dates later.</p>`}
+    <div class="btns"><button class="btn" data-appr-cancel>Cancel</button><button class="btn primary" data-appr-go="${c.id}" data-appr-kind="${kind}" ${bad ? "disabled" : ""}>${kind === "approved" ? (m && A.notify ? "Approve and tell the manager" : "Approve") : "Send the new dates"}</button></div></div>`;
+}
+
+// Updates the preview while HR types the note, without re-rendering (which would drop focus and the next click).
+function refreshApproval() {
+  const box = document.querySelector(".appr-form"), go = box && box.querySelector("[data-appr-go]"); if (!go) return;
+  const c = D().cases.find((x) => x.id === go.dataset.apprGo), e = emp(c.empId), m = e.mgr ? emp(e.mgr) : null; if (!m) return;
+  const d = caseDates(c), P = planFor(c), bad = sensitiveNote(UI.appr.note);
+  const msg = managerNotice(go.dataset.apprKind, { emp: e, mgr: m, co: D().company, start: d.start, end: d.end, protectedLeave: P.segs.some((x) => x.lane === "protect" && x.cls !== "none"), hr: S.me.name, note: UI.appr.note.trim() });
+  const lt = box.querySelector(".mailprev .letter-text"); if (lt) lt.textContent = msg.body;
+  const h = box.querySelector("#ap-note + .hint"); if (h) { h.textContent = bad ? `Take out "${bad}". The manager may know the dates, not the reason.` : "Keep it to logistics. No reason, health or family details."; h.classList.toggle("bad-t", !!bad); }
+  go.disabled = !!bad;
+}
+
 function addEmployeePanel() {
   const A = UI.addEmp, emps = D().employees;
-  if (!A.open) return `<div class="btns"><button class="btn primary" data-addemp-open>Add an employee</button></div>`;
+  if (UI.imp.open) return importPanel();
+  if (!A.open) return `<div class="btns"><button class="btn primary" data-addemp-open>Add an employee</button><button class="btn" data-imp-open>Import from a file</button></div>`;
   return `<section class="panel" data-form="addEmp"><h3>Add an employee</h3>
     <div class="note-box">Made-up details only for now. Do not enter real employee names or health information.</div>
     <div class="row"><div class="field"><label for="ae-name">Name</label><input type="text" id="ae-name" data-bind="name" value="${esc(A.name)}" maxlength="80"></div>
+      <div class="field"><label for="ae-email">Work email</label><input type="email" id="ae-email" data-bind="email" value="${esc(A.email)}" maxlength="120"></div>
       <div class="field"><label for="ae-role">Job title</label><input type="text" id="ae-role" data-bind="role" value="${esc(A.role)}" maxlength="80"></div>
       <div class="field"><label for="ae-hire">Hire date</label><input type="date" id="ae-hire" data-bind="hire" value="${esc(A.hire || addDays(TODAY, -365))}" max="${TODAY}"></div></div>
     <div class="row"><div class="field"><label for="ae-h">Hours worked, last 12 months</label><input type="number" id="ae-h" data-bind="hours12" data-num value="${A.hours12}"><span class="hint">1,250 or more is needed for family leave.</span></div>
@@ -524,8 +608,8 @@ function hrEmployees() {
   ${org ? addEmployeePanel() : ""}
   <section class="panel"><div class="tw"><table class="cards"><thead><tr><th>Employee</th><th>Hired</th><th class="num">Hours, last 12 months</th><th class="num">Family leave left</th><th class="num">Sick hours</th><th class="num">Schedule</th><th>Qualifies today for</th>${org ? "<th>Manager</th><th></th>" : ""}</tr></thead><tbody>
   ${D().employees.map((e) => { const el = eligibility(e, co, TODAY); const q = [["Family leave", el.cfra.ok], ...(el.fmla.covered ? [["FMLA", el.fmla.ok]] : []), ...(D().cases.some((c) => c.empId === e.id && c.reason === "pregnancy_bonding") ? [["Pregnancy leave", el.pdl.ok]] : []), ["Bereavement", el.short.ok], ["Sick leave", el.sick.ok]];
-    return `<tr><td class="full"><div class="person">${avatar(e, "sm")}<div><b>${esc(e.name)}</b><div class="small muted">${esc(e.role)}</div></div></div></td><td data-l="Hired" class="small mono">${org ? `<input type="date" aria-label="Hire date for ${esc(e.name)}" data-emp="${e.id}|hire" value="${e.hire}" max="${TODAY}">` : fmt(e.hire)}</td>
-  <td data-l="Hours, 12 mo" class="num"><input type="number" aria-label="Hours worked in the last 12 months for ${esc(e.name)}" id="h-${e.id}" data-emp="${e.id}|hours12" value="${e.hours12}" style="width:90px;text-align:right"></td>
+    return `<tr><td class="full"><div class="person">${avatar(e, "sm")}<div><b>${esc(e.name)}</b><div class="small muted">${esc(e.role)}${e.email ? ` · ${esc(e.email)}` : ""}</div></div></div></td><td data-l="Hired" class="small mono">${org ? `<input type="date" aria-label="Hire date for ${esc(e.name)}" data-emp="${e.id}|hire" value="${e.hire}" max="${TODAY}">` : fmt(e.hire)}</td>
+  <td data-l="Hours, 12 mo" class="num"><input type="number" aria-label="Hours worked in the last 12 months for ${esc(e.name)}" id="h-${e.id}" data-emp="${e.id}|hours12" value="${e.hours12}" style="width:90px;text-align:right">${e.hoursEst ? `<div class="small muted">Estimated. Check payroll</div>` : ""}</td>
   <td data-l="Family leave left" class="num">${el.cfra.ok ? plural(el.cfra.remaining, "week") : '<span class="muted">Not yet</span>'}</td>
   <td data-l="Sick hours" class="num"><input type="number" aria-label="Sick hours for ${esc(e.name)}" id="s-${e.id}" data-emp="${e.id}|sick" value="${e.sick}" style="width:72px;text-align:right"></td>
   <td data-l="Schedule" class="num small"><div style="display:flex;gap:4px;align-items:center;justify-content:flex-end;white-space:nowrap"><input type="number" aria-label="Usual shift hours for ${esc(e.name)}" data-emp="${e.id}|shiftHours" value="${shiftOf(e)}" min="1" max="24" style="width:52px;text-align:right"> h/day <input type="number" aria-label="Hours a week for ${esc(e.name)}" data-emp="${e.id}|weeklyHours" value="${weeklyOf(e)}" min="1" max="80" style="width:56px;text-align:right"> h/wk</div></td>
@@ -639,9 +723,9 @@ function empCase(c) {
   const confirmKey = ["notice", "designate", "confirm", "record"].filter((k) => c.tasks.some((t) => t.key === k)).pop();
   const reviewed = c.tasks.find((t) => t.key === "notice" || t.key === "confirm" || t.key === "record");
   const confirmed = confirmKey && c.tasks.find((t) => t.key === confirmKey).done;
-  const stage = confirmed ? 3 : reviewed && reviewed.done ? 2 : 1;
+  const stage = confirmed || c.approvedOn ? 3 : reviewed && reviewed.done ? 2 : 1;
   const due = reviewed && !reviewed.done && reviewed.due ? ` · HR replies by ${fmtS(reviewed.due)}` : "";
-  const track = s.t === "Returned" ? "" : `<ol class="track" aria-label="Request status">${["Sent to HR", "HR reviewing", "Confirmed"].map((x, i) => `<li class="${i + 1 < stage ? "done" : i + 1 === stage ? "now" : ""}" ${i + 1 === stage ? 'aria-current="step"' : ""}><span>${x}</span></li>`).join("")}</ol><p class="small muted" style="margin:-4px 0 0">Asked ${fmt(c.requested)}${stage === 1 ? due : ""}${stage === 3 ? " · your dates are confirmed" : ""}</p>`;
+  const track = s.t === "Returned" ? "" : `<ol class="track" aria-label="Request status">${["Sent to HR", "HR reviewing", "Confirmed"].map((x, i) => `<li class="${i + 1 < stage ? "done" : i + 1 === stage ? "now" : ""}" ${i + 1 === stage ? 'aria-current="step"' : ""}><span>${x}</span></li>`).join("")}</ol><p class="small muted" style="margin:-4px 0 0">Asked ${fmt(c.requested)}${stage === 1 ? due : ""}${stage === 3 ? ` · your dates are confirmed${c.approvedOn ? `. Your manager is told the dates only, never the reason` : ""}` : ""}</p>`;
   return `<section class="panel"><div class="panel-h"><h3>${esc(REASONS[c.reason].emp)}</h3>${pill(s.t, s.cls)}</div>${track}${timelineHTML(p)}
   <div><div class="label" style="margin-bottom:8px">What happens next</div><ol class="steps">${steps.map((x) => `<li><span>${x}</span></li>`).join("")}</ol></div>
   ${p.warnings.length ? `<div class="infobox">HR will go over a few details of this request with you before confirming dates.</div>` : ""}
@@ -668,7 +752,8 @@ function mgrView() {
   <div class="grid2">
     <section class="panel"><h3>Plan coverage</h3>${leaves.length ? leaves.map((c) => { const e = emp(c.empId); return `<div class="field" style="border-top:1px solid var(--line);padding-top:12px">
       <div class="panel-h"><div class="person">${avatar(e, "sm")}<b>${esc(e.name)}</b></div>${pill(c.status.t, c.status.cls)}</div>
-      <div class="small">Out <span class="mono">${fmtS(c.start)}</span>, back <span class="mono">${fmtS(c.end)}</span>. HR confirms the return date.</div>
+      <div class="small">Out <span class="mono">${fmtS(c.start)}</span>, back <span class="mono">${fmtS(c.end)}</span>. ${c.approved ? "Approved by HR." : "HR confirms the return date."}</div>
+      ${(c.notices || []).length ? `<details class="more"><summary class="small">Message from HR · ${fmtS(c.notices[c.notices.length - 1].sentOn)}</summary><div class="letter-text">${esc(c.notices[c.notices.length - 1].body)}</div></details>` : ""}
       <label for="cov-${c.id}" class="small" style="font-weight:600">Who covers what</label><textarea id="cov-${c.id}" data-cov="${c.id}" placeholder="For example: Ben takes the Tuesday roasts. Saves when you click away.">${esc(c.coverage)}</textarea></div>`; }).join("") : '<p class="muted">Nobody on your team has time off coming up.</p>'}
       ${flags.length ? `<div class="small muted">Sent to HR, waiting on them: ${flags.map((c) => esc(emp(c.empId).name)).join(", ")}</div>` : ""}
       <div class="infobox">Please do not ask why someone is out, and do not contact them about work while they are on leave. Questions go to ${esc(D().company.hrContact)} in HR.</div></section>
@@ -1097,11 +1182,34 @@ document.addEventListener("click", async (ev) => {
   if (b.dataset.change) { await act({ type: "updateCase", caseId: b.dataset.change, opts: readChange() }, "New dates saved. Deadlines updated."); return; }
   if (b.dataset.returned) { await act({ type: "markReturned", caseId: b.dataset.returned, on: document.getElementById("ce-back")?.value }, "Marked as returned"); return; }
   if (b.dataset.unreturn) { await act({ type: "markReturned", caseId: b.dataset.unreturn, on: null }, "Return undone"); return; }
+  if (b.hasAttribute("data-imp-open")) { UI.imp = { open: true, rows: null, raw: null, missing: [], error: "", file: "", busy: false }; UI.addEmp.open = false; render(); return; }
+  if (b.hasAttribute("data-imp-close")) { UI.imp.open = false; render(); return; }
+  if (b.hasAttribute("data-imp-template")) {
+    const url = URL.createObjectURL(new Blob([templateCSV()], { type: "text/csv" }));
+    const a = document.createElement("a"); a.href = url; a.download = "leave-ledger-employees.csv"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000); return;
+  }
+  if (b.hasAttribute("data-imp-paste")) { readRoster(document.getElementById("imp-paste").value, "Pasted rows"); render(); return; }
+  if (b.hasAttribute("data-imp-go")) {
+    UI.imp.busy = true; render();
+    const j = await act({ type: "importRoster", rows: UI.imp.raw });
+    UI.imp.busy = false;
+    if (j && j.imported) { const r = j.imported; UI.imp = { open: false, rows: null, raw: null, missing: [], error: "", file: "", busy: false }; render(); toast(`Imported: ${r.added} added, ${r.updated} updated${r.skipped ? `, ${r.skipped} left out` : ""}`); }
+    else render();
+    return;
+  }
+  if (b.dataset.apprOpen) { UI.appr = { caseId: b.dataset.apprOpen, notify: true, note: "" }; render(); return; }
+  if (b.hasAttribute("data-appr-cancel")) { UI.appr.caseId = null; render(); return; }
+  if (b.dataset.apprGo) {
+    const kind = b.dataset.apprKind, A = UI.appr;
+    const j = await act(kind === "approved" ? { type: "approveCase", caseId: b.dataset.apprGo, notify: A.notify, note: A.note } : { type: "notifyManager", caseId: b.dataset.apprGo, note: A.note });
+    if (j) { UI.appr = { caseId: null, notify: true, note: "" }; render(); toast(kind === "approved" ? "Approved" : "New dates sent"); }
+    return;
+  }
   if (b.hasAttribute("data-addemp-open")) { UI.addEmp = { ...UI.addEmp, open: true, error: "", hire: UI.addEmp.hire || addDays(TODAY, -365) }; render(); document.getElementById("ae-name")?.focus(); return; }
   if (b.hasAttribute("data-addemp-cancel")) { UI.addEmp.open = false; render(); return; }
   if (b.hasAttribute("data-addemp")) {
     const A = UI.addEmp;
-    try { const j = await api("action", { type: "addEmployee", employee: { name: A.name, role: A.role, hire: A.hire || addDays(TODAY, -365), hours12: A.hours12, sick: A.sick, hiQuarter: A.hiQuarter, shiftHours: A.shiftHours, weeklyHours: A.weeklyHours, mgr: A.mgr } }); accept(j); UI.addEmp = { open: false, name: "", role: "", hire: "", hours12: 1000, sick: 24, hiQuarter: 12000, shiftHours: 8, weeklyHours: 40, mgr: "", error: "" }; render(); toast("Employee added"); }
+    try { const j = await api("action", { type: "addEmployee", employee: { name: A.name, email: A.email, role: A.role, hire: A.hire || addDays(TODAY, -365), hours12: A.hours12, sick: A.sick, hiQuarter: A.hiQuarter, shiftHours: A.shiftHours, weeklyHours: A.weeklyHours, mgr: A.mgr } }); accept(j); UI.addEmp = { open: false, name: "", email: "", role: "", hire: "", hours12: 1000, sick: 24, hiQuarter: 12000, shiftHours: 8, weeklyHours: 40, mgr: "", error: "" }; render(); toast("Employee added"); }
     catch (e) { if (e.message !== "signed out") { A.error = e.message; render(); } }
     return;
   }
@@ -1220,6 +1328,13 @@ document.addEventListener("change", (ev) => {
   if (el.dataset.userRole) { usersChange({ op: "role", email: el.dataset.userRole, role: el.value }, "Role changed"); return; }
   if (el.hasAttribute("data-lock")) { usersChange({ op: "lock", on: el.checked }, el.checked ? "Company accounts only" : "Any Google account can be invited"); return; }
   if (UI.letter && ["lt-on", "lt-how"].includes(el.id)) { readLetterFields(); return; }
+  if (el.hasAttribute("data-imp-file")) {
+    const f = el.files && el.files[0]; if (!f) return;
+    if (/\.(xlsx|xls|numbers)$/i.test(f.name)) { UI.imp.error = "That is a spreadsheet file. Save it as CSV first (File, Save As or Download, CSV), then upload that."; UI.imp.rows = null; render(); return; }
+    if (f.size > 2e6) { UI.imp.error = "That file is over 2 MB. Is it the right one?"; render(); return; }
+    f.text().then((t) => { readRoster(t, f.name); render(); }); return;
+  }
+  if (el.id === "ap-notify") { UI.appr.notify = el.checked; render(); return; }
   if (el.dataset.edd) { const [caseId, step] = el.dataset.edd.split("|"); act({ type: "eddCheck", caseId, step, done: el.checked }, el.checked ? "Nice. Ticked off." : "Unticked"); return; }
   if (el.dataset.task) { const [caseId, key] = el.dataset.task.split("|"); act({ type: "toggleTask", caseId, key, done: el.checked }, el.checked ? "Marked done" : "Reopened"); return; }
   if (el.dataset.emp) { const [id, field] = el.dataset.emp.split("|"); act({ type: "updateEmployee", id, field, value: el.value }, "Saved"); return; }
@@ -1243,6 +1358,7 @@ document.addEventListener("input", (ev) => {
     return;
   }
   if (el.hasAttribute && el.hasAttribute("data-ai-text")) { UI.reqAI.text = el.value; return; }
+  if (el.id === "ap-note") { UI.appr.note = el.value; refreshApproval(); return; }
   if (el.closest('[data-form="flag"]') && el.dataset.bind) UI.flag[el.dataset.bind] = el.value;
 });
 function bind(el) {
