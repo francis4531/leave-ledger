@@ -90,12 +90,38 @@ describe("test site", { skip }, () => {
     assert.deepEqual(errors, []);
   });
 
+  test("employee uses the guide wizard, sends the request, and ticks off an EDD step", async () => {
+    const { p, errors } = await page();
+    await p.goto(S.base);
+    await p.fill("#lg-pw", "test-pass-123");
+    await p.click('[data-pick="priya@mesaverde.example"]');
+    await p.click('[data-tab="guide"]');
+    assert.equal((await p.$$(".lcard")).length, 7, "seven leave cards");
+    await p.click("[data-wiz-start]");
+    await p.click('[data-wiz-need="family_care"]');
+    await p.selectOption("#wz-rel", "parent");
+    await p.fill("#wz-wk", "5");
+    await p.click("[data-wiz-next]");
+    await p.waitForSelector("[data-wiz-use]");
+    assert.match(await p.textContent("main"), /Your job is protected from/);
+    await p.click("[data-wiz-use]");
+    await p.waitForSelector('[data-form="req"]');
+    assert.equal(await p.inputValue("#rq-reason"), "family_care");
+    await p.click("[data-submitreq]");
+    await p.waitForSelector("#toast:not([hidden])");
+    const box = p.locator('[data-edd$="|pfl-account"]').first();
+    await box.check();
+    await p.waitForSelector("text=Ticked off");
+    assert.ok(await p.locator('[data-edd$="|pfl-account"]').first().isChecked(), "stays ticked after saving");
+    assert.deepEqual(errors, []);
+  });
+
   test("every HR screen opens without errors", async () => {
     const { p, errors } = await page();
     await p.goto(S.base);
     await p.fill("#lg-pw", "test-pass-123");
     await p.click('[data-pick="grace@mesaverde.example"]');
-    for (const t of ["overview", "cases", "plan", "employees", "settings", "myleave"]) { await p.click(`[data-tab="${t}"]`); await p.waitForTimeout(100); }
+    for (const t of ["overview", "cases", "plan", "employees", "settings", "guide", "myleave"]) { await p.click(`[data-tab="${t}"]`); await p.waitForTimeout(100); }
     assert.deepEqual(errors, []);
   });
 });
@@ -119,7 +145,8 @@ describe("preview site", { skip }, () => {
     await p.waitForSelector("[data-pick]");
     assert.equal(await p.textContent(".envtag"), "Early preview");
     await p.click('[data-pick="grace@mesaverde.example"]');
-    assert.ok(!(await p.$('[data-tab="settings"]')), "no Settings for prospects");
+    await p.waitForSelector("#tabs button");
+    assert.ok(await p.$('[data-tab="settings"]'), "HR in a sample copy has Settings");
     await p.click("#fbBtn");
     await p.click('[data-fb-rate="4"]');
     await p.fill("#fb-note", "Clear and fast");
@@ -173,7 +200,7 @@ describe("preview site", { skip }, () => {
     await ana.p.click("[data-accept]");
     await ana.p.waitForSelector("#who .nm");
     assert.equal(await ana.p.textContent("#who .nm"), "Ben Whitaker");
-    assert.deepEqual(await ana.p.$$eval("#tabs button", (b) => b.map((x) => x.textContent)), ["My leave"]);
+    assert.deepEqual(await ana.p.$$eval("#tabs button", (b) => b.map((x) => x.textContent)), ["My leave", "Guide"]);
     for (const x of [sam, ana, admin]) assert.deepEqual(x.errors, []);
   });
 
@@ -183,5 +210,43 @@ describe("preview site", { skip }, () => {
     await p.waitForSelector("text=invite only");
     await p.goto(S.base + "/strategy");
     await p.waitForSelector("text=Page not found");
+  });
+});
+
+// Parity: HR gets the same product in the test site, a prospect's sample copy, and a real workspace.
+describe("same product everywhere", { skip }, () => {
+  const HR_TABS = ["overview", "cases", "plan", "employees", "settings", "myleave"];
+  async function checkHR(p, label, { users }) {
+    const tabs = await p.$$eval("#tabs [data-tab], #tabs .more-menu [data-tab]", (b) => b.map((x) => x.dataset.tab));
+    for (const t of HR_TABS) assert.ok(tabs.includes(t), `${label}: ${t} tab`);
+    assert.equal(tabs.includes("access"), users, `${label}: Users tab`);
+    await p.click('[data-tab="settings"]');
+    for (const sel of ["#co-name", "#co-hc", "#co-hol", "#co-max"]) assert.ok(await p.$(sel), `${label}: setting ${sel}`);
+    await p.click('[data-tab="employees"]');
+    assert.ok(await p.$("[data-addemp-open]"), `${label}: add employee`);
+    await p.click('[data-tab="cases"]');
+    await p.click("tr[data-open]");
+    assert.ok(await p.$("[data-change]"), `${label}: change this leave`);
+    assert.ok(await p.$("[data-letter], [data-letter-view]"), `${label}: letters`);
+  }
+  test("test site, sample copy and workspace give HR every screen", async () => {
+    const T = await startServer("test"), P = await startServer("preview");
+    try {
+      const t = await page(); await t.p.goto(T.base); await t.p.fill("#lg-pw", "test-pass-123"); await t.p.click('[data-pick="grace@mesaverde.example"]'); await t.p.waitForSelector("#tabs button");
+      await checkHR(t.p, "test site", { users: false });
+
+      const admin = await page(); await admin.p.goto(P.base + "/inbox"); await admin.p.fill("#pw", "admin-pass-1"); await admin.p.click('button:has-text("Sign in")');
+      await admin.p.fill("#nm", "Parity"); await admin.p.fill("#ne", "sam@bayside.com"); await admin.p.click("text=Create invite link");
+      const link = (await admin.p.textContent(".link")).trim();
+      const s = await page(); await s.p.goto(link); await s.p.click('[data-pick="grace@mesaverde.example"]'); await s.p.waitForSelector("#tabs button");
+      await checkHR(s.p, "sample copy", { users: true });
+      await s.p.click('[data-tab="access"]'); await s.p.waitForSelector("[data-invite-colleague]");
+      assert.equal((await s.p.$$("button[data-pick]")).length, 9, "Try as for the other 9 sample users");
+
+      const w = await page(); await w.p.goto(P.base); await w.p.click(".gbtn"); await google(w.p, "sam@bayside.com");
+      await w.p.fill("#ws-name", "Parity Co"); await w.p.check("#ws-agree"); await w.p.click("[data-create]"); await w.p.waitForSelector("#tabs button");
+      await checkHR(w.p, "workspace", { users: true });
+      for (const x of [t, s, w, admin]) assert.deepEqual(x.errors, []);
+    } finally { await T.close(); await P.close(); }
   });
 });

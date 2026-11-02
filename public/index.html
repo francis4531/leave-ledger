@@ -356,6 +356,27 @@ details.more[open] summary{margin-bottom:4px}
 .acct b{font-size:.95rem}
 @media (max-width:820px){.login{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:640px){.accts{grid-template-columns:repeat(2,minmax(0,1fr))}.acct{flex-direction:column;align-items:flex-start;gap:8px}.acct .scn{font-size:.78rem}}
+/* Guide, wizard, EDD checklist */
+ul.plain{margin:0;padding-left:18px;display:grid;gap:6px}
+.wiz-start{border-left:4px solid var(--accent)}
+.wiz-start h3{margin:0 0 4px}.wiz-start p{margin:0 0 12px}
+.edd a,.guide-links a{color:var(--accent)}
+.gifs{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px}
+.gifs figure{margin:0}.gifs img{width:100%;height:auto;border:1px solid var(--line);border-radius:10px;display:block}
+.gifs figcaption{margin-top:6px}
+.leavecards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:12px}
+.lcard{border:1px solid var(--line);border-radius:10px;padding:14px}
+.lcard h4{margin:0 0 2px;font-size:1rem}
+.lcard dl{margin:10px 0 0;display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:.88rem}
+.lcard dt{color:var(--muted)}.lcard dd{margin:0}.lcard p{margin:10px 0 0}
+.choices{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr));gap:10px}
+.choice{display:flex;flex-direction:column;gap:4px;text-align:left;padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);cursor:pointer;font:inherit;color:inherit}
+.choice:hover,.choice:focus-visible{border-color:var(--accent)}
+.edd .claim{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px}
+.claim-h{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.eddsteps{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.eddsteps .d{display:block;margin-top:2px}
+.eddsteps li.done b{text-decoration:line-through;color:var(--muted)}
 </style>
 </head>
 <body>

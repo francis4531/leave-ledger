@@ -3,6 +3,7 @@
 // with invite links, Google sign-in, company workspaces, feedback, a survey and an admin inbox.
 import crypto from "node:crypto";
 import * as E from "../../public/engine.mjs";
+import { eddIds } from "../../public/guide.mjs";
 import STRATEGY from "./strategy-data.mjs";
 import { runIntake, validate as validateDraft, changedFields, DEFAULT_MODEL } from "./intake.mjs";
 import { DKEY, loadDecisions, cleanDecision, mirrorToGitHub } from "./decisions.mjs";
@@ -55,9 +56,23 @@ export async function load(store, today, key = KEY, seed = true) {
 }
 
 // What each signed-in account may see. Managers get dates only; employees get their own record.
+// What a user can do, by role and kind of space. The screens follow this list and the server enforces it,
+// so a sample copy, a real workspace and the test site offer the same product. Differences are about safety only.
+export function capsFor(kind, role) {
+  const hr = role === "hr";
+  return {
+    settings: hr, editCompany: hr, editEmployees: hr, letters: hr, changeLeave: hr, clerkStats: hr,
+    reset: hr && kind !== "org",            // a real workspace never goes back to sample data
+    clearLeaves: hr && kind === "org",
+    users: hr && kind !== "test",           // the test site uses a shared password instead
+    inviteUsers: hr && (kind === "org" || kind === "preview"),
+    tryAs: kind === "preview" || kind === "test",
+  };
+}
+
 export function viewFor(D, acct, today, env = {}, space = { kind: "test" }) {
   const me = D.employees.find((e) => e.id === acct.empId);
-  const out = { me: { email: acct.email, name: me.name, role: acct.role, label: acct.label, empId: me.id, views: VIEWS[acct.role] }, today, mode: isFeedback(env) ? "feedback" : "test", space, ai: { on: !!env.ANTHROPIC_API_KEY, model: env.LL_MODEL || DEFAULT_MODEL } };
+  const out = { me: { email: acct.email, name: me.name, role: acct.role, label: acct.label, empId: me.id, views: VIEWS[acct.role] }, today, mode: isFeedback(env) ? "feedback" : "test", space, caps: capsFor(space.kind, acct.role), ai: { on: !!env.ANTHROPIC_API_KEY, model: env.LL_MODEL || DEFAULT_MODEL } };
   if (acct.role === "hr") return { ...out, data: D };
   // Employees get their own cases without HR notes, the manager's flag note, or intake text someone else wrote.
   // Letter drafts stay with HR; employees see only the letters HR marked as sent.
@@ -101,9 +116,9 @@ function attachIntake(D, c, a, today, source) {
 
 // Returns an error string, or null after mutating D.
 function apply(D, acct, a, today, kind = "test") {
-  if (kind === "preview" && (a.type === "reset" || a.type === "updateCompany")) return "Not available in this preview";
-  if (kind === "org" && a.type === "reset") return "Not available in a workspace";
-  if (kind === "test" && a.type === "clearCases") return "Unknown action";
+  const caps = capsFor(kind, acct.role);
+  if (a.type === "reset" && !caps.reset) return kind === "org" ? "Not available in a workspace" : "HR only";
+  if (a.type === "clearCases" && !caps.clearLeaves) return "Unknown action";
   const hr = acct.role === "hr", me = acct.empId;
   const emp = (id) => D.employees.find((e) => e.id === id);
   const kase = (id) => D.cases.find((c) => c.id === id);
@@ -156,6 +171,15 @@ function apply(D, acct, a, today, kind = "test") {
       c.tasks = E.makeTasks(c.reason, c.requested, plan, D.company).map((t) => { const o = done.find((x) => x.key === t.key); return o ? { ...t, done: true, doneOn: o.doneOn } : t; });
       if (a.intake) attachIntake(D, c, { intake: { ...a.intake, text: c.notes || a.intake.text } }, today, "manager");
       log(`Set leave type for ${emp(c.empId).name}: ${E.REASONS[c.reason].hr}`); return null;
+    }
+    case "eddCheck": {
+      // The employee ticks off EDD filing steps on their own leave; HR can tick them too.
+      const c = kase(a.caseId); if (!c || c.reason === "unknown") return "Case not found";
+      if (!hr && c.empId !== me) return "Not your leave";
+      if (!eddIds(c, E.planFor(c, D)).includes(a.step)) return "Unknown step";
+      c.edd = c.edd || {};
+      if (a.done) c.edd[a.step] = today; else delete c.edd[a.step];
+      return null;
     }
     case "updateCase": {
       // New dates or length. Steps already done stay done; open deadlines move with the new plan.
@@ -254,7 +278,7 @@ function apply(D, acct, a, today, kind = "test") {
     case "reset": {
       if (!hr) return "HR only";
       const fresh = E.sampleData(today);
-      const keep = { intakeLog: D.intakeLog || [], aiUsage: D.aiUsage || {} };
+      const keep = { intakeLog: D.intakeLog || [], aiUsage: D.aiUsage || {}, ...(D.activity ? { activity: D.activity } : {}) };
       Object.keys(D).forEach((k) => delete D[k]); Object.assign(D, fresh, keep);
       D.log = [{ at: new Date().toISOString(), by: who, text: "Reset to sample data" }]; return null;
     }
@@ -283,7 +307,9 @@ async function resolve(req, store, env, today) {
   const R = { kind: null, user, s };
   if (s && s.t) {
     const invites = await loadInvites(store), inv = invites.items[s.t];
-    if (inv && !inv.disabled) return { ...R, kind: "preview", id: s.t, key: tenantKey(s.t), invite: inv, invites, acct: s.e ? ACCOUNTS.find((a) => a.email === s.e) || null : null };
+    // A copy opened through Google sign-in (s.u) stays open only while that account still has access.
+    const stillIn = !s.u || (user && user.sub === s.u && previewAllowed(inv, user));
+    if (inv && !inv.disabled && stillIn) return { ...R, kind: "preview", id: s.t, key: tenantKey(s.t), invite: inv, invites, acct: s.e ? ACCOUNTS.find((a) => a.email === s.e) || null : null, u: s.u || null };
   }
   if (s && s.o && user) {
     const meta = await loadOrg(store, s.o), member = memberFor(meta, user);
@@ -330,9 +356,15 @@ async function linkInvite(store, user, code) {
   if (!user.invites.includes(code)) { user.invites.push(code); await saveUser(store, user); }
 }
 // Preview invites sent to a specific email are picked up when that user signs in with Google.
+// Google accounts that may open a sample copy: the invite's own email, invited colleagues, and anyone who
+// signed in after opening the invite link (removing a colleague removes them from that list too).
+const previewAllowed = (inv, user) => (inv.email && inv.email === user.email) || (inv.colleagues || []).some((c) => c.email === user.email) || (inv.users || []).some((u) => u.sub === user.sub);
 async function claimInviteEmails(store, user) {
   const invites = await loadInvites(store);
-  for (const [code, inv] of Object.entries(invites.items)) if (inv.email && inv.email === user.email && !inv.disabled) await linkInvite(store, user, code);
+  for (const [code, inv] of Object.entries(invites.items)) {
+    const asked = (inv.email && inv.email === user.email) || (inv.colleagues || []).some((x) => x.email === user.email);
+    if (asked && !inv.disabled) await linkInvite(store, user, code);
+  }
 }
 
 export async function handle(req, store, env) {
@@ -354,7 +386,7 @@ async function route_(req, store, env) {
 
   if (route === "site" && req.method === "GET") return json({ mode: FB ? "feedback" : "test", google: FB && googleOn(env), contact: FB ? env.LL_CONTACT_EMAIL || null : null });
   if (route.startsWith("admin")) return FB ? handleAdmin(req, route, store, env, today) : err("Not found", 404);
-  if (route.startsWith("auth/") || route === "me" || route === "space" || route.startsWith("org")) {
+  if (route.startsWith("auth/") || route === "me" || route === "space" || route.startsWith("org") || route.startsWith("preview")) {
     if (!FB) return err("Not found", 404);
   }
 
@@ -402,12 +434,13 @@ async function route_(req, store, env) {
   if (route === "space" && req.method === "POST") {
     const body = await req.json().catch(() => ({}));
     if (body.kind === "preview") {
-      const ok = (R.kind === "preview" && R.id === body.id) || (R.user && (R.user.invites || []).includes(body.id));
+      const inv0 = (await loadInvites(store)).items[body.id];
+      const ok = (R.kind === "preview" && R.id === body.id) || (R.user && inv0 && previewAllowed(inv0, R.user));
       const all = await loadInvites(store), inv = all.items[body.id];
       if (!ok || !inv || inv.disabled) return err("That preview is not available.", 403);
       if (!inv.joined) { inv.joined = new Date().toISOString(); await store.setJSON(IKEY, all); }
       await load(store, today, tenantKey(body.id));
-      return json({ ok: true }, 200, { "set-cookie": sessCookie({ t: body.id }, env) });
+      return json({ ok: true }, 200, { "set-cookie": sessCookie({ t: body.id, ...(R.user ? { u: R.user.sub } : {}) }, env) });
     }
     if (body.kind === "org") {
       if (!R.user) return err("Sign in with Google first.", 401);
@@ -464,7 +497,7 @@ async function route_(req, store, env) {
       if (!acct) return err("Pick one of the users listed.");
       const D = await load(store, today, R.key);
       touch(D, acct.email, "persona"); await store.setJSON(R.key, D);
-      return json(viewFor(D, acct, today, env, spaceInfo(R)), 200, { "set-cookie": sessCookie({ t: R.id, e: acct.email }, env) });
+      return json(viewFor(D, acct, today, env, spaceInfo(R)), 200, { "set-cookie": sessCookie({ t: R.id, e: acct.email, ...(R.u ? { u: R.u } : {}) }, env) });
     }
     if (!env.LL_TEST_PASSWORD) return err("This site has no test password yet. Set LL_TEST_PASSWORD in Netlify, then redeploy.", 503);
     const pw = String(body.password || "");
@@ -474,7 +507,7 @@ async function route_(req, store, env) {
   }
   if (route === "logout" && req.method === "POST") {
     // Preview: keep the invite so "Switch user" goes back to the picker. Workspace: back to the spaces list.
-    const keep = R.kind === "preview" ? sessCookie({ t: R.id }, env) : clearSess();
+    const keep = R.kind === "preview" ? sessCookie({ t: R.id, ...(R.u ? { u: R.u } : {}) }, env) : clearSess();
     return json({ ok: true }, 200, { "set-cookie": keep });
   }
 
@@ -535,6 +568,34 @@ async function route_(req, store, env) {
     const ok = await addFeedback(store, { ...f, at: new Date().toISOString(), invite: R.kind === "preview" ? R.id : null, org: R.kind === "org" ? R.id : null, persona: acct.email, user: R.user ? R.user.email : null, role: acct.role }, R.kind === "org" ? "org:" + R.id : R.id);
     if (!ok) return err("Thanks, that is a lot of feedback for one day. Please send more tomorrow.", 429);
     return json({ ok: true });
+  }
+
+  /* ----- Sample copy users: the sample people (Try as) and colleagues invited by Google email ----- */
+  if (R.kind === "preview" && route === "preview/members") {
+    if (acct.role !== "hr") return err("HR only", 403);
+    const inv = R.invites.items[R.id];
+    const out = () => json({
+      sample: ACCOUNTS.map(({ email, name, role, label, empId }) => ({ email, name, role, label, empId })),
+      colleagues: (inv.colleagues || []).map((c) => ({ ...c, joined: (inv.users || []).some((u) => u.email === c.email) })),
+      signedIn: (inv.users || []).map(({ email, name }) => ({ email, name })),
+    });
+    if (req.method === "GET") return out();
+    if (req.method === "POST") {
+      const body = await req.json().catch(() => ({}));
+      const email = String(body.email || "").toLowerCase().trim();
+      inv.colleagues = inv.colleagues || [];
+      if (body.op === "invite") {
+        if (!EMAIL_RE.test(email)) return err("Enter a valid email address.");
+        if (inv.colleagues.some((c) => c.email === email)) return err("That colleague is already invited.");
+        if (inv.colleagues.length >= 10) return err("You can invite up to 10 colleagues to a sample copy.");
+        inv.colleagues.push({ email, invitedBy: R.user ? R.user.email : acct.name, at: new Date().toISOString() });
+      } else if (body.op === "remove") {
+        inv.colleagues = inv.colleagues.filter((c) => c.email !== email);
+        inv.users = (inv.users || []).filter((u) => u.email !== email);
+      } else return err("Bad request");
+      await store.setJSON(IKEY, R.invites);
+      return out();
+    }
   }
 
   /* ----- Workspace users (HR admins only) ----- */

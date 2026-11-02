@@ -4,6 +4,7 @@ import {
   planFor as planForD, caseDates as caseDatesD, caseStatus as caseStatusD,
 } from "./engine.mjs";
 import { LETTERS, hasLetter, draftLetter } from "./notices.mjs";
+import { LEAVES, RIGHTS, EDD, eddSteps } from "./guide.mjs";
 
 /* ---------- State ---------- */
 let S = null;          // {me, today, data}
@@ -42,12 +43,14 @@ const caseStatus = (c) => caseStatusD(c, D(), TODAY);
 
 /* Tabs per role. The view follows from the tab. */
 const TABS = {
-  hr: [["overview", "Today"], ["cases", "Leaves"], ["plan", "Plan a leave"], ["employees", "Employees"], ["access", "Users"], ["settings", "Settings"], ["myleave", "My leave"]],
-  mgr: [["team", "My team"], ["myleave", "My leave"]],
-  emp: [["myleave", "My leave"]],
+  hr: [["overview", "Today"], ["cases", "Leaves"], ["plan", "Plan a leave"], ["employees", "Employees"], ["access", "Users"], ["settings", "Settings"], ["guide", "Guide"], ["myleave", "My leave"]],
+  mgr: [["team", "My team"], ["myleave", "My leave"], ["guide", "Guide"]],
+  emp: [["myleave", "My leave"], ["guide", "Guide"]],
 };
-// Users is for workspaces only; Settings is hidden in preview copies of the sample company.
-const tabsFor = (role) => TABS[role].filter(([k]) => (k !== "access" || ORG()) && !(k === "settings" && FB() && !ORG()));
+// The server says what this user can do (S.caps); tabs and buttons follow it.
+const CAP = (k) => !!(S && S.caps && S.caps[k]);
+const SAMPLE = () => !!(S && S.space && S.space.kind === "preview");
+const tabsFor = (role) => TABS[role].filter(([k]) => (k !== "access" || CAP("users")) && (k !== "settings" || CAP("settings")));
 const viewOf = () => (UI.tab === "myleave" ? "emp" : S.me.role === "mgr" ? "mgr" : S.me.role === "hr" ? "hr" : "emp");
 
 /* ---------- API ---------- */
@@ -61,7 +64,7 @@ async function api(path, body) {
   return j;
 }
 function accept(j) {
-  S = { me: j.me, today: j.today, data: j.data, ai: j.ai || { on: false }, space: j.space || { kind: "test" } }; TODAY = j.today;
+  S = { me: j.me, today: j.today, data: j.data, ai: j.ai || { on: false }, space: j.space || { kind: "test" }, caps: j.caps || {} }; TODAY = j.today;
   if (j.mode) MODE = j.mode;
   if (!UI.tab || !tabsFor(S.me.role).some(([k]) => k === UI.tab)) UI.tab = tabsFor(S.me.role)[0][0];
   if (!UI.planner.start) UI.planner.start = addDays(TODAY, 14);
@@ -294,6 +297,81 @@ function hrCases() {
     return `<tr class="click" data-open="${c.id}" tabindex="0"><td class="full"><div class="person">${avatar(e, "sm")}<div><b>${esc(e.name)}</b><div class="small muted">${esc(e.role)} · from ${{ hr: "HR", employee: "employee", manager: "manager" }[c.source]}</div></div></div></td><td data-l="Type">${esc(REASONS[c.reason].hr)}</td><td data-l="Dates" class="small">${d.end ? `<span class="mono">${range(d.start, d.end)}</span>` : '<span class="muted">Not set yet</span>'}</td><td data-l="Status">${pill(s.t, s.cls)}</td><td data-l="To do">${late ? pill(late + " late", "bad") : left ? pill(left + " open", "") : pill("All done", "ok")}</td></tr>`; }).join("") || `<tr><td colspan="5" class="muted">${D().cases.length ? "Nothing here." : "No leaves yet."}</td></tr>`}
   </tbody></table></div></section>`;
 }
+/* ---------- EDD filing help ---------- */
+const ext = (href, text) => `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(text)} <span aria-hidden="true">↗</span></a>`;
+function eddPanel(c, p, mine) {
+  const E2 = eddSteps(c, p); if (!E2) return "";
+  const done = c.edd || {};
+  return `<div class="edd"><div class="label" style="margin-bottom:8px">${mine ? "Getting paid by the state" : `State pay claims · ${esc(first(emp(c.empId).name))}'s checklist`}</div>
+    ${!mine ? `<p class="small muted" style="margin:0 0 8px">The employee files these with EDD and ticks them off on their leave page. You can see where they are.</p>` : ""}
+    ${E2.claims.map((cl) => { const n = cl.steps.filter((x) => done[x.id]).length;
+      return `<div class="claim"><div class="claim-h"><b>${esc(cl.title)}</b><span class="small muted">${n} of ${cl.steps.length} done · file ${fmtS(cl.window.from)} to ${fmtS(cl.window.to)}</span></div>
+      <ol class="eddsteps">${cl.steps.map((x) => `<li class="${done[x.id] ? "done" : ""}"><label class="check"><input type="checkbox" data-edd="${c.id}|${x.id}" ${done[x.id] ? "checked" : ""}><span><b>${esc(x.t)}</b><span class="small muted d">${esc(x.d)}${x.link ? ` ${ext(x.link, "EDD page")}` : ""}</span></span></label></li>`).join("")}</ol>
+      ${cl.note ? `<p class="small muted">${esc(cl.note)} ${cl.notes ? ext(cl.notes, "EDD pregnancy FAQ") : ""}</p>` : ""}
+      <p class="small">${ext(cl.link, "How to file online")} · ${ext(cl.mail, "File by mail instead")}</p></div>`; }).join("")}
+  </div>`;
+}
+
+/* ---------- Guide: walkthroughs, California leave explainer, which-leave wizard ---------- */
+const NEEDS = [
+  ["own_health", "My own health", "An illness, injury, surgery or mental health care"],
+  ["pregnancy_bonding", "I'm pregnant", "Prenatal care, birth and recovery, then time with the baby"],
+  ["bonding", "A new child", "Birth, adoption or foster placement"],
+  ["family_care", "Caring for family", "Someone close to me is seriously ill or injured"],
+  ["bereavement", "A death in the family", ""],
+  ["repro", "A pregnancy loss", "Miscarriage, stillbirth, or a failed adoption, surrogacy or IVF"],
+  ["sick", "A sick day or appointment", "For me or a family member"],
+  ["other", "Something else", "Vacation, jury duty, moving, a personal day"],
+];
+function guideView() {
+  const hr = S.me.role === "hr", W = UI.wiz;
+  if (W && W.step) return wizardView();
+  const gifs = [...(hr ? [["hr-setup", "Setting up and running leave as HR"]] : []), ["employee", "Asking for leave as an employee"]];
+  return `<div class="head"><div><h2>Guide</h2><p>How Leave Ledger works, and California leave in a few minutes.</p></div></div>
+  <section class="panel wiz-start"><h3>Which leave fits me?</h3><p class="muted">Answer two or three questions. You will see what you qualify for, what the state pays, and what to do next, before anything is sent.</p><button class="btn primary" data-wiz-start>Start</button></section>
+  <section class="panel"><h3>See it in action</h3><div class="gifs">${gifs.map(([f, t]) => `<figure><img src="/guides/${f}.gif" alt="${esc(t)}" loading="lazy" onerror="this.closest('figure').remove()"><figcaption class="small muted">${esc(t)}</figcaption></figure>`).join("")}</div></section>
+  <section class="panel"><h3>California leave in a few minutes</h3>
+    <p class="muted">Most California employers with 5 or more employees owe these leaves. The state, not your employer, pays for the longer ones through EDD.</p>
+    <div class="leavecards">${LEAVES.map((l) => `<article class="lcard"><h4>${esc(l.title)}</h4><div class="small muted">${esc(l.law)}</div>
+      <dl><dt>How long</dt><dd>${esc(l.time)}</dd><dt>Pay</dt><dd>${esc(l.pay)}</dd><dt>Who qualifies</dt><dd>${esc(l.who)}</dd></dl><p class="small">${esc(l.more)}</p></article>`).join("")}</div>
+  </section>
+  <div class="grid2 even"><section class="panel"><h3>Your rights</h3><ul class="plain">${RIGHTS.map((r) => `<li>${esc(r)}</li>`).join("")}</ul></section>
+  <section class="panel"><h3>Getting paid by the state</h3><p class="small">State Disability Insurance (SDI) pays while you cannot work because of your own health or pregnancy. Paid Family Leave (PFL) pays while you bond with a new child or care for family. Both come from EDD, usually about 70 to 90% of your wages, up to $1,765 a week in 2026.</p>
+    <ul class="plain small guide-links"><li>${ext(EDD.diOnline, "How to file for disability pay")}</li><li>${ext(EDD.pflOnline, "How to file for Paid Family Leave")}</li><li>${ext(EDD.pregnancy, "Pregnancy and EDD")}</li><li>${ext(EDD.pay, "What EDD pays")}</li></ul></section></div>`;
+}
+function wizardView() {
+  const W = UI.wiz, me = emp(S.me.empId), co = D().company;
+  if (!me) return `<div class="head"><div><button class="linkish" data-wiz-close>← Guide</button><h2 style="margin-top:8px">Which leave fits me?</h2></div></div><section class="panel"><p>Your sign-in is not linked to an employee record yet, so there is nothing to check against. Ask HR to link it on the Users tab.</p></section>`;
+  const back = `<button class="btn sm" data-wiz-back>Back</button>`;
+  const head = (n, t) => `<div class="head"><div><button class="linkish" data-wiz-close>← Guide</button><h2 style="margin-top:8px">${esc(t)}</h2><p>Step ${n} of 3</p></div></div>`;
+  if (W.step === 1) return `${head(1, "What is going on?")}<section class="panel"><div class="choices">${NEEDS.map(([k, t, d]) => `<button class="choice" data-wiz-need="${k}"><b>${esc(t)}</b>${d ? `<span class="small muted">${esc(d)}</span>` : ""}</button>`).join("")}</div></section>`;
+  if (W.need === "other") return `${head(2, "That is usually not a protected leave")}<section class="panel"><p>Vacation, jury duty, voting and personal days are not covered by these California leave laws. Jury duty and voting time have their own rules, and vacation follows your company's policy.</p><p class="muted">Ask HR about it directly, or use sick leave if you or a family member are ill.</p><div class="btns">${back}<button class="btn" data-wiz-close>Back to the guide</button></div></section>`;
+  const R = REASONS[W.need];
+  if (W.step === 2) return `${head(2, "A few details")}<section class="panel" data-form="wiz">
+    ${R.rel ? relSelect("wz-rel", R.rel, W.relation) : ""}
+    ${W.need === "pregnancy_bonding" ? `<div class="field"><label for="wz-due">Due date</label><input type="date" id="wz-due" data-bind="due" value="${esc(W.due)}"><span class="hint">Doctors usually take you off work up to 4 weeks before the due date, and for 6 weeks after (8 after a cesarean).</span></div>
+      <label class="check"><input type="checkbox" data-bind="bond" ${W.bond ? "checked" : ""}>I also want time to bond with the baby after</label>`
+      : `<div class="field"><label for="wz-start">First day off</label><input type="date" id="wz-start" data-bind="start" value="${esc(W.start)}"></div>${lengthFields("wz-", { ...W, reason: W.need })}`}
+    <div class="btns">${back}<button class="btn primary" data-wiz-next>See what I get</button></div></section>`;
+  // Step 3: the plan from the rules engine, for this employee.
+  const o = wizOpts(W), p = buildPlan(me, co, W.need, o), prot = p.segs.filter((s) => s.lane === "protect" && s.cls !== "none");
+  const fake = { reason: W.need, opts: o, edd: {} }, wba = weeklyBenefit(me, co);
+  const E3 = eddSteps(fake, p);
+  return `${head(3, "Here is what you would get")}<section class="panel"><div class="panel-h"><h3>${esc(R.emp)}</h3></div>${timelineHTML(p)}
+    <ul class="plain">${prot.length ? `<li>Your job is protected from <b>${fmtS(prot[0].start)}</b> to <b>${fmtS(addDays(prot[prot.length - 1].end, -1))}</b>.</li>` : `<li>This time is not job protected by state law. Ask HR about company policy.</li>`}
+      ${wba && (p.pays.sdi || p.pays.pfl) ? `<li>The state may pay you about <b>${money(wba.amount)} a week</b>${p.pays.sdi ? ", after a 7-day wait" : ""}. EDD decides the final amount.</li>` : ""}
+      ${["own_health", "family_care", "bonding"].includes(W.need) && !p.el.cfra.ok ? `<li>You may not qualify for job-protected family leave yet. It needs 12 months here and 1,250 hours worked in the last year. HR will confirm, and state pay can still apply.</li>` : ""}
+      ${W.need === "pregnancy_bonding" && W.bond && !p.el.cfra.ok ? `<li>Your pregnancy leave is protected from day one. Bonding time after it may not be job protected yet, because that needs 12 months and 1,250 hours. State pay can still apply.</li>` : ""}
+      ${W.need === "sick" ? `<li>You have about <b>${plural(Math.floor(sickUsable(me)), "hour")}</b> of sick leave you can use now.</li>` : ""}</ul>
+    ${E3 ? `<p class="small muted">After you send it, your leave page will walk you through filing with EDD: ${E3.claims.map((x) => `${esc(x.title)}, between ${fmtS(x.window.from)} and ${fmtS(x.window.to)}`).join("; ")}.</p>` : ""}
+    <p class="small muted">Nothing is sent yet. On the next screen you can check the request, then send it to HR. Your manager only ever sees the dates.</p>
+    <div class="btns">${back}<button class="btn primary" data-wiz-use>Use this for my request</button></div></section>`;
+}
+function wizOpts(W) {
+  if (W.need === "pregnancy_bonding") { const due = W.due || addDays(TODAY, 60); return { start: addDays(due, -28), disWeeks: 10, bondWeeks: W.bond ? 12 : 0, weeks: 4, days: 5, hours: 8, relation: "parent" }; }
+  return { start: W.start, weeks: +W.weeks || 4, disWeeks: 10, bondWeeks: 12, days: +W.days || 3, hours: +W.hours || 8, relation: W.relation || "parent" };
+}
+
 /* ---------- HR: change dates, mark returned ---------- */
 function changePanel(c) {
   const d = caseDates(c), started = c.opts.start <= TODAY;
@@ -386,6 +464,7 @@ function hrCase(c) {
   } else {
     const p = planFor(c);
     body = `${intakePanel(c, e)}<section class="panel"><div class="panel-h"><h3>The plan</h3><span class="small muted">${esc(REASONS[c.reason].hr)}${c.opts.relation && REASONS[c.reason].rel ? " · " + esc(relName(c.opts.relation)) : ""}</span></div>${timelineHTML(p)}${payHTML(p)}</section>
+    ${eddSteps(c, p) ? `<section class="panel">${eddPanel(c, p, false)}</section>` : ""}
     <section class="panel"><h3>Does ${esc(first(e.name))} qualify?</h3>${eligHTML(p, c.reason)}${factsHTML(p)}</section>`;
   }
   return `<div class="head"><div><button class="linkish" data-back>← All leaves</button><div class="person" style="margin-top:10px">${avatar(e, "lg")}<div><h2>${esc(e.name)}</h2><p class="muted">${esc(e.role)} · hired ${fmt(e.hire)} · asked ${fmt(c.requested)}</p></div></div></div>${pill(s.t, s.cls)}</div>
@@ -439,7 +518,7 @@ function addEmployeePanel() {
   </section>`;
 }
 function hrEmployees() {
-  const co = D().company, org = ORG(), emps = D().employees;
+  const co = D().company, org = CAP("editEmployees"), emps = D().employees;
   const mgrSel = (e) => `<select aria-label="Manager for ${esc(e.name)}" data-emp="${e.id}|mgr"><option value="">None</option>${emps.filter((x) => x.id !== e.id).map((x) => `<option value="${x.id}" ${e.mgr === x.id ? "selected" : ""}>${esc(x.name)}</option>`).join("")}</select>`;
   return `<div class="head"><div><h2>Employees</h2><p>Who qualifies for what, as of today. Hours and sick balances come from payroll; change them right here.</p></div></div>
   ${org ? addEmployeePanel() : ""}
@@ -473,7 +552,7 @@ function copilotStats() {
 }
 function hrSettings() {
   const co = D().company;
-  return `<div class="head"><div><h2>Settings</h2><p>The number of employees decides which laws apply. ${ORG() ? "Changes here apply to everyone in this workspace." : "Changes here apply to every test account."}</p></div></div>
+  return `<div class="head"><div><h2>Settings</h2><p>The number of employees decides which laws apply. ${ORG() ? "Changes here apply to everyone in this workspace." : SAMPLE() ? "Changes here apply only to your copy of the sample company. Try 50 employees to see federal FMLA switch on." : "Changes here apply to every test account."}</p></div></div>
   <section class="panel"><h3>Laws that apply to ${esc(co.name)}</h3><div class="lawlist">${lawRows().map(([n, ab, on, what, when]) => `<div><div><b>${n}</b>${ab ? ` <span class="muted small">${ab}</span>` : ""}<div class="why">${what}${!on && when ? ` ${when}.` : ""}</div></div>${on ? pill("Applies", "ok") : pill("Not yet", "")}</div>`).join("")}</div></section>
   <div class="grid2 even"><section class="panel"><h3>Company</h3>
     <div class="field"><label for="co-name">Company name</label><input type="text" id="co-name" value="${esc(co.name)}" data-co="name"></div>
@@ -485,12 +564,13 @@ function hrSettings() {
     <div class="row"><div class="field"><label for="co-max">Weekly maximum</label><input type="number" id="co-max" value="${co.wbaMax}" data-co="wbaMax" data-num><span class="hint">$1,765 for 2026 claims</span></div>
     <div class="field"><label for="co-band">90% rate applies up to</label><input type="number" id="co-band" value="${co.band90}" data-co="band90" data-num><span class="hint">Highest quarter wages. $16,279.90 for 2026 claims. Above it the state pays a flat amount, then 70%.</span></div></div>
     <div class="infobox">Lower earners get about 90% of weekly wages, a middle band gets a flat amount, and higher earners get about 70%, up to the weekly maximum. The state makes the final calculation.</div>
-    ${copilotStats()}
-    ${ORG() ? `<h3>Start over</h3>
+    ${CAP("clerkStats") ? copilotStats() : ""}
+    ${CAP("clearLeaves") ? `<h3>Start over</h3>
     <p class="small muted">Deletes every leave in this workspace. Employees and users stay.</p>
-    <div class="btns"><button class="btn" data-clear>Clear all leaves</button></div>` : `<h3>Test data</h3>
-    <p class="small muted">Puts the sample company, employees and leaves back for every test account. Anything added since is removed.</p>
-    <div class="btns"><button class="btn" data-reset>Reset to sample data</button></div>`}
+    <div class="btns"><button class="btn" data-clear>Clear all leaves</button></div>` : ""}
+    ${CAP("reset") ? `<h3>${SAMPLE() ? "Start over" : "Test data"}</h3>
+    <p class="small muted">${SAMPLE() ? "Puts the sample company back in your copy. Anything you added or changed is removed." : "Puts the sample company, employees and leaves back for every test account. Anything added since is removed."}</p>
+    <div class="btns"><button class="btn" data-reset>Reset to sample data</button></div>` : ""}
   </section></div>`;
 }
 
@@ -550,8 +630,7 @@ function empCase(c) {
   const prot = p.segs.filter((s) => s.lane === "protect" && s.cls !== "none");
   if (notice && !notice.done) steps.push(`HR will confirm what you qualify for by <b>${fmtS(notice.due)}</b>.`);
   if (cert && !cert.done) steps.push(`Ask your doctor to fill in the medical certification, then send it to HR by <b>${fmtS(cert.due)}</b>.`);
-  if (p.pays.sdi) steps.push(`Apply for state disability pay at SDI Online (edd.ca.gov) within ${RULES.sdi.fileWithin} days of your first day out. The first 7 days are not paid by the state, but you can use sick leave.`);
-  if (p.pays.pfl) steps.push(`Apply for Paid Family Leave at SDI Online (edd.ca.gov) within ${RULES.pfl.fileWithin} days of your first day of leave.`);
+  if (p.pays.sdi || p.pays.pfl) steps.push(`Apply to the state (EDD) for pay while you are out. The steps and dates are below.`);
   if (prot.length) steps.push(`Your job is held for you from <b>${fmtS(prot[0].start)}</b> to <b>${fmtS(addDays(prot[prot.length - 1].end, -1))}</b>, and your health coverage stays the same.`);
   if (c.reason === "bereavement") steps.push("HR may ask for proof of the death within 30 days of your first day off.");
   if (c.reason === "sick") steps.push("Your next pay stub will show your new balance.");
@@ -566,6 +645,7 @@ function empCase(c) {
   return `<section class="panel"><div class="panel-h"><h3>${esc(REASONS[c.reason].emp)}</h3>${pill(s.t, s.cls)}</div>${track}${timelineHTML(p)}
   <div><div class="label" style="margin-bottom:8px">What happens next</div><ol class="steps">${steps.map((x) => `<li><span>${x}</span></li>`).join("")}</ol></div>
   ${p.warnings.length ? `<div class="infobox">HR will go over a few details of this request with you before confirming dates.</div>` : ""}
+  ${eddPanel(c, p, true)}
   ${(c.notices || []).length ? `<div><div class="label" style="margin-bottom:8px">Letters from HR</div><div class="stack" style="gap:8px">${c.notices.slice().reverse().map((n) => `<details class="more letter-item"><summary>${esc(n.subject)} <span class="muted small">· ${fmt(n.sentOn)}</span></summary><div class="letter-text">${esc(n.body)}</div></details>`).join("")}</div></div>` : ""}</section>`;
 }
 
@@ -713,7 +793,7 @@ function renderNow() {
   document.body.classList.toggle("has-bottom-tabs", phone && list.length > 1);
   const focusId = document.activeElement && document.activeElement.id;
   const v = viewOf();
-  const html = FB() && UI.survey.open ? surveyView() : v === "emp" ? empView() : v === "mgr" ? mgrView() : { overview: hrOverview, cases: hrCases, plan: hrPlan, employees: hrEmployees, access: hrUsers, settings: hrSettings }[UI.tab]();
+  const html = FB() && UI.survey.open ? surveyView() : UI.tab === "guide" ? guideView() : v === "emp" ? empView() : v === "mgr" ? mgrView() : { overview: hrOverview, cases: hrCases, plan: hrPlan, employees: hrEmployees, access: hrUsers, settings: hrSettings }[UI.tab]();
   const foot = FB()
     ? `<span>${ORG() ? "Early preview workspace. Use made-up employee details only." : "Early preview with a made-up company."} Rules checked October 2026 for California employers. Not legal advice. <a href="/privacy">Privacy</a></span>${UI.survey.open ? "" : `<button class="btn sm" data-survey>${UI.survey.done ? "Edit your survey answers" : "Take the 2-minute survey"}</button>`}`
     : `<span>Test site with a made-up company. Rules checked October 2026 for California employers. Not legal advice.</span><a href="/strategy">Product strategy progress</a>`;
@@ -820,7 +900,34 @@ async function loadUsers() {
   render();
 }
 const ROLE_NAMES = { hr: "HR admin", mgr: "Manager", emp: "Employee" };
+function sampleUsers() {
+  const U = UI.users;
+  if (!U.sample) { queueMicrotask(loadSampleUsers); return `<div class="head"><div><h2>Users</h2></div></div><section class="panel"><p class="muted">Loading...</p></section>`; }
+  const roleOf = { hr: "HR admin", mgr: "Manager", emp: "Employee" };
+  return `<div class="head"><div><h2>Users</h2><p>Everyone who can use your copy of ${esc(D().company.name)}. Try the app as any of them, or invite a colleague to explore it with you.</p></div></div>
+  <div class="grid2 form">
+    <section class="panel" data-form="users"><h3>Invite a colleague</h3>
+      <p class="small muted">They sign in at this site with Google using this email, and see this same copy, with your changes.</p>
+      <div class="field"><label for="us-email">Google account email</label><input type="email" id="us-email" data-bind="email" value="${esc(U.email)}" placeholder="name@company.com" autocomplete="off"></div>
+      ${U.error ? `<p class="err" role="alert">${esc(U.error)}</p>` : ""}
+      <div class="btns"><button class="btn primary" data-invite-colleague ${U.busy ? "disabled" : ""}>Invite</button></div>
+      ${U.colleagues.length ? `<div class="queue">${U.colleagues.map((c) => `<div class="qrow" style="grid-template-columns:minmax(0,1fr) auto auto"><div class="small">${esc(c.email)}</div>${c.joined ? pill("Signed in", "ok") : pill("Invited", "")}<button class="btn sm" data-uncolleague="${esc(c.email)}">Remove</button></div>`).join("")}</div>` : `<p class="small muted">No colleagues invited yet.</p>`}
+    </section>
+    <section class="panel"><h3>${U.sample.length} sample users</h3>
+      <div class="tw"><table><thead><tr><th>User</th><th>Role</th><th></th></tr></thead><tbody>
+      ${U.sample.map((a) => `<tr><td><div class="person">${avatar({ id: a.empId, name: a.name }, "sm")}<div><b>${esc(a.name)}</b><div class="small muted">${esc(a.label.split(" · ")[1] || "")}</div></div></div></td><td>${roleOf[a.role]}</td>
+        <td>${a.email === S.me.email ? '<span class="small muted">You now</span>' : `<button class="btn sm" data-pick="${esc(a.email)}">Try as</button>`}</td></tr>`).join("")}
+      </tbody></table></div>
+    </section>
+  </div>`;
+}
+async function loadSampleUsers() {
+  try { const j = await api("preview/members"); Object.assign(UI.users, { sample: j.sample, colleagues: j.colleagues }); }
+  catch (e) { if (e.message !== "signed out") UI.users.error = e.message; UI.users.sample = UI.users.sample || []; UI.users.colleagues = UI.users.colleagues || []; }
+  render();
+}
 function hrUsers() {
+  if (SAMPLE()) return sampleUsers();
   const U = UI.users;
   if (!U.list) { queueMicrotask(loadUsers); return `<div class="head"><div><h2>Users</h2></div></div><section class="panel"><p class="muted">Loading...</p></section>`; }
   const emps = D().employees, taken = new Set(U.list.map((m) => m.empId));
@@ -975,6 +1082,18 @@ document.addEventListener("click", async (ev) => {
   }
   if (b.hasAttribute("data-req-open")) { UI.reqOpen = true; render(); document.getElementById("rq-text")?.focus(); return; }
   if (b.hasAttribute("data-req-close")) { UI.reqOpen = false; render(); return; }
+  if (b.hasAttribute("data-wiz-start")) { UI.wiz = { step: 1, need: null, relation: "parent", start: addDays(TODAY, 14), due: addDays(TODAY, 90), bond: true, weeks: 4, days: 3, hours: 8 }; render(); window.scrollTo(0, 0); return; }
+  if (b.dataset.wizNeed) { UI.wiz.need = b.dataset.wizNeed; UI.wiz.step = 2; render(); window.scrollTo(0, 0); return; }
+  if (b.hasAttribute("data-wiz-back")) { UI.wiz.step = Math.max(1, UI.wiz.step - 1); render(); return; }
+  if (b.hasAttribute("data-wiz-close")) { UI.wiz = null; render(); window.scrollTo(0, 0); return; }
+  if (b.hasAttribute("data-wiz-next")) { document.querySelectorAll('[data-form="wiz"] [data-bind]').forEach((el) => { UI.wiz[el.dataset.bind] = el.type === "checkbox" ? el.checked : el.hasAttribute("data-num") ? +el.value : el.value; }); UI.wiz.step = 3; render(); window.scrollTo(0, 0); return; }
+  if (b.hasAttribute("data-wiz-use")) {
+    const W = UI.wiz, o = wizOpts(W);
+    Object.assign(UI.req, { reason: W.need, relation: o.relation, start: o.start, weeks: o.weeks, disWeeks: o.disWeeks, bondWeeks: o.bondWeeks, days: o.days, hours: o.hours });
+    UI.wiz = null; UI.tab = "myleave"; UI.reqOpen = true; render();
+    setTimeout(() => { document.querySelector('[data-form="req"]')?.scrollIntoView({ behavior: "smooth", block: "start" }); }, 0);
+    toast("Check the details, then send it to HR."); return;
+  }
   if (b.dataset.change) { await act({ type: "updateCase", caseId: b.dataset.change, opts: readChange() }, "New dates saved. Deadlines updated."); return; }
   if (b.dataset.returned) { await act({ type: "markReturned", caseId: b.dataset.returned, on: document.getElementById("ce-back")?.value }, "Marked as returned"); return; }
   if (b.dataset.unreturn) { await act({ type: "markReturned", caseId: b.dataset.unreturn, on: null }, "Return undone"); return; }
@@ -993,6 +1112,16 @@ document.addEventListener("click", async (ev) => {
   if (b.hasAttribute("data-invite-user")) {
     const U = UI.users;
     if (await usersChange({ op: "invite", email: U.email.trim(), role: U.role, empId: U.empId }, "Invited. Ask them to sign in with Google.")) { U.email = ""; U.empId = ""; render(); }
+    return;
+  }
+  if (b.hasAttribute("data-invite-colleague")) {
+    const U = UI.users; U.busy = true; U.error = "";
+    try { const j = await api("preview/members", { op: "invite", email: (document.getElementById("us-email")?.value || "").trim() }); Object.assign(U, { colleagues: j.colleagues, email: "", busy: false }); render(); toast("Invited. Ask them to sign in with Google."); }
+    catch (e) { if (e.message !== "signed out") { U.busy = false; U.error = e.message; render(); } }
+    return;
+  }
+  if (b.dataset.uncolleague) {
+    try { const j = await api("preview/members", { op: "remove", email: b.dataset.uncolleague }); UI.users.colleagues = j.colleagues; render(); toast("Removed"); } catch (e) { if (e.message !== "signed out") toast(e.message); }
     return;
   }
   if (b.dataset.userRemove) {
@@ -1025,7 +1154,7 @@ document.addEventListener("click", async (ev) => {
   if (b.hasAttribute("data-logout")) { await api("logout", {}).catch(() => {}); S = null; UI.login.error = ""; UI.survey.open = false; ACCOUNTS = FB() ? null : ACCOUNTS; if (FB()) await loadMe(); renderLogin(); window.scrollTo(0, 0); return; }
   if (b.dataset.lfilter) { UI.leavesFilter = b.dataset.lfilter; render(); return; }
   if (b.hasAttribute("data-more")) { UI.moreOpen = !UI.moreOpen; render(); return; }
-  if (b.dataset.tab) { UI.moreOpen = false; UI.tab = b.dataset.tab; UI.caseId = null; if (b.dataset.tab === "access") UI.users.list = null; render(); window.scrollTo(0, 0); return; }
+  if (b.dataset.tab) { UI.moreOpen = false; UI.tab = b.dataset.tab; UI.caseId = null; if (b.dataset.tab === "access") { UI.users.list = null; UI.users.sample = null; } render(); window.scrollTo(0, 0); return; }
   if (b.dataset.open) { UI.tab = "cases"; UI.caseId = b.dataset.open; render(); window.scrollTo(0, 0); return; }
   if (b.hasAttribute("data-back")) { UI.caseId = null; render(); return; }
   if (b.hasAttribute("data-createcase")) {
@@ -1070,7 +1199,7 @@ document.addEventListener("click", async (ev) => {
     const j = await act({ type: "deleteCase", caseId: b.dataset.delete }, "Deleted"); if (j) { UI.caseId = null; render(); } return;
   }
   if (b.hasAttribute("data-reset")) {
-    if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Tap again to reset for everyone"; b.classList.add("primary"); return; }
+    if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = SAMPLE() ? "Tap again to reset your copy" : "Tap again to reset for everyone"; b.classList.add("primary"); return; }
     await act({ type: "reset" }, "Sample data is back"); return;
   }
 });
@@ -1091,6 +1220,7 @@ document.addEventListener("change", (ev) => {
   if (el.dataset.userRole) { usersChange({ op: "role", email: el.dataset.userRole, role: el.value }, "Role changed"); return; }
   if (el.hasAttribute("data-lock")) { usersChange({ op: "lock", on: el.checked }, el.checked ? "Company accounts only" : "Any Google account can be invited"); return; }
   if (UI.letter && ["lt-on", "lt-how"].includes(el.id)) { readLetterFields(); return; }
+  if (el.dataset.edd) { const [caseId, step] = el.dataset.edd.split("|"); act({ type: "eddCheck", caseId, step, done: el.checked }, el.checked ? "Nice. Ticked off." : "Unticked"); return; }
   if (el.dataset.task) { const [caseId, key] = el.dataset.task.split("|"); act({ type: "toggleTask", caseId, key, done: el.checked }, el.checked ? "Marked done" : "Reopened"); return; }
   if (el.dataset.emp) { const [id, field] = el.dataset.emp.split("|"); act({ type: "updateEmployee", id, field, value: el.value }, "Saved"); return; }
   if (el.dataset.co) {
@@ -1117,12 +1247,12 @@ document.addEventListener("input", (ev) => {
 });
 function bind(el) {
   const form = el.closest("[data-form]"); if (!form || !el.dataset.bind) return;
-  const target = { planner: UI.planner, req: UI.req, flag: UI.flag }[form.dataset.form];
-  let v = el.value; if (el.hasAttribute("data-num")) v = Math.max(0, +v || 0);
+  const target = { planner: UI.planner, req: UI.req, flag: UI.flag, wiz: UI.wiz }[form.dataset.form];
+  let v = el.type === "checkbox" ? el.checked : el.value; if (el.hasAttribute("data-num")) v = Math.max(0, +v || 0);
   if (el.type === "date" && !v) return;
   target[el.dataset.bind] = v;
   if (el.dataset.bind === "reason" && REASONS[v].rel === "bereave" && !REL.bereave.some((r) => r[0] === target.relation)) target.relation = "parent";
-  if (form.dataset.form !== "flag") render();
+  if (!["flag", "wiz"].includes(form.dataset.form)) render(); // re-rendering on blur would swallow the next click
 }
 
 window.matchMedia("(max-width:640px)").addEventListener("change", () => { if (S) render(); });

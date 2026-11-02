@@ -153,14 +153,30 @@ describe("preview site: setup and invite links", () => {
     const n1 = (await u1.get("/api/state")).body.data.cases.length, n2 = (await u2.get("/api/state")).body.data.cases.length;
     assert.equal(n2 - n1, 1);
   });
-  test("prospects cannot reset data, change company settings, or see the strategy page", async () => {
+  test("HR in a sample copy has the full product: settings and reset change only that copy; strategy stays hidden", async () => {
+    const p = preview();
+    const [c1, c2] = [await makeInvite(p, { name: "One" }), await makeInvite(p, { name: "Two" })];
+    const a = p.as({ ip: "1.2.3.4" }), b = p.as({ ip: "5.6.7.8" });
+    await a.post("/api/join", { code: c1 }); await b.post("/api/join", { code: c2 });
+    const st = (await a.post("/api/login", { email: "grace@mesaverde.example" })).body;
+    await b.post("/api/login", { email: "grace@mesaverde.example" });
+    assert.equal(st.caps.settings, true); assert.equal(st.caps.reset, true); assert.equal(st.caps.users, true);
+    assert.equal((await a.post("/api/action", { type: "updateCompany", field: "headcount", value: 60 })).status, 200);
+    assert.equal((await b.get("/api/state")).body.data.company.headcount, 38, "the other copy is unchanged");
+    const r = await a.post("/api/action", { type: "reset" });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.data.company.headcount, 38);
+    assert.equal((await a.get("/api/strategy")).status, 404);
+    assert.equal((await a.post("/api/strategy/decision", { week: 1, n: 1, answer: "x" })).status, 404);
+    assert.equal((await a.get("/api/admin/state")).status, 401);
+  });
+  test("employees in a sample copy still cannot change settings", async () => {
     const p = preview(), code = await makeInvite(p), c = p.as();
-    await c.post("/api/join", { code }); await c.post("/api/login", { email: "grace@mesaverde.example" });
-    assert.equal((await c.post("/api/action", { type: "reset" })).status, 403);
+    await c.post("/api/join", { code });
+    const st = (await c.post("/api/login", { email: "ben@mesaverde.example" })).body;
+    assert.equal(st.caps.settings, false);
     assert.equal((await c.post("/api/action", { type: "updateCompany", field: "headcount", value: 3 })).status, 403);
-    assert.equal((await c.get("/api/strategy")).status, 404);
-    assert.equal((await c.post("/api/strategy/decision", { week: 1, n: 1, answer: "x" })).status, 404);
-    assert.equal((await c.get("/api/admin/state")).status, 401);
+    assert.equal((await c.post("/api/action", { type: "reset" })).status, 403);
   });
   test("turning off an invite signs its users out", async () => {
     const p = preview(), code = await makeInvite(p), c = p.as();
@@ -415,5 +431,66 @@ describe("test site: changing a leave", () => {
     const after = r.body.data.cases.find((x) => x.id === c.id);
     assert.equal(after.returnedOn, st.today);
     assert.ok(after.tasks.find((t) => t.key === "return").done);
+  });
+});
+
+describe("preview site: colleagues in a sample copy", () => {
+  test("HR invites a colleague by Google email; they see the same copy; removing them ends access", async () => {
+    const p = preview();
+    const code = await makeInvite(p, { name: "Sam", email: "sam@bayside.com" });
+    const sam = p.as({ ip: "9.1.1.1" }); await sam.google(ACCTS.sam);
+    assert.equal((await sam.post("/api/space", { kind: "preview", id: code })).status, 200);
+    await sam.post("/api/login", { email: "grace@mesaverde.example" });
+    await sam.post("/api/action", { type: "updateCompany", field: "name", value: "Bayside Trial" });
+    const inv = await sam.post("/api/preview/members", { op: "invite", email: "ana@bayside.com" });
+    assert.equal(inv.status, 200);
+    assert.equal(inv.body.colleagues[0].email, "ana@bayside.com");
+    assert.equal(inv.body.sample.length, 10);
+
+    const ana = p.as({ ip: "9.2.2.2" }); await ana.google(ACCTS.ana);
+    const me = (await ana.get("/api/me")).body;
+    assert.ok(me.spaces.some((x) => x.kind === "preview" && x.id === code), "the copy is listed for the colleague");
+    assert.equal((await ana.post("/api/space", { kind: "preview", id: code })).status, 200);
+    const st = (await ana.post("/api/login", { email: "dana@mesaverde.example" })).body;
+    assert.equal(st.data.company.name, "Bayside Trial", "same copy");
+
+    assert.equal((await sam.post("/api/preview/members", { op: "remove", email: "ana@bayside.com" })).status, 200);
+    assert.equal((await ana.get("/api/state")).status, 401, "removed colleague loses access");
+    assert.equal((await ana.post("/api/space", { kind: "preview", id: code })).status, 403);
+  });
+  test("only HR in the copy can manage colleagues, and someone uninvited cannot open it", async () => {
+    const p = preview(), code = await makeInvite(p);
+    const c = p.as(); await c.post("/api/join", { code }); await c.post("/api/login", { email: "ben@mesaverde.example" });
+    assert.equal((await c.post("/api/preview/members", { op: "invite", email: "x@y.com" })).status, 403);
+    const eve = p.as(); await eve.google(ACCTS.eve);
+    assert.equal((await eve.post("/api/space", { kind: "preview", id: code })).status, 403);
+  });
+});
+
+describe("EDD filing checklist", () => {
+  test("an employee ticks steps on their own leave, HR sees the ticks, nobody else can tick", async () => {
+    const s = testSite();
+    const marcus = await signedIn(s, "marcus@mesaverde.example");
+    const mine = (await marcus.get("/api/state")).body.data.cases.find((c) => c.reason === "family_care");
+    assert.ok(mine, "Marcus has a family care leave");
+    let r = await marcus.post("/api/action", { type: "eddCheck", caseId: mine.id, step: "pfl-account", done: true });
+    assert.equal(r.status, 200);
+    assert.ok(r.body.data.cases.find((c) => c.id === mine.id).edd["pfl-account"], "ticked");
+    assert.equal((await marcus.post("/api/action", { type: "eddCheck", caseId: mine.id, step: "constructor", done: true })).status, 400, "unknown step");
+    assert.equal((await marcus.post("/api/action", { type: "eddCheck", caseId: mine.id, step: "sdi-file", done: true })).status, 400, "no SDI on a care leave");
+
+    const hr = await signedIn(s, "grace@mesaverde.example");
+    const seen = (await hr.get("/api/state")).body.data.cases.find((c) => c.id === mine.id);
+    assert.ok(seen.edd["pfl-account"], "HR sees the tick");
+
+    for (const who of ["ben@mesaverde.example", "dana@mesaverde.example"]) {
+      const c = await signedIn(s, who);
+      assert.equal((await c.post("/api/action", { type: "eddCheck", caseId: mine.id, step: "pfl-file", done: true })).status, 403, `${who} cannot tick Marcus's steps`);
+    }
+    const dana = await signedIn(s, "dana@mesaverde.example");
+    for (const tc of (await dana.get("/api/state")).body.data.teamCases) assert.ok(!("edd" in tc), "managers do not see EDD progress");
+
+    r = await marcus.post("/api/action", { type: "eddCheck", caseId: mine.id, step: "pfl-account", done: false });
+    assert.ok(!r.body.data.cases.find((c) => c.id === mine.id).edd["pfl-account"], "unticked");
   });
 });
