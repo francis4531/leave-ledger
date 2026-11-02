@@ -168,6 +168,7 @@ function render() {
   <section class="panel">
     <h2>Company workspaces</h2>
     <p class="small muted">Set up by invited users with Google sign-in. Made-up employee details only, except design partners you mark below once their checklist is done.</p>
+    <div class="btns" style="margin:4px 0 10px;align-items:center"><span class="small">${ST.backups ? `Last daily backup: <b>${when(ST.backups.at)}</b> · ${ST.backups.workspaces} workspaces${ST.backups.errors && ST.backups.errors.length ? ` · <span style="color:var(--bad)">${ST.backups.errors.length} failed</span>` : ""}` : "No backup has run yet."}</span><button class="btn sm" data-backup-now>Back up now</button></div>
     <div class="scroll"><table class="tbl">
       <thead><tr><th>Workspace</th><th>Status</th><th>Users</th><th>Employees</th><th>Leaves</th><th>Last active</th><th>Survey</th><th></th></tr></thead>
       <tbody>${(ST.orgs || []).length ? ST.orgs.map((o) => `<tr>
@@ -175,7 +176,7 @@ function render() {
         <td>${o.disabled ? `<span class="pill bad">Off</span>` : `<span class="pill ok">On</span>`}</td>
         <td>${o.joined} of ${o.users} signed in</td><td>${o.employees}</td><td>${o.cases}</td>
         <td>${o.activity ? when(o.activity.last) : "-"}</td><td>${o.survey ? `<span class="pill ok">Done</span>` : "-"}</td>
-        <td><div class="btns"><button class="btn sm" data-org="${o.id}" data-off="${o.disabled ? "0" : "1"}">${o.disabled ? "Turn on" : "Turn off"}</button><button class="btn sm" data-test-org="${o.id}" data-on="${o.test ? "0" : "1"}">${o.test ? "Not a test" : "Mark as test"}</button><button class="btn sm" data-partner-org="${o.id}" data-on="${o.partner ? "0" : "1"}">${o.partner ? "End design partner" : "Make design partner"}</button></div></td></tr>`).join("") : `<tr><td colspan="8" class="muted">No workspaces yet.</td></tr>`}</tbody>
+        <td><div class="btns"><button class="btn sm" data-org="${o.id}" data-off="${o.disabled ? "0" : "1"}">${o.disabled ? "Turn on" : "Turn off"}</button><button class="btn sm" data-test-org="${o.id}" data-on="${o.test ? "0" : "1"}">${o.test ? "Not a test" : "Mark as test"}</button><button class="btn sm" data-backups-org="${o.id}">Backups</button><button class="btn sm" data-partner-org="${o.id}" data-on="${o.partner ? "0" : "1"}">${o.partner ? "End design partner" : "Make design partner"}</button></div></td></tr>`).join("") : `<tr><td colspan="8" class="muted">No workspaces yet.</td></tr>`}</tbody>
     </table></div>
   </section>
 
@@ -245,6 +246,19 @@ document.addEventListener("click", async (e) => {
       await api("admin/invite/update", { code: b.dataset.reset, resetData: true }); await refresh(); toast("Their copy is back to the sample data");
     }
     else if (b.dataset.testInvite) { await api("admin/invite/update", { code: b.dataset.testInvite, test: b.dataset.on === "1" }); await refresh(); toast(b.dataset.on === "1" ? "Marked as test" : "Counted again"); }
+    else if (b.hasAttribute("data-backup-now")) { const r = await api("admin/backups/run", {}); await refresh(); toast(`Backed up ${r.workspaces} workspaces`); }
+    else if (b.dataset.backupsOrg) {
+      const id = b.dataset.backupsOrg, r = await api("admin/backups?id=" + encodeURIComponent(id));
+      const row = b.closest("tr"); row.nextElementSibling && row.nextElementSibling.classList.contains("bk") && row.nextElementSibling.remove();
+      const tr = document.createElement("tr"); tr.className = "bk";
+      tr.innerHTML = `<td colspan="8"><div class="small">${r.days.length ? `Backups: ${r.days.map((d) => `<button class="btn sm" data-restore="${id}|${d}">Restore ${d}</button>`).join(" ")}` : "No backups yet."} <span class="muted">Restoring backs up today's data first, so it can be undone.</span></div></td>`;
+      row.after(tr);
+    }
+    else if (b.dataset.restore) {
+      const [id, day] = b.dataset.restore.split("|");
+      if (!confirm(`Put this workspace back to how it was on ${day}? Changes since then are replaced (today's data is backed up first).`)) return;
+      await api("admin/org/restore", { id, day }); await refresh(); toast(`Restored to ${day}`);
+    }
     else if (b.dataset.partnerOrg) {
       if (b.dataset.on === "1" && !confirm("Allow real employee data in this workspace? Only do this once the design partner checklist is done.")) return;
       await api("admin/org/update", { id: b.dataset.partnerOrg, partner: b.dataset.on === "1" }); await refresh(); toast(b.dataset.on === "1" ? "Design partner: real data allowed" : "Back to made-up data only");

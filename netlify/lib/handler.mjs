@@ -8,6 +8,7 @@ import { checkRows } from "../../public/roster.mjs";
 import { managerNotice, sensitiveNote, legalSummary } from "../../public/notices.mjs";
 import { mailOn, canEmail, sendMail } from "./mail.mjs";
 import { runColumnMap } from "./rostermap.mjs";
+import { listBackups, lastBackupRun, restoreBackup, exportBundle, deleteWorkspace, runBackups, KEEP_DAYS } from "./backup.mjs";
 import STRATEGY from "./strategy-data.mjs";
 import { runIntake, validate as validateDraft, changedFields, DEFAULT_MODEL } from "./intake.mjs";
 import { DKEY, loadDecisions, cleanDecision, mirrorToGitHub } from "./decisions.mjs";
@@ -698,6 +699,29 @@ async function route_(req, store, env) {
     }
   }
 
+  /* ----- Workspace data: export, backups, delete (HR admins only) ----- */
+  if (R.kind === "org" && route === "org/export" && req.method === "GET") {
+    if (acct.role !== "hr") return err("HR only", 403);
+    R.D.log = [{ at: new Date().toISOString(), by: acct.name || R.user.name, text: "Downloaded all workspace data" }, ...(R.D.log || [])].slice(0, 200);
+    await store.setJSON(R.key, R.D);
+    return json(exportBundle(R.meta, R.D, today));
+  }
+  if (R.kind === "org" && route === "org/backups" && req.method === "GET") {
+    if (acct.role !== "hr") return err("HR only", 403);
+    return json({ days: await listBackups(store, R.id), keep: KEEP_DAYS });
+  }
+  if (R.kind === "org" && route === "org/delete" && req.method === "POST") {
+    if (acct.role !== "hr") return err("HR only", 403);
+    const body = await req.json().catch(() => ({}));
+    if (String(body.confirm || "").trim().toLowerCase() !== String(R.meta.name).trim().toLowerCase()) return err("Type the workspace name exactly to confirm.");
+    await deleteWorkspace(store, R.id);
+    const audit = (await store.get("deleted-orgs", { type: "json" })) || { items: [] };
+    audit.items = [{ id: R.id, name: R.meta.name, by: R.user.email, at: new Date().toISOString(), employees: R.D.employees.length, leaves: R.D.cases.length }, ...audit.items].slice(0, 200);
+    await store.setJSON("deleted-orgs", audit);
+    R.user.orgs = (R.user.orgs || []).filter((x) => x !== R.id); await saveUser(store, R.user);
+    return json({ ok: true }, 200, { "set-cookie": sessCookie({}, env) });
+  }
+
   /* ----- Workspace users (HR admins only) ----- */
   if (R.kind === "org" && route === "org/members" && req.method === "GET") {
     if (acct.role !== "hr") return err("HR only", 403);
@@ -852,13 +876,14 @@ async function handleAdmin(req, route, store, env, today) {
         activity: D && D.activity ? D.activity : null, survey: !!sv.byInvite["org:" + id], test: !!meta.test, partner: !!meta.realData, partnerSince: meta.partnerSince || null });
     }
     orgs.sort((a, b) => b.created.localeCompare(a.created));
+    const backups = await lastBackupRun(store), deleted = ((await store.get("deleted-orgs", { type: "json" })) || { items: [] }).items.slice(0, 20);
     // Test copies (the admin's own trials) are left out of the survey numbers.
     const isTest = (k) => k.startsWith("org:") ? !!orgs.find((o) => o.id === k.slice(4) && o.test) : !!(invites.items[k] && invites.items[k].test);
     const real = Object.fromEntries(Object.entries(sv.byInvite).filter(([k]) => !isTest(k)));
     const name = (f) => f.org ? ((ix.items[f.org] || {}).name || "Workspace") + " (workspace)" : (invites.items[f.invite] && invites.items[f.invite].name) || f.invite;
     const sname = (k) => k.startsWith("org:") ? ((ix.items[k.slice(4)] || {}).name || "Workspace") + " (workspace)" : (invites.items[k] && invites.items[k].name) || k;
     return json({
-      invites: list, orgs,
+      invites: list, orgs, backups, deleted,
       feedback: fb.items.map((f) => ({ ...f, who: name(f), test: isTest(f.org ? "org:" + f.org : f.invite || "") })),
       surveys: Object.entries(sv.byInvite).map(([k, s]) => ({ invite: k, who: sname(k), test: isTest(k), ...s })).sort((a, b) => b.at.localeCompare(a.at)),
       summary: { ...summarize(real), testExcluded: Object.keys(sv.byInvite).length - Object.keys(real).length },
@@ -919,6 +944,19 @@ async function handleAdmin(req, route, store, env, today) {
       await store.setJSON(tenantKey(body.code), fresh);
     }
     return json({ ok: true });
+  }
+  if (route === "admin/backups" && req.method === "GET") {
+    const id = new URL(req.url).searchParams.get("id");
+    if (!(await loadOrg(store, id))) return err("Workspace not found", 404);
+    return json({ days: await listBackups(store, id) });
+  }
+  if (route === "admin/backups/run" && req.method === "POST") return json(await runBackups(store, today));
+  if (route === "admin/org/restore" && req.method === "POST") {
+    const body = await req.json().catch(() => ({}));
+    if (!(await loadOrg(store, body.id))) return err("Workspace not found", 404);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(body.day || "")) return err("Pick a day");
+    const problem = await restoreBackup(store, body.id, body.day, today);
+    return problem ? err(problem) : json({ ok: true });
   }
   if (route === "admin/org/update" && req.method === "POST") {
     const body = await req.json().catch(() => ({}));

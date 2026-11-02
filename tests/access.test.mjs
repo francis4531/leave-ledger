@@ -652,3 +652,55 @@ describe("design partners: real data in one workspace", () => {
     assert.equal(list.find((o) => o.id === id).partner, true);
   });
 });
+
+describe("workspace data: export, daily backups, restore and delete", () => {
+  async function setup() {
+    const p = preview();
+    await makeInvite(p, { name: "Sam", email: "sam@bayside.com" });
+    const sam = p.as({ ip: "3.3.3.3" }); await sam.google(ACCTS.sam);
+    const id = (await sam.post("/api/org/create", { name: "Bayside Dental", headcount: 18, start: "sample", agree: true })).body.id;
+    return { p, sam, id };
+  }
+  test("HR exports everything; sign-in ids are left out; employees cannot export", async () => {
+    const { p, sam, id } = await setup();
+    const r = await sam.get("/api/org/export");
+    assert.equal(r.status, 200);
+    assert.equal(r.body.format, "leave-ledger-export-1");
+    assert.equal(r.body.employees.length, 10); assert.ok(r.body.leaves.length > 0);
+    assert.ok(!JSON.stringify(r.body.workspace.users).includes("g-sam"), "no Google ids");
+    await sam.post("/api/org/members", { op: "invite", email: "ana@bayside.com", role: "emp", empId: "e8" });
+    const ana = p.as({ ip: "4.4.4.4" }); await ana.google(ACCTS.ana); await ana.post("/api/org/accept", { id });
+    for (const path of ["/api/org/export", "/api/org/backups"]) assert.equal((await ana.get(path)).status, 403);
+    assert.equal((await ana.post("/api/org/delete", { confirm: "Bayside Dental" })).status, 403);
+  });
+  test("backups keep 14 days; the admin restores a day and today's data is saved first", async () => {
+    const { p, sam, id } = await setup();
+    const { runBackups, listBackups } = await import("../netlify/lib/backup.mjs");
+    for (let d = 1; d <= 16; d++) await runBackups(p.store, `2026-10-${String(d).padStart(2, "0")}`);
+    const days = await listBackups(p.store, id);
+    assert.equal(days.length, 14); assert.equal(days[0], "2026-10-16"); assert.equal(days.at(-1), "2026-10-03");
+    assert.equal((await sam.get("/api/org/backups")).body.days.length, 14, "HR sees backup days");
+    const before = (await sam.get("/api/state")).body.data.employees.length;
+    await sam.post("/api/action", { type: "addEmployee", employee: { name: "New Hire", hire: "2026-01-05" } });
+    assert.equal((await sam.post("/api/admin/org/restore", { id, day: "2026-10-16" })).status, 401, "HR cannot restore");
+    const admin = await adminClient(p);
+    assert.equal((await admin.post("/api/admin/org/restore", { id, day: "2026-10-16" })).status, 200);
+    const st = (await sam.get("/api/state")).body.data;
+    assert.equal(st.employees.length, before, "back to the backup");
+    assert.match(st.log[0].text, /Restored from the backup of 2026-10-16/);
+    assert.ok((await admin.get("/api/admin/state")).body.backups.at);
+  });
+  test("deleting needs the exact name, removes data and backups, and ends access", async () => {
+    const { p, sam, id } = await setup();
+    const { runBackups } = await import("../netlify/lib/backup.mjs");
+    await runBackups(p.store, "2026-11-01");
+    assert.equal((await sam.post("/api/org/delete", { confirm: "Bayside" })).status, 400);
+    assert.equal((await sam.post("/api/org/delete", { confirm: "bayside dental" })).status, 200);
+    assert.deepEqual([...p.store.map.keys()].filter((k) => k.includes(id)), [], "nothing left for this workspace");
+    assert.equal((await sam.get("/api/state")).status, 401);
+    assert.equal((await sam.post("/api/space", { kind: "org", id })).status, 403);
+    const admin = await adminClient(p);
+    const s = (await admin.get("/api/admin/state")).body;
+    assert.ok(!s.orgs.some((o) => o.id === id)); assert.equal(s.deleted[0].name, "Bayside Dental");
+  });
+});

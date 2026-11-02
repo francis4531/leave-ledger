@@ -10,6 +10,8 @@ export function memoryStore() {
     map: m,
     get: async (k) => (m.has(k) ? JSON.parse(m.get(k)) : null),
     setJSON: async (k, v) => { m.set(k, JSON.stringify(v)); },
+    delete: async (k) => { m.delete(k); },
+    list: async ({ prefix = "" } = {}) => ({ blobs: [...m.keys()].filter((k) => k.startsWith(prefix)).map((key) => ({ key })) }),
   };
 }
 

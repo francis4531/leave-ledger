@@ -281,6 +281,29 @@ describe("preview site", { skip }, () => {
     for (const x of [sam, ana, admin]) assert.deepEqual(x.errors, []);
   });
 
+  test("HR downloads the workspace data, sees backups, and deletes the workspace", async () => {
+    const admin = await page();
+    await admin.p.goto(S.base + "/inbox"); await admin.p.fill("#pw", "admin-pass-1"); await admin.p.click('button:has-text("Sign in")');
+    await admin.p.fill("#nm", "Pat, Kim Florist"); await admin.p.fill("#ne", "pat@gmail.com"); await admin.p.click("text=Create invite link"); await admin.p.waitForSelector(".link");
+    const { p, errors } = await page({ acceptDownloads: true });
+    await p.goto(S.base); await p.click(".gbtn"); await google(p, "pat@gmail.com");
+    await p.fill("#ws-name", "Kim Florist"); await p.check("#ws-agree"); await p.click("[data-create]"); await p.waitForSelector("#tabs button");
+    await p.click('[data-tab="settings"]');
+    await p.waitForSelector("text=No backup yet");
+    const [csv] = await Promise.all([p.waitForEvent("download"), p.click('[data-dl="employees"]')]);
+    assert.match(csv.suggestedFilename(), /^kim-florist-employees-\d{4}-\d{2}-\d{2}\.csv$/);
+    const [all] = await Promise.all([p.waitForEvent("download"), p.click('[data-dl="all"]')]);
+    const json = JSON.parse(await (await import("node:fs")).promises.readFile(await all.path(), "utf8"));
+    assert.equal(json.workspace.name, "Kim Florist");
+    await admin.p.click("[data-backup-now]"); await admin.p.waitForSelector("text=Backed up");
+    await p.click("[data-del-open]"); await p.fill("#del-name", "Kim"); await p.click("[data-del-go]");
+    await p.waitForSelector("text=Type the workspace name exactly");
+    await p.fill("#del-name", "Kim Florist"); await p.click("[data-del-go]");
+    await p.waitForSelector("text=Workspace deleted");
+    for (const x of [admin]) assert.deepEqual(x.errors, []);
+    assert.deepEqual(errors, []);
+  });
+
   test("a visitor without an invite sees only the invite-only page, and /strategy is not found", async () => {
     const { p } = await page();
     await p.goto(S.base);

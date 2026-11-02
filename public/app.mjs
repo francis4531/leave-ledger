@@ -27,6 +27,8 @@ const UI = {
   home: { busy: false, error: "", form: { name: "", city: "", headcount: 20, jobTitle: "", start: "sample", lockDomain: false, agree: false } },
   users: { list: null, domain: null, canLock: false, myDomain: null, email: "", role: "emp", empId: "", busy: false, error: "" },
   letter: null,          // {caseId, key, subject, body, sentOn, method, view: index of a sent letter}
+  backups: { loaded: false, busy: false, days: null, keep: 14 },
+  del: { open: false, text: "", error: "" },
   imp: { open: false, rows: null, raw: null, grid: null, map: {}, error: "", file: "", busy: false },
   appr: { caseId: null, notify: true, note: "" },
   addEmp: { open: false, name: "", email: "", role: "", hire: "", hours12: 1000, sick: 24, hiQuarter: 12000, shiftHours: 8, weeklyHours: 40, mgr: "", error: "" },
@@ -70,6 +72,7 @@ async function api(path, body) {
 function accept(j) {
   S = { me: j.me, today: j.today, data: j.data, ai: j.ai || { on: false }, space: j.space || { kind: "test" }, caps: j.caps || {}, mail: j.mail || { on: false } }; TODAY = j.today;
   if (j.mode) MODE = j.mode;
+  if (UI.backups.space !== S.space.id) UI.backups = { loaded: false, busy: false, days: null, keep: 14, space: S.space.id };
   if (!UI.tab || !tabsFor(S.me.role).some(([k]) => k === UI.tab)) UI.tab = tabsFor(S.me.role)[0][0];
   if (!UI.planner.start) UI.planner.start = addDays(TODAY, 14);
   if (!UI.req.start) UI.req.start = addDays(TODAY, 14);
@@ -718,7 +721,42 @@ function hrSettings() {
     ${CAP("reset") ? `<h3>${SAMPLE() ? "Start over" : "Test data"}</h3>
     <p class="small muted">${SAMPLE() ? "Puts the sample company back in your copy. Anything you added or changed is removed." : "Puts the sample company, employees and leaves back for every test account. Anything added since is removed."}</p>
     <div class="btns"><button class="btn" data-reset>Reset to sample data</button></div>` : ""}
-  </section></div>`;
+  </section></div>
+  ${dataPanel()}`;
+}
+// Your data: downloads for everyone with Settings; backups and delete for company workspaces.
+function dataPanel() {
+  const org = S.space.kind === "org", B = UI.backups;
+  if (org && !B.loaded && !B.busy) { B.busy = true; api("org/backups").then((j) => { Object.assign(UI.backups, { days: j.days, keep: j.keep, loaded: true, busy: false }); if (UI.tab === "settings") render(); }).catch(() => { B.busy = false; B.loaded = true; }); }
+  const name = D().company.name, del = UI.del;
+  return `<section class="panel" style="margin-top:20px"><h3>Your data</h3>
+    <p class="small muted" style="margin-top:0">Download what is in Leave Ledger at any time. Spreadsheets open in Excel or Google Sheets.</p>
+    <div class="btns"><button class="btn" data-dl="employees">Employees (CSV)</button><button class="btn" data-dl="leaves">Leaves (CSV)</button>${org ? `<button class="btn" data-dl="all">Everything (JSON)</button>` : ""}</div>
+    ${org ? `<h4 style="margin:18px 0 4px">Backups</h4>
+      <p class="small muted" style="margin:0">Leave Ledger copies this workspace every day and keeps the last ${B.keep || 14} days. To go back to an earlier day, contact the site admin.</p>
+      <p class="small">${B.loaded ? (B.days && B.days.length ? `Last backup: <b>${fmt(B.days[0])}</b> · ${plural(B.days.length, "day")} kept` : "No backup yet. The first one runs tonight.") : "Checking backups"}</p>
+      <h4 style="margin:18px 0 4px;color:var(--bad)">Delete this workspace</h4>
+      <p class="small muted" style="margin:0 0 8px">Deletes every employee, leave, letter, user and backup in ${esc(name)}, for good. Download everything first if you want a copy.</p>
+      ${del.open ? `<div class="field"><label for="del-name">Type <b>${esc(name)}</b> to confirm</label><input type="text" id="del-name" autocomplete="off" value="${esc(del.text)}"></div>
+        ${del.error ? `<p class="err">${esc(del.error)}</p>` : ""}<div class="btns"><button class="btn" data-del-cancel>Cancel</button><button class="btn danger" data-del-go>Delete for good</button></div>`
+        : `<div class="btns"><button class="btn danger" data-del-open>Delete this workspace</button></div>`}` : ""}
+  </section>`;
+}
+const csvCellOut = (v) => { const t = String(v ?? ""); return /[",\n]/.test(t) || /^[=+\-@]/.test(t) ? `"${(/^[=+\-@]/.test(t) ? "'" : "") + t.replace(/"/g, '""')}"` : t; };
+function download(name, text, type) {
+  const url = URL.createObjectURL(new Blob([text], { type })); const a = document.createElement("a");
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+const slug = (s) => String(s || "workspace").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+function downloadCSV(kind) {
+  const co = D().company, E2 = D().employees;
+  const rows = kind === "employees"
+    ? [["name", "email", "job_title", "hire_date", "manager_name", "weekly_hours", "hours_per_day", "hours_worked_last_12_months", "sick_hours_balance", "sick_hours_used_this_year", "highest_quarter_wages"],
+      ...E2.map((e) => [e.name, e.email || "", e.role, e.hire, e.mgr ? (emp(e.mgr) || {}).name || "" : "", weeklyOf(e), shiftOf(e), e.hours12, e.sick, e.sickUsedYr, e.hiQuarter])]
+    : [["employee", "leave_type", "requested", "first_day", "last_day", "status", "approved_on", "approved_by", "letters_sent", "letters_confirmed", "steps_open"],
+      ...D().cases.map((c) => { const e = emp(c.empId) || { name: "" }, d = caseDates(c), st = caseStatus(c), n = c.notices || [];
+        return [e.name, REASONS[c.reason].hr, c.requested, c.reason === "unknown" ? "" : d.start, c.reason === "unknown" || !d.end ? "" : addDays(d.end, -1), st.t, c.approvedOn || "", c.approvedBy || "", n.length, n.filter((x) => x.ackAt).length, c.tasks.filter((t) => !t.done).length]; })];
+  download(`${slug(co.name)}-${kind}-${TODAY}.csv`, rows.map((r) => r.map(csvCellOut).join(",")).join("\r\n") + "\r\n", "text/csv");
 }
 
 /* ---------- Employee ---------- */
@@ -1257,6 +1295,19 @@ document.addEventListener("click", async (ev) => {
   if (b.dataset.change) { await act({ type: "updateCase", caseId: b.dataset.change, opts: readChange() }, "New dates saved. Deadlines updated."); return; }
   if (b.dataset.returned) { await act({ type: "markReturned", caseId: b.dataset.returned, on: document.getElementById("ce-back")?.value }, "Marked as returned"); return; }
   if (b.dataset.unreturn) { await act({ type: "markReturned", caseId: b.dataset.unreturn, on: null }, "Return undone"); return; }
+  if (b.dataset.dl) {
+    if (b.dataset.dl !== "all") { downloadCSV(b.dataset.dl); return; }
+    try { const j = await api("org/export"); download(`${slug(D().company.name)}-all-data-${TODAY}.json`, JSON.stringify(j, null, 2), "application/json"); toast("Downloaded"); } catch (e) { toast(e.message); }
+    return;
+  }
+  if (b.hasAttribute("data-del-open")) { UI.del = { open: true, text: "", error: "" }; render(); document.getElementById("del-name")?.focus(); return; }
+  if (b.hasAttribute("data-del-cancel")) { UI.del = { open: false, text: "", error: "" }; render(); return; }
+  if (b.hasAttribute("data-del-go")) {
+    UI.del.text = document.getElementById("del-name").value;
+    try { await api("org/delete", { confirm: UI.del.text }); UI.del = { open: false, text: "", error: "" }; S = null; location.href = "/?deleted=1"; }
+    catch (e) { if (e.message !== "signed out") { UI.del.error = e.message; render(); } }
+    return;
+  }
   if (b.dataset.legal) {
     const j = await act({ type: "sendToLegal", caseId: b.dataset.legal });
     if (j) { const c = D().cases.find((x) => x.id === b.dataset.legal), last = c.legalCopies[c.legalCopies.length - 1];
@@ -1492,6 +1543,7 @@ document.addEventListener("visibilitychange", async () => {
   const u0 = new URL(location.href), ae = u0.searchParams.get("auth_error");
   const AUTH_MSG = { cancelled: "Google sign-in was cancelled.", expired: "Sign-in took too long or started in another browser. Try again.", failed: "Sign-in could not be confirmed. Try again.", unreachable: "Could not reach Google. Try again.", unverified: "Your Google account email is not verified yet.", off: "Google sign-in is not set up yet." };
   if (ae) { UI.login.error = AUTH_MSG[ae] || "Sign-in did not work. Try again."; u0.searchParams.delete("auth_error"); history.replaceState(null, "", u0.pathname + (u0.search || "") + u0.hash); }
+  if (u0.searchParams.has("deleted")) { u0.searchParams.delete("deleted"); history.replaceState(null, "", u0.pathname + (u0.search || "") + u0.hash); setTimeout(() => toast("Workspace deleted, with all its data and backups"), 300); }
   try { const site = await (await fetch("/api/site")).json(); MODE = site.mode || MODE; } catch (e) {}
   if (FB()) await loadMe();
   try {
