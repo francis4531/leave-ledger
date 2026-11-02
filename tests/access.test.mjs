@@ -290,9 +290,20 @@ describe("preview site: company workspaces", () => {
     assert.equal((await eve.post("/api/org/accept", { id: orgId })).status, 403);
     assert.equal((await eve.get("/api/state")).status, 401);
   });
-  test("domain lock refuses outside accounts", async () => {
-    const p = preview(), { sam } = await samWithWorkspace(p, { lockDomain: true });
-    assert.equal((await sam.post("/api/org/members", { op: "invite", email: "pat@gmail.com", role: "emp", empId: "e8" })).status, 400);
+  test("company-accounts-only: never at setup, never with made-up employees, only for a company workspace", async () => {
+    const p = preview();
+    const { sam } = await samWithWorkspace(p, { lockDomain: true });
+    let m = (await sam.get("/api/org/members")).body;
+    assert.equal(m.domain, null, "setup cannot lock");
+    assert.equal(m.canLock, false); assert.equal(m.lockReason, "sample");
+    assert.equal((await sam.post("/api/org/members", { op: "lock", on: true })).status, 400, "not with made-up employees");
+
+    const p2 = preview(), { sam: sam2 } = await samWithWorkspace(p2, { start: "empty" });
+    m = (await sam2.get("/api/org/members")).body;
+    assert.equal(m.canLock, true);
+    assert.equal((await sam2.post("/api/org/members", { op: "lock", on: true })).status, 200);
+    const empId = (await sam2.get("/api/state")).body.data.employees[0].id;
+    assert.equal((await sam2.post("/api/org/members", { op: "invite", email: "pat@gmail.com", role: "emp", empId })).status, 400, "outside accounts refused");
   });
   test("only HR can manage users; the last signed-in HR admin stays", async () => {
     const p = preview(), { sam, orgId } = await samWithWorkspace(p);

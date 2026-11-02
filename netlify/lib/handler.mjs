@@ -77,6 +77,9 @@ export function capsFor(kind, role) {
 const PRICES = { "claude-haiku-5-5": [0.10, 0.50] };
 function aiInfo(env) { const p = PRICES[env.LL_MODEL || DEFAULT_MODEL]; return { on: !!env.ANTHROPIC_API_KEY, price: p ? { input: p[0], output: p[1] } : null }; }
 
+// Locking to a company domain is for a workspace set up for a real company (started empty) by an HR admin on Google Workspace.
+const lockAllowed = (R) => R.meta.start === "empty" && !!R.user.hd;
+
 export function viewFor(D, acct, today, env = {}, space = { kind: "test" }) {
   const me = D.employees.find((e) => e.id === acct.empId);
   const out = { me: { email: acct.email, name: me.name, role: acct.role, label: acct.label, empId: me.id, views: VIEWS[acct.role] }, today, mode: isFeedback(env) ? "feedback" : "test", space, caps: capsFor(space.kind, acct.role), mail: { on: space.kind === "org" && mailOn(env) }, ai: aiInfo(env) };
@@ -664,13 +667,14 @@ async function route_(req, store, env) {
   /* ----- Workspace users (HR admins only) ----- */
   if (R.kind === "org" && route === "org/members" && req.method === "GET") {
     if (acct.role !== "hr") return err("HR only", 403);
-    return json({ members: R.meta.members.map(({ sub, ...m }) => ({ ...m, joined: !!sub })), domain: R.meta.domain, canLock: !!R.user.hd, myDomain: R.user.hd || null });
+    return json({ members: R.meta.members.map(({ sub, ...m }) => ({ ...m, joined: !!sub })), domain: R.meta.domain, canLock: lockAllowed(R), lockReason: lockAllowed(R) ? null : R.meta.start !== "empty" ? "sample" : "no-domain", myDomain: R.user.hd || null });
   }
   if (R.kind === "org" && route === "org/members" && req.method === "POST") {
     if (acct.role !== "hr") return err("HR only", 403);
     const body = await req.json().catch(() => ({}));
     if (body.op === "lock") {
       if (body.on) {
+        if (R.meta.start !== "empty") return err("Company accounts only is for a workspace set up for your own company, not one with made-up employees.");
         if (!R.user.hd) return err("Only Google Workspace accounts can lock a workspace to their company domain.");
         const off = R.meta.members.filter((m) => !m.email.endsWith("@" + R.user.hd));
         if (off.length) return err(`Remove users outside @${R.user.hd} first: ${off.map((m) => m.email).join(", ")}`);

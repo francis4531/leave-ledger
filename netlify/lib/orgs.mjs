@@ -74,8 +74,7 @@ export function cleanCreate(b, user) {
   if (b.agree !== true) return { error: "Please confirm you will use made-up employee details only." };
   const headcount = Math.round(+b.headcount);
   if (!(headcount >= 1 && headcount <= 100000)) return { error: "Enter the number of employees." };
-  if (b.lockDomain && !user.hd) return { error: "Only Google Workspace accounts can lock a workspace to their company domain." };
-  return { name, city: trim(b.city, 60) || "California", headcount, start: b.start === "empty" ? "empty" : "sample", jobTitle: trim(b.jobTitle, 60) || "HR", lockDomain: !!b.lockDomain };
+  return { name, city: trim(b.city, 60) || "California", headcount, start: b.start === "empty" ? "empty" : "sample", jobTitle: trim(b.jobTitle, 60) || "HR" };
 }
 
 export function createOrg(o, user, today) {
@@ -94,7 +93,9 @@ export function createOrg(o, user, today) {
   D.log = [{ at: now, by: user.name, text: o.start === "sample" ? "Workspace created with sample employees" : "Workspace created" }];
   const meta = {
     id, name: o.name, created: now, createdBy: user.sub, ownerEmail: user.email, disabled: false,
-    domain: o.lockDomain ? user.hd : null, madeUpOnly: true,
+    // The company-domain lock is set later, on the Users tab, and only for a workspace set up for a real company
+    // (started empty, not with made-up employees). Never at creation.
+    domain: null, start: o.start, madeUpOnly: true,
     members: [{ email: user.email, role: "hr", empId, sub: user.sub, invitedAt: now, joinedAt: now, invitedBy: user.email }],
   };
   return { meta, D };

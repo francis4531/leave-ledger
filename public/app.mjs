@@ -967,7 +967,6 @@ function renderHome(root) {
         <div class="field"><span class="label" style="font-weight:600;font-size:.86rem;text-transform:none;letter-spacing:0;color:var(--ink)">Start with</span>
           <label class="check"><input type="radio" name="ws-start" data-bind="start" value="sample" ${f.start === "sample" ? "checked" : ""}>10 made-up employees and a few leaves, with you as the HR admin</label>
           <label class="check"><input type="radio" name="ws-start" data-bind="start" value="empty" ${f.start === "empty" ? "checked" : ""}>Just me. I will add made-up employees myself</label></div>
-        ${u.hd ? `<label class="check"><input type="checkbox" data-bind="lockDomain" ${f.lockDomain ? "checked" : ""}>Only allow @${esc(u.hd)} Google accounts to join</label>` : ""}
         <label class="check"><input type="checkbox" id="ws-agree" data-bind="agree" ${f.agree ? "checked" : ""}>I will use made-up employee details only</label>
         <div class="btns"><button class="btn primary" data-create ${H.busy ? "disabled" : ""}>${H.busy ? "Setting up..." : "Create workspace"}</button></div>
       </section>` : C.why && !sp.length ? "" : C.why ? `<p class="small muted">${esc(C.why)}</p>` : ""}
@@ -1005,7 +1004,7 @@ async function createWorkspace() {
 
 /* ---------- Workspace: Users (HR admins) ---------- */
 async function loadUsers() {
-  try { const j = await api("org/members"); Object.assign(UI.users, { list: j.members, domain: j.domain, canLock: j.canLock, myDomain: j.myDomain }); }
+  try { const j = await api("org/members"); Object.assign(UI.users, { list: j.members, domain: j.domain, canLock: j.canLock, lockReason: j.lockReason, myDomain: j.myDomain }); }
   catch (e) { if (e.message !== "signed out") UI.users.error = e.message; UI.users.list = UI.users.list || []; }
   render();
 }
@@ -1052,8 +1051,8 @@ function hrUsers() {
       ${U.error ? `<p class="err" role="alert">${esc(U.error)}</p>` : ""}
       <div class="btns"><button class="btn primary" data-invite-user ${U.busy ? "disabled" : ""}>Invite</button></div>
       <p class="small muted">They sign in at this site with Google using that email. There is no email sent yet, so tell them yourself.</p>
-      <h3>Company Google accounts only</h3>
-      ${U.canLock ? `<label class="check"><input type="checkbox" data-lock ${U.domain ? "checked" : ""}>Only allow @${esc(U.myDomain)} accounts</label><span class="hint small muted">Users must sign in with a Google Workspace account on your company domain.</span>` : `<p class="small muted">Available when you sign in with a Google Workspace account on your company domain.</p>`}
+      ${U.lockReason === "sample" && !U.domain ? "" : `<h3>Company Google accounts only</h3>
+      ${U.canLock || U.domain ? `<label class="check"><input type="checkbox" data-lock ${U.domain ? "checked" : ""}>Only allow @${esc(U.domain || U.myDomain)} accounts</label><span class="hint small muted">Users must sign in with a Google Workspace account on your company domain.</span>` : `<p class="small muted">Available when you sign in with a Google Workspace account on your company domain.</p>`}`}
     </section>
     <section class="panel"><h3>${U.list.length} ${U.list.length === 1 ? "user" : "users"}</h3>
       <div class="tw"><table><thead><tr><th>User</th><th>Employee</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>
