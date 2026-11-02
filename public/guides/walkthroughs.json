@@ -1,0 +1,120 @@
+{
+ "hr": {
+  "title": "Running leave as HR",
+  "intro": "Set up once, then Leave Ledger tells you what is due and drafts what you send.",
+  "steps": [
+   {
+    "img": "/guides/hr/01.jpg",
+    "t": "Tell Leave Ledger about your company",
+    "d": "Settings. Your headcount and holidays decide which California leave laws apply to you."
+   },
+   {
+    "img": "/guides/hr/02.jpg",
+    "t": "Bring in your employees",
+    "d": "Employees, then Import from a file. Fill in the template from your HR or payroll system and upload it. You see every row before anything is saved."
+   },
+   {
+    "img": "/guides/hr/03.jpg",
+    "t": "Invite your team to sign in",
+    "d": "Users. Each employee signs in with Google and sees only their own leave. Managers see dates, never reasons."
+   },
+   {
+    "img": "/guides/hr/04.jpg",
+    "t": "Start each day on Today",
+    "d": "Every deadline you owe by law, soonest first. Tick a step when it is done."
+   },
+   {
+    "img": "/guides/hr/05.jpg",
+    "t": "Open a leave that needs approval",
+    "d": "Leaves. The plan shows the protected dates, what the state pays, and whether the employee qualifies."
+   },
+   {
+    "img": "/guides/hr/06.jpg",
+    "t": "Check what the manager will read",
+    "d": "The manager gets the dates and what not to do. Never the reason, the type of leave, or anything medical."
+   },
+   {
+    "img": "/guides/hr/07.jpg",
+    "t": "Approved",
+    "d": "The employee now sees a green Confirmed on their leave page, and the manager has the dates."
+   },
+   {
+    "img": "/guides/hr/08.jpg",
+    "t": "Send the letters the law requires",
+    "d": "Leave Ledger drafts each letter from the plan. Read it, edit it, then mark it sent. The employee can read it on their leave page."
+   }
+  ]
+ },
+ "mgr": {
+  "title": "Leave for managers",
+  "intro": "You see when your team is out and plan coverage. The reasons stay with HR.",
+  "steps": [
+   {
+    "img": "/guides/mgr/01.jpg",
+    "t": "See who is out",
+    "d": "My team shows the next 12 weeks. You see dates only, never why."
+   },
+   {
+    "img": "/guides/mgr/02.jpg",
+    "t": "HR tells you when a leave is approved",
+    "d": "You get the dates, the expected return, and what to do and not do. It also comes by email when your company has it set up."
+   },
+   {
+    "img": "/guides/mgr/03.jpg",
+    "t": "Plan coverage",
+    "d": "Write who covers what. HR sees your plan on the leave."
+   },
+   {
+    "img": "/guides/mgr/04.jpg",
+    "t": "Heard someone needs time off? Tell HR the same day",
+    "d": "The legal clock starts when you hear about it, even if they never say the word leave. Keep it short, no medical details."
+   }
+  ]
+ },
+ "emp": {
+  "title": "Asking for time off",
+  "intro": "Find out what you qualify for, send the request, and follow it until it is confirmed.",
+  "steps": [
+   {
+    "img": "/guides/emp/01.jpg",
+    "t": "See what you have",
+    "d": "My leave shows your sick hours, family leave, and about how much the state pays while you are out."
+   },
+   {
+    "img": "/guides/emp/02.jpg",
+    "t": "Learn your options",
+    "d": "Guide explains each California leave in plain words: how long, what it pays, who qualifies."
+   },
+   {
+    "img": "/guides/emp/03.jpg",
+    "t": "Not sure which leave fits? Start here",
+    "d": "Pick what is going on. A few questions, and nothing is sent until you say so."
+   },
+   {
+    "img": "/guides/emp/04.jpg",
+    "t": "See your protection and pay first",
+    "d": "The dates your job is protected and what the state may pay, worked out for you."
+   },
+   {
+    "img": "/guides/emp/05.jpg",
+    "t": "Check it and send it to HR",
+    "d": "The request is filled in from your answers. Change anything, then send it."
+   },
+   {
+    "img": "/guides/emp/06.jpg",
+    "t": "Follow your request",
+    "d": "Sent to HR, then HR reviewing, then Confirmed. HR replies within 5 business days."
+   },
+   {
+    "img": "/guides/emp/07.jpg",
+    "t": "Look for the green Confirmed",
+    "d": "When HR approves, your dates are confirmed. Your manager is told the dates only, never the reason."
+   },
+   {
+    "img": "/guides/emp/08.jpg",
+    "t": "Get paid by the state, step by step",
+    "d": "File with EDD using the dates and links here. Tick each step as you go."
+   }
+  ]
+ }
+}

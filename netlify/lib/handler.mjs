@@ -73,9 +73,13 @@ export function capsFor(kind, role) {
   };
 }
 
+// What the browser learns about Clerk: on or off, and a list price for the cost estimate. Never the supplier or model.
+const PRICES = { "claude-haiku-5-5": [0.10, 0.50] };
+function aiInfo(env) { const p = PRICES[env.LL_MODEL || DEFAULT_MODEL]; return { on: !!env.ANTHROPIC_API_KEY, price: p ? { input: p[0], output: p[1] } : null }; }
+
 export function viewFor(D, acct, today, env = {}, space = { kind: "test" }) {
   const me = D.employees.find((e) => e.id === acct.empId);
-  const out = { me: { email: acct.email, name: me.name, role: acct.role, label: acct.label, empId: me.id, views: VIEWS[acct.role] }, today, mode: isFeedback(env) ? "feedback" : "test", space, caps: capsFor(space.kind, acct.role), mail: { on: space.kind === "org" && mailOn(env) }, ai: { on: !!env.ANTHROPIC_API_KEY, model: env.LL_MODEL || DEFAULT_MODEL } };
+  const out = { me: { email: acct.email, name: me.name, role: acct.role, label: acct.label, empId: me.id, views: VIEWS[acct.role] }, today, mode: isFeedback(env) ? "feedback" : "test", space, caps: capsFor(space.kind, acct.role), mail: { on: space.kind === "org" && mailOn(env) }, ai: aiInfo(env) };
   if (acct.role === "hr") return { ...out, data: D };
   // Employees get their own cases without HR notes, the manager's flag note, or intake text someone else wrote.
   // Letter drafts stay with HR; employees see only the letters HR marked as sent.
@@ -709,7 +713,7 @@ async function route_(req, store, env) {
     D.aiUsage = u;
     if (FB) touch(D, acct.email, "intake");
     await store.setJSON(R.key, D);
-    return json({ draft: res.draft, model: res.usage.model, ms: res.usage.ms });
+    return json({ draft: res.draft, ms: res.usage.ms });
   }
 
   if (route === "action" && req.method === "POST") {

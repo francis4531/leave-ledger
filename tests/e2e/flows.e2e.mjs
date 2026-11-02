@@ -109,6 +109,7 @@ describe("test site", { skip }, () => {
     assert.equal(await p.inputValue("#rq-reason"), "family_care");
     await p.click("[data-submitreq]");
     await p.waitForSelector("#toast:not([hidden])");
+    assert.ok(await p.$(".status-banner.sent, .status-banner.wait"), "a new request says it is not confirmed yet");
     const box = p.locator('[data-edd$="|pfl-account"]').first();
     await box.check();
     await p.waitForSelector("text=Ticked off");
@@ -138,7 +139,7 @@ describe("test site", { skip }, () => {
     assert.ok(await p.$eval("[data-appr-go]", (x) => x.disabled), "a note with the reason cannot be sent");
     await p.fill("#ap-note", "A temp starts Monday.");
     await p.click("[data-appr-go]");
-    await p.waitForSelector("text=Approved Nov");
+    await p.waitForSelector(".status-banner.ok");
     await p.click("[data-logout]");
     await p.click('[data-pick="mei@mesaverde.example"]');
     await p.click("text=Message from HR");
@@ -146,6 +147,14 @@ describe("test site", { skip }, () => {
     assert.match(text, /approved time off for Marcus Bell/);
     assert.match(text, /A temp starts Monday/);
     for (const w of ["Care for", "Family and medical", "CFRA", "Paid Family Leave", "surgery"]) assert.ok(!text.includes(w), `manager must not see "${w}"`);
+    await p.click("[data-logout]");
+    await p.click('[data-pick="marcus@mesaverde.example"]');
+    await p.waitForSelector(".status-banner.ok");
+    assert.match(await p.textContent(".status-banner.ok"), /Confirmed by HR/);
+    await p.click('[data-tab="guide"]');
+    await p.waitForSelector(".walk h4");
+    assert.equal(await p.textContent(".walk h3"), "Asking for time off", "employees get the employee walkthrough");
+    assert.equal((await p.$$("[data-walk-flow]")).length, 0, "and only that one");
     assert.deepEqual(errors, []);
   });
 

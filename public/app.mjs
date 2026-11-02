@@ -3,7 +3,7 @@ import {
   weeklyBenefit, eligibility, buildPlan, makeTasks,
   planFor as planForD, caseDates as caseDatesD, caseStatus as caseStatusD,
 } from "./engine.mjs";
-import { LETTERS, hasLetter, draftLetter, managerNotice, sensitiveNote } from "./notices.mjs";
+import { LETTERS, hasLetter, draftLetter, managerNotice, sensitiveNote, nextWorkday } from "./notices.mjs";
 import { COLUMNS, templateCSV, parseTable, checkRows, HR_SYSTEMS } from "./roster.mjs";
 import { LEAVES, RIGHTS, EDD, eddSteps } from "./guide.mjs";
 
@@ -297,7 +297,7 @@ function hrCases() {
     ${D().cases.length > 8 ? `<input type="search" id="lv-q" placeholder="Find an employee" value="${esc(UI.leavesQ || "")}" aria-label="Find an employee">` : ""}</div>
   <section class="panel"><div class="tw"><table class="cards"><thead><tr><th>Employee</th><th>Type</th><th>Dates</th><th>Status</th><th>To do</th></tr></thead><tbody>
   ${shown.map((c) => { const d = caseDates(c), s = caseStatus(c), e = emp(c.empId); const late = c.tasks.filter((t) => !t.done && t.due && t.due <= TODAY).length; const left = c.tasks.filter((t) => !t.done && !t.optional).length;
-    return `<tr class="click" data-open="${c.id}" tabindex="0"><td class="full"><div class="person">${avatar(e, "sm")}<div><b>${esc(e.name)}</b><div class="small muted">${esc(e.role)} · from ${{ hr: "HR", employee: "employee", manager: "manager" }[c.source]}</div></div></div></td><td data-l="Type">${esc(REASONS[c.reason].hr)}</td><td data-l="Dates" class="small">${d.end ? `<span class="mono">${range(d.start, d.end)}</span>` : '<span class="muted">Not set yet</span>'}</td><td data-l="Status">${pill(s.t, s.cls)}</td><td data-l="To do">${late ? pill(late + " late", "bad") : left ? pill(left + " open", "") : pill("All done", "ok")}</td></tr>`; }).join("") || `<tr><td colspan="5" class="muted">${D().cases.length ? "Nothing here." : "No leaves yet."}</td></tr>`}
+    return `<tr class="click" data-open="${c.id}" tabindex="0"><td class="full"><div class="person">${avatar(e, "sm")}<div><b>${esc(e.name)}</b><div class="small muted">${esc(e.role)} · from ${{ hr: "HR", employee: "employee", manager: "manager" }[c.source]}</div></div></div></td><td data-l="Type">${esc(REASONS[c.reason].hr)}</td><td data-l="Dates" class="small">${d.end ? `<span class="mono">${range(d.start, d.end)}</span>` : '<span class="muted">Not set yet</span>'}</td><td data-l="Status"><div class="btns" style="gap:4px">${pill(s.t, s.cls)}${c.reason === "unknown" || s.t === "Returned" ? "" : c.approvedOn ? pill("✓ Approved", "ok") : pill("Needs approval", "warn")}</div></td><td data-l="To do">${late ? pill(late + " late", "bad") : left ? pill(left + " open", "") : pill("All done", "ok")}</td></tr>`; }).join("") || `<tr><td colspan="5" class="muted">${D().cases.length ? "Nothing here." : "No leaves yet."}</td></tr>`}
   </tbody></table></div></section>`;
 }
 /* ---------- EDD filing help ---------- */
@@ -329,10 +329,9 @@ const NEEDS = [
 function guideView() {
   const hr = S.me.role === "hr", W = UI.wiz;
   if (W && W.step) return wizardView();
-  const gifs = [...(hr ? [["hr-setup", "Setting up and running leave as HR"]] : []), ["employee", "Asking for leave as an employee"]];
   return `<div class="head"><div><h2>Guide</h2><p>How Leave Ledger works, and California leave in a few minutes.</p></div></div>
   <section class="panel wiz-start"><h3>Which leave fits me?</h3><p class="muted">Answer two or three questions. You will see what you qualify for, what the state pays, and what to do next, before anything is sent.</p><button class="btn primary" data-wiz-start>Start</button></section>
-  <section class="panel"><h3>See it in action</h3><div class="gifs">${gifs.map(([f, t]) => `<figure><img src="/guides/${f}.gif" alt="${esc(t)}" loading="lazy" onerror="this.closest('figure').remove()"><figcaption class="small muted">${esc(t)}</figcaption></figure>`).join("")}</div></section>
+  ${walkthroughView()}
   <section class="panel"><h3>California leave in a few minutes</h3>
     <p class="muted">Most California employers with 5 or more employees owe these leaves. The state, not your employer, pays for the longer ones through EDD.</p>
     <div class="leavecards">${LEAVES.map((l) => `<article class="lcard"><h4>${esc(l.title)}</h4><div class="small muted">${esc(l.law)}</div>
@@ -341,6 +340,23 @@ function guideView() {
   <div class="grid2 even"><section class="panel"><h3>Your rights</h3><ul class="plain">${RIGHTS.map((r) => `<li>${esc(r)}</li>`).join("")}</ul></section>
   <section class="panel"><h3>Getting paid by the state</h3><p class="small">State Disability Insurance (SDI) pays while you cannot work because of your own health or pregnancy. Paid Family Leave (PFL) pays while you bond with a new child or care for family. Both come from EDD, usually about 70 to 90% of your wages, up to $1,765 a week in 2026.</p>
     <ul class="plain small guide-links"><li>${ext(EDD.diOnline, "How to file for disability pay")}</li><li>${ext(EDD.pflOnline, "How to file for Paid Family Leave")}</li><li>${ext(EDD.pregnancy, "Pregnancy and EDD")}</li><li>${ext(EDD.pay, "What EDD pays")}</li></ul></section></div>`;
+}
+// Step-by-step walkthrough for this kind of user. One screen at a time; the user moves on when ready.
+let WALK = null;
+function walkthroughView() {
+  if (WALK === null) { WALK = false; fetch("/guides/walkthroughs.json").then((r) => r.json()).then((j) => { WALK = j; if (UI.tab === "guide") render(); }).catch(() => {}); }
+  if (!WALK) return "";
+  const own = S.me.role, key = UI.walk && WALK[UI.walk.flow] ? UI.walk.flow : own, F = WALK[key]; if (!F) return "";
+  const i = Math.min(UI.walk && UI.walk.flow === key ? UI.walk.i : 0, F.steps.length - 1), st = F.steps[i];
+  const others = own === "hr" ? [["hr", "HR"], ["mgr", "Managers"], ["emp", "Employees"]] : [];
+  return `<section class="panel walk" aria-roledescription="walkthrough">
+    <div class="panel-h"><div><h3>${esc(F.title)}</h3><p class="small muted" style="margin:2px 0 0">${esc(F.intro)}</p></div>
+      ${others.length ? `<div class="seg" role="group" aria-label="Walkthrough for">${others.map(([k, n]) => `<button data-walk-flow="${k}" aria-pressed="${k === key}">${n}</button>`).join("")}</div>` : ""}</div>
+    <div class="walk-body"><div class="walk-img"><img src="${esc(st.img)}" alt="${esc(st.t)}" width="1100" height="760"></div>
+      <div class="walk-text"><div class="small muted">Step ${i + 1} of ${F.steps.length}</div><h4>${esc(st.t)}</h4><p>${esc(st.d)}</p>
+        <div class="btns"><button class="btn" data-walk="-1" ${i === 0 ? "disabled" : ""}>Back</button><button class="btn primary" data-walk="1" ${i === F.steps.length - 1 ? "disabled" : ""}>Next</button></div>
+        <div class="walk-dots" role="group" aria-label="Go to step">${F.steps.map((x, k) => `<button data-walk-to="${k}" aria-label="Step ${k + 1}: ${esc(x.t)}" aria-current="${k === i}"></button>`).join("")}</div></div></div>
+  </section>`;
 }
 function wizardView() {
   const W = UI.wiz, me = emp(S.me.empId), co = D().company;
@@ -547,7 +563,7 @@ function approvalPanel(c) {
   const viewList = sent.length ? `<details class="more"><summary class="small">Messages to ${esc(m ? first(m.name) : "the manager")} (${sent.length})</summary>${sent.slice().reverse().map((n) => `<div class="small muted" style="margin-top:8px">${fmt(n.sentOn)} · ${how(n)}</div><div class="letter-text">${esc(n.subject)}\n\n${esc(n.body)}</div>`).join("")}</details>` : "";
   if (c.approvedOn) {
     const moved = last && (last.start !== d.start || last.end !== d.end);
-    return `<section class="panel"><div class="panel-h"><h3>Approved</h3>${pill("Approved " + fmtS(c.approvedOn), "ok")}</div>
+    return `<section class="panel"><div class="status-banner ok" role="status" style="margin-bottom:8px"><span class="sb-ic" aria-hidden="true">✓</span><div><div class="sb-t">Approved on ${fmtS(c.approvedOn)}</div><div class="small">${esc(first(e.name))} sees "Confirmed by HR" on their leave page.</div></div></div>
       <p class="small" style="margin:0">${esc(c.approvedBy || "HR")} approved this on ${fmt(c.approvedOn)}.${last ? ` ${esc(first(m ? m.name : "The manager"))} was told the dates ${fmt(last.sentOn)}, ${how(last)}.` : m ? ` ${esc(m.name)} has not been told the dates.` : ""}</p>
       ${m && (moved || !last) ? `<div class="infobox" style="margin-top:8px">${moved ? `The dates changed after ${esc(first(m.name))} was told.` : ""} <button class="btn sm" data-appr-open="${c.id}" data-appr-kind="update">${last ? "Send the new dates" : "Tell the manager the dates"}</button></div>` : ""}
       ${UI.appr.caseId === c.id ? approveForm(c, e, m, "update") : ""}${viewList}</section>`;
@@ -622,14 +638,13 @@ function copilotStats() {
   const L = (D().intakeLog || []).filter((x) => x.ai), u = D().aiUsage || {}, mk = TODAY.slice(0, 7), m = (u.month || {})[mk];
   const clean = L.filter((x) => !x.changed.length).length;
   const byField = ["reason", "relation", "start", "length"].map((k) => [k, L.filter((x) => x.changed.includes(k)).length]);
-  const haiku = /haiku-5-5/.test(S.ai.model || "");
-  const cost = m && haiku ? (m.input * 0.10 + m.output * 0.50) / 1e6 : null;
+  const pr = S.ai.price, cost = m && pr ? (m.input * pr.input + m.output * pr.output) / 1e6 : null;
   return `<h3>✦ Clerk intake</h3>
-    ${S.ai.on ? `<p class="small">On · model <code>${esc(S.ai.model)}</code>. Employees can describe their need in their own words and Clerk fills in the request form. It never decides eligibility.</p>` : `<div class="infobox">Off. Add <code>ANTHROPIC_API_KEY</code> in Netlify, under Site configuration, Environment variables, then redeploy.</div>`}
+    ${S.ai.on ? `<p class="small">On. Employees can describe their need in their own words and Clerk fills in the request form. It never decides eligibility.</p>` : `<div class="infobox">Off. The site admin can turn it on.</div>`}
     <div class="balance">
       <div><span class="label">Requests this month</span><span class="v">${m ? m.requests : 0}</span><span class="small muted">${m && m.requests ? `${Math.round(m.ms / m.requests / 100) / 10}s average` : "None yet"}</span></div>
       <div><span class="label">Sent without changes</span><span class="v">${L.length ? Math.round((clean / L.length) * 100) + "%" : "n/a"}</span><span class="small muted">${clean} of ${L.length} sent requests</span></div>
-      <div><span class="label">AI cost this month</span><span class="v">${cost !== null ? "$" + cost.toFixed(cost < 1 ? 4 : 2) : "n/a"}</span><span class="small muted">${haiku ? "At Haiku 5.5 list price" : "Model price not tracked"}</span></div>
+      <div><span class="label">AI cost this month</span><span class="v">${cost !== null ? "$" + cost.toFixed(cost < 1 ? 4 : 2) : "n/a"}</span><span class="small muted">${pr ? "Estimated at list price" : "Not tracked"}</span></div>
     </div>
     ${L.length ? `<p class="small muted">Fixes users made before sending: ${byField.map(([k, n]) => `${FIELD_NAMES[k]} ${n}`).join(" · ")}. Each fix is a test case for the golden dataset.</p>
     <details class="more"><summary>Show the last ${Math.min(10, L.length)} intakes</summary><div class="tw"><table><thead><tr><th>When</th><th>Their words</th><th>Clerk read</th><th>Sent as</th></tr></thead><tbody>${L.slice(0, 10).map((x) => `<tr><td class="small mono">${new Date(x.at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Los_Angeles" })}</td><td class="small">${esc(x.text.length > 90 ? x.text.slice(0, 90) + "…" : x.text)}</td><td class="small">${esc(REASONS[x.ai.reason]?.hr || "Not sure")}${x.ai.flag ? " ⚑" : ""}</td><td class="small">${esc(REASONS[x.final.reason]?.hr || x.final.reason)}${x.changed.length ? `<div class="muted">fixed: ${esc(x.changed.map((k) => FIELD_NAMES[k]).join(", "))}</div>` : ""}</td></tr>`).join("")}</tbody></table></div></details>` : ""}`;
@@ -724,9 +739,19 @@ function empCase(c) {
   const reviewed = c.tasks.find((t) => t.key === "notice" || t.key === "confirm" || t.key === "record");
   const confirmed = confirmKey && c.tasks.find((t) => t.key === confirmKey).done;
   const stage = confirmed || c.approvedOn ? 3 : reviewed && reviewed.done ? 2 : 1;
-  const due = reviewed && !reviewed.done && reviewed.due ? ` · HR replies by ${fmtS(reviewed.due)}` : "";
-  const track = s.t === "Returned" ? "" : `<ol class="track" aria-label="Request status">${["Sent to HR", "HR reviewing", "Confirmed"].map((x, i) => `<li class="${i + 1 < stage ? "done" : i + 1 === stage ? "now" : ""}" ${i + 1 === stage ? 'aria-current="step"' : ""}><span>${x}</span></li>`).join("")}</ol><p class="small muted" style="margin:-4px 0 0">Asked ${fmt(c.requested)}${stage === 1 ? due : ""}${stage === 3 ? ` · your dates are confirmed${c.approvedOn ? `. Your manager is told the dates only, never the reason` : ""}` : ""}</p>`;
-  return `<section class="panel"><div class="panel-h"><h3>${esc(REASONS[c.reason].emp)}</h3>${pill(s.t, s.cls)}</div>${track}${timelineHTML(p)}
+  // A clear answer first: confirmed (green), being reviewed, or sent. The bar below shows the same thing.
+  const d = caseDates(c), lastDay = addDays(d.end, -1), back = nextWorkday(d.end, D().company.holidays || []);
+  const wd = (x) => new Date(x + "T00:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+  const confOn = c.approvedOn || (confirmed && c.tasks.find((t) => t.key === confirmKey).doneOn);
+  const letter = (c.notices || []).length ? ` <button class="linkish" data-open-letters="${c.id}">Read HR's letter</button>` : "";
+  const banner = s.t === "Returned" ? "" : stage === 3
+    ? `<div class="status-banner ok" role="status"><span class="sb-ic" aria-hidden="true">✓</span><div><div class="sb-t">Confirmed by HR${confOn ? ` on ${fmtS(confOn)}` : ""}</div>
+        <div>You are off <b>${wd(d.start)}</b>${lastDay !== d.start ? ` to <b>${wd(lastDay)}</b>` : ""}, and back at work <b>${wd(back)}</b>.</div>
+        <div class="small">${c.approvedOn ? "Your manager was told the dates only, never the reason." : "Your manager sees the dates only, never the reason."}${letter}</div></div></div>`
+    : `<div class="status-banner ${stage === 2 ? "wait" : "sent"}" role="status"><span class="sb-ic" aria-hidden="true">${stage === 2 ? "…" : "→"}</span><div><div class="sb-t">${stage === 2 ? "HR is reviewing your request" : "Sent to HR"}</div>
+        <div>${stage === 2 ? "Not confirmed yet. HR has sent what you qualify for and will confirm your dates." : `Not confirmed yet.${reviewed && reviewed.due ? ` HR replies by <b>${fmtS(reviewed.due)}</b>.` : ""}`}</div></div></div>`;
+  const track = s.t === "Returned" ? "" : `${banner}<ol class="track ${stage === 3 ? "is-done" : ""}" aria-label="Request status">${["Sent to HR", "HR reviewing", "Confirmed"].map((x, i) => `<li class="${i + 1 < stage || stage === 3 ? "done" : i + 1 === stage ? "now" : ""}" ${i + 1 === stage ? 'aria-current="step"' : ""}><span>${x}</span></li>`).join("")}</ol><p class="small muted" style="margin:-4px 0 0">Asked ${fmt(c.requested)}</p>`;
+  return `<section class="panel"><div class="panel-h"><h3>${esc(REASONS[c.reason].emp)}</h3><div class="btns" style="gap:6px">${stage === 3 && s.t !== "Returned" ? pill("✓ Confirmed", "ok") : ""}${pill(s.t, s.cls)}</div></div>${track}${timelineHTML(p)}
   <div><div class="label" style="margin-bottom:8px">What happens next</div><ol class="steps">${steps.map((x) => `<li><span>${x}</span></li>`).join("")}</ol></div>
   ${p.warnings.length ? `<div class="infobox">HR will go over a few details of this request with you before confirming dates.</div>` : ""}
   ${eddPanel(c, p, true)}
@@ -819,7 +844,7 @@ function renderPreviewLogin(root) {
         <li>Switch to a manager such as <b>Dana</b> to see what managers can and cannot see.</li>
       </ol>
       <p class="small">Tap <b>Feedback</b> on any screen to tell us what works and what does not. When you are done, there is a 2-minute survey.</p>
-      <div class="note-box">Please use made-up details only, no real names or health information. Text you type for Clerk, the built-in assistant, is processed by Anthropic to fill in the form. <a href="/privacy">Privacy</a></div>
+      <div class="note-box">Please use made-up details only, no real names or health information. Text you type for Clerk, the built-in assistant, is processed by our AI provider to fill in the form. <a href="/privacy">Privacy</a></div>
       ${googleBar()}
       ${L.error ? `<p class="err" role="alert">${esc(L.error)}</p>` : ""}
     </div>
@@ -1167,7 +1192,9 @@ document.addEventListener("click", async (ev) => {
   }
   if (b.hasAttribute("data-req-open")) { UI.reqOpen = true; render(); document.getElementById("rq-text")?.focus(); return; }
   if (b.hasAttribute("data-req-close")) { UI.reqOpen = false; render(); return; }
-  if (b.hasAttribute("data-wiz-start")) { UI.wiz = { step: 1, need: null, relation: "parent", start: addDays(TODAY, 14), due: addDays(TODAY, 90), bond: true, weeks: 4, days: 3, hours: 8 }; render(); window.scrollTo(0, 0); return; }
+  if (b.dataset.walkFlow) { UI.walk = { flow: b.dataset.walkFlow, i: 0 }; render(); return; }
+  if (b.dataset.walk || b.dataset.walkTo) { const key = (UI.walk && UI.walk.flow) || S.me.role, cur = UI.walk && UI.walk.flow === key ? UI.walk.i : 0; UI.walk = { flow: key, i: b.dataset.walkTo ? +b.dataset.walkTo : Math.max(0, cur + +b.dataset.walk) }; render(); return; }
+  if (b.hasAttribute("data-wiz-start")) { UI.wiz = { step: 1, need: null, relation: "parent", start: (() => { let d = addDays(TODAY, 14); while (new Date(d + "T00:00:00Z").getUTCDay() !== 1) d = addDays(d, 1); return d; })(), due: addDays(TODAY, 90), bond: true, weeks: 4, days: 3, hours: 8 }; render(); window.scrollTo(0, 0); return; }
   if (b.dataset.wizNeed) { UI.wiz.need = b.dataset.wizNeed; UI.wiz.step = 2; render(); window.scrollTo(0, 0); return; }
   if (b.hasAttribute("data-wiz-back")) { UI.wiz.step = Math.max(1, UI.wiz.step - 1); render(); return; }
   if (b.hasAttribute("data-wiz-close")) { UI.wiz = null; render(); window.scrollTo(0, 0); return; }
@@ -1182,6 +1209,7 @@ document.addEventListener("click", async (ev) => {
   if (b.dataset.change) { await act({ type: "updateCase", caseId: b.dataset.change, opts: readChange() }, "New dates saved. Deadlines updated."); return; }
   if (b.dataset.returned) { await act({ type: "markReturned", caseId: b.dataset.returned, on: document.getElementById("ce-back")?.value }, "Marked as returned"); return; }
   if (b.dataset.unreturn) { await act({ type: "markReturned", caseId: b.dataset.unreturn, on: null }, "Return undone"); return; }
+  if (b.dataset.openLetters) { ev.preventDefault(); const sec = b.closest(".panel"); const det = sec && sec.querySelector(".letter-item"); if (det) { det.open = true; det.scrollIntoView({ behavior: "smooth", block: "center" }); } return; }
   if (b.hasAttribute("data-imp-open")) { UI.imp = { open: true, rows: null, raw: null, missing: [], error: "", file: "", busy: false }; UI.addEmp.open = false; render(); return; }
   if (b.hasAttribute("data-imp-close")) { UI.imp.open = false; render(); return; }
   if (b.hasAttribute("data-imp-template")) {
