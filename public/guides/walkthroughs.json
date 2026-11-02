@@ -11,7 +11,7 @@
    {
     "img": "/guides/hr/02.jpg",
     "t": "Bring in your employees",
-    "d": "Employees, then Import from a file. Fill in the template from your HR or payroll system and upload it. You see every row before anything is saved."
+    "d": "Employees, then Import from a file. Upload the employee list your HR or payroll system exports, Excel or CSV. Leave Ledger matches the columns, and you see every row before anything is saved."
    },
    {
     "img": "/guides/hr/03.jpg",

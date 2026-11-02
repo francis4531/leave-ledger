@@ -7,6 +7,7 @@ import { eddIds } from "../../public/guide.mjs";
 import { checkRows } from "../../public/roster.mjs";
 import { managerNotice, sensitiveNote } from "../../public/notices.mjs";
 import { mailOn, canEmail, sendMail } from "./mail.mjs";
+import { runColumnMap } from "./rostermap.mjs";
 import STRATEGY from "./strategy-data.mjs";
 import { runIntake, validate as validateDraft, changedFields, DEFAULT_MODEL } from "./intake.mjs";
 import { DKEY, loadDecisions, cleanDecision, mirrorToGitHub } from "./decisions.mjs";
@@ -239,6 +240,12 @@ function apply(D, acct, a, today, kind = "test") {
       }
       const n = (k) => checked.filter((x) => x.action === k).length;
       a._import = { added: n("add"), updated: n("update"), skipped: n("skip") };
+      // Remember how this file's columns were matched, so next month's upload of the same export is one step.
+      if (a.saveMap && typeof a.saveMap.sig === "string" && a.saveMap.map && typeof a.saveMap.map === "object") {
+        const map = Object.fromEntries(Object.entries(a.saveMap.map).filter(([k, v]) => /^[a-z_0-9]{2,40}$/.test(k) && Number.isInteger(v) && v >= 0 && v < 200));
+        const maps = { ...(D.importMaps || {}) }; maps[trim(a.saveMap.sig, 2000)] = { map, at: today };
+        D.importMaps = Object.fromEntries(Object.entries(maps).sort((x, y) => (y[1].at > x[1].at ? 1 : -1)).slice(0, 10));
+      }
       log(`Imported employees: ${a._import.added} added, ${a._import.updated} updated`);
       return null;
     }
@@ -698,8 +705,9 @@ async function route_(req, store, env) {
     return json(viewFor(D, acct, today, env, spaceInfo(R)));
   }
 
-  if (route === "intake" && req.method === "POST") {
+  if ((route === "intake" || route === "roster/map") && req.method === "POST") {
     const body = await req.json().catch(() => ({}));
+    if (route === "roster/map" && acct.role !== "hr") return err("HR only", 403);
     const D = await getD();
     const u = D.aiUsage && D.aiUsage.day === today ? D.aiUsage : { day: today, count: 0, by: {}, input: 0, output: 0, month: (D.aiUsage && D.aiUsage.month) || {} };
     const perUser = +(env.LL_AI_PER_USER_DAY || (FB ? 15 : 40)), perDay = +(FB ? env.LL_AI_PER_SPACE_DAY || env.LL_AI_PER_INVITE_DAY || 30 : env.LL_AI_DAY || 400);
@@ -707,7 +715,7 @@ async function route_(req, store, env) {
     if ((u.by[acct.email] || 0) >= perUser || u.count >= perDay) return err(limitMsg, 429);
     const g = FB ? await aiGlobalOk(store, today, +(env.LL_AI_DAY || 400)) : null;
     if (g && !g.ok) return err(limitMsg, 429);
-    const res = await runIntake(body.text, today, env);
+    const res = route === "roster/map" ? await runColumnMap(body.columns, env) : await runIntake(body.text, today, env);
     if (res.error) return err(res.error, res.status || 502);
     if (g) await g.bump();
     const mk = today.slice(0, 7);
@@ -717,6 +725,7 @@ async function route_(req, store, env) {
     D.aiUsage = u;
     if (FB) touch(D, acct.email, "intake");
     await store.setJSON(R.key, D);
+    if (route === "roster/map") return json({ map: res.map, unsure: res.unsure });
     return json({ draft: res.draft, ms: res.usage.ms });
   }
 

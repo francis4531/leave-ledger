@@ -69,6 +69,14 @@ export function installFakes() {
       return new Response(JSON.stringify({ id_token: "h." + Buffer.from(JSON.stringify(claims)).toString("base64url") + ".s" }), { status: 200 });
     }
     if (u.includes("api.anthropic.com")) {
+      const req = JSON.parse(init.body || "{}");
+      if (/match the columns/.test(req.system || "")) {
+        // Stand-in Clerk for column matching: matches by type and a few words, like the real one would.
+        const cols = JSON.parse(req.messages[0].content.replace(/^Columns:\n/, ""));
+        const pick = (t) => { const c = cols.find(t); return c ? c.i : null; };
+        const map = { name: pick((c) => /employee|worker|person/i.test(c.heading) && c.type === "text"), email: pick((c) => c.type === "email"), hire_date: pick((c) => c.type === "date"), manager_name: pick((c) => /boss|lead/i.test(c.heading)) };
+        return new Response(JSON.stringify({ content: [{ type: "text", text: JSON.stringify({ map: { ...map, evil: 3, job_title: 999 }, unsure: ["manager_name"] }) }], usage: { input_tokens: 400, output_tokens: 60 } }), { status: 200 });
+      }
       const draft = { reason: "family_care", relation: "parent", start: "2026-11-12", weeks: 3, confidence: { reason: "high" }, summary: "Care for a parent.", ask: [], language: "en" };
       return new Response(JSON.stringify({ model: "claude-haiku-5-5", content: [{ type: "text", text: JSON.stringify(draft) }], usage: { input_tokens: 1000, output_tokens: 100 } }), { status: 200 });
     }

@@ -158,6 +158,31 @@ describe("test site", { skip }, () => {
     assert.deepEqual(errors, []);
   });
 
+  test("HR uploads an export with unfamiliar headings, Clerk matches the columns, and the next upload remembers", async () => {
+    const { p, errors } = await page();
+    await p.goto(S.base);
+    await p.fill("#lg-pw", "test-pass-123");
+    await p.click('[data-pick="grace@mesaverde.example"]');
+    await p.click('[data-tab="employees"]');
+    await p.click("[data-imp-open]");
+    const csv = "Employee,Login,Began,Boss\nNoor Haddad,noor@example.com,2022-02-01,Dana Ortiz\n";
+    await p.setInputFiles("#imp-file", { name: "export.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
+    await p.waitForSelector(".mapbox");
+    assert.ok(await p.$eval("[data-map-done]", (x) => x.disabled), "cannot continue without email and hire date");
+    await p.click("[data-map-clerk]");
+    await p.waitForSelector("[data-map-done]:not([disabled])");
+    assert.equal(await p.inputValue('[data-map="email"]'), "1");
+    await p.click("[data-map-done]");
+    await p.waitForSelector(".imp-sum");
+    await p.click("[data-imp-go]");
+    await p.waitForSelector("text=Imported: 1 added");
+    await p.click("[data-imp-open]");
+    await p.setInputFiles("#imp-file", { name: "export.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
+    await p.waitForSelector(".imp-sum");
+    assert.match(await p.textContent('[data-form="imp"]'), /same way as your last upload/);
+    assert.deepEqual(errors, []);
+  });
+
   test("every HR screen opens without errors", async () => {
     const { p, errors } = await page();
     await p.goto(S.base);

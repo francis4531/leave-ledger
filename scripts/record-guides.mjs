@@ -51,7 +51,7 @@ async function hr(browser) {
     await step("Tell Leave Ledger about your company", "Settings. Your headcount and holidays decide which California leave laws apply to you.", "#co-hc");
     await p.click('[data-tab="employees"]'); await p.click("[data-imp-open]");
     await p.setInputFiles("#imp-file", { name: "employees.csv", mimeType: "text/csv", buffer: Buffer.from(templateCSV()) }); await p.waitForSelector(".imp-sum");
-    await step("Bring in your employees", "Employees, then Import from a file. Fill in the template from your HR or payroll system and upload it. You see every row before anything is saved.", ".imp-sum");
+    await step("Bring in your employees", "Employees, then Import from a file. Upload the employee list your HR or payroll system exports, Excel or CSV. Leave Ledger matches the columns, and you see every row before anything is saved.", ".imp-sum");
     await p.click("[data-imp-go]"); await p.waitForTimeout(300);
     await p.click('[data-tab="access"]'); await p.waitForSelector("#us-email"); await p.fill("#us-email", "ana@bayside.com");
     await step("Invite your team to sign in", "Users. Each employee signs in with Google and sees only their own leave. Managers see dates, never reasons.", '[data-form="users"]');

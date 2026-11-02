@@ -21,7 +21,7 @@ test("reads quotes, commas, tabs, US dates and header aliases", () => {
   const t = parseTable('Full Name,Work Email,Start Date,Reports To\n"Rivera, Jamie",J@X.COM,5/20/2024,Dana Ortiz\n');
   assert.deepEqual(t.missing, []);
   const [r] = checkRows(t.rows, existing, TODAY);
-  assert.equal(r.data.name, "Rivera, Jamie"); assert.equal(r.data.email, "j@x.com"); assert.equal(r.data.hire, "2024-05-20"); assert.equal(r.data.mgr, "e1");
+  assert.equal(r.data.name, "Jamie Rivera", "last name first is flipped"); assert.equal(r.data.email, "j@x.com"); assert.equal(r.data.hire, "2024-05-20"); assert.equal(r.data.mgr, "e1");
   const tab = parseTable("name\temail\thire_date\nA B\ta@b.co\t2020-01-01\n");
   assert.equal(checkRows(tab.rows, [], TODAY)[0].action, "add");
 });
@@ -70,4 +70,59 @@ test("expected back skips weekends and holidays; notes that give the reason away
   assert.equal(nextWorkday("2026-11-26", ["2026-11-26", "2026-11-27"]), "2026-11-30");
   for (const t of ["after her surgery", "baby is due", "funeral Friday", "on CFRA", "mental health", "looking after his mom", "Grandmother passed"]) assert.ok(sensitiveNote(t), t);
   for (const t of ["A temp starts Monday", "Please cover the Tuesday roasts", ""]) assert.equal(sensitiveNote(t), null, t);
+});
+
+import { parseGrid, autoMap, missingFields, columnProfile, applyMap, headerSig } from "../public/roster.mjs";
+import { readXlsx } from "../public/xlsx.mjs";
+import { validateMap, runColumnMap } from "../netlify/lib/rostermap.mjs";
+import { execFileSync } from "node:child_process";
+import fs from "node:fs"; import os from "node:os"; import path from "node:path";
+
+test("common payroll export headings are matched without help", () => {
+  const cases = {
+    "First name,Last name,Work email,Personal email,Hire date,Manager": { first_name: 0, last_name: 1, email: 2, hire_date: 4, manager_name: 5 },
+    "Legal First Name,Legal Last Name,Work Contact: Work Email,Hire Date,Reports To Name,Position Title": { first_name: 0, last_name: 1, email: 2, hire_date: 3, manager_name: 4, job_title: 5 },
+    "Employee Name,Email Address,Original Hire Date,Supervisor,Job Title,Standard Hours": { name: 0, email: 1, hire_date: 2, manager_name: 3, job_title: 4, weekly_hours: 5 },
+    "Full name,Work email,Start date,Manager email": { name: 0, email: 1, hire_date: 2, manager_email: 3 },
+  };
+  for (const [h, want] of Object.entries(cases)) { const m = autoMap(h.split(",")); assert.deepEqual(m, want, h); assert.deepEqual(missingFields(m), [], h); }
+});
+test("a title line above the headings is skipped; semicolons work; last-name-first names flip", () => {
+  const g = parseGrid("Census report for Bayside\n\nName;Email;Hire date;Manager\n\"Rivera, Jamie\";j@x.co;45366;\n");
+  assert.deepEqual(g.header, ["Name", "Email", "Hire date", "Manager"]);
+  const [r] = checkRows(applyMap(g.body, autoMap(g.header)), [], TODAY);
+  assert.equal(r.data.name, "Jamie Rivera");
+  assert.equal(r.data.hire, "2024-03-15", "Excel date number");
+});
+test("Clerk only gets headings and data kinds, never values", () => {
+  const g = parseGrid("Employee,Login,Began\nJamie Rivera,jamie@x.co,2021-03-15\n");
+  const prof = columnProfile(g.header, g.body);
+  assert.deepEqual(prof.map((c) => c.type), ["text", "email", "date"]);
+  assert.ok(!JSON.stringify(prof).includes("Jamie") && !JSON.stringify(prof).includes("jamie@"));
+});
+test("Clerk's answer is checked: unknown fields, bad columns and reused columns are dropped", () => {
+  const cols = [{}, {}, {}];
+  assert.deepEqual(validateMap({ map: { name: 0, email: 0, hire_date: 2, evil: 1, job_title: 9 } }, cols).map, { name: 0, hire_date: 2 });
+  assert.equal(validateMap("nope", cols), null);
+});
+test("Clerk matching is off without an AI key", async () => {
+  assert.equal((await runColumnMap([{ heading: "x" }], {})).status, 503);
+});
+test("the same export gets the same signature, so its matches can be reused", () => {
+  assert.equal(headerSig(["Hire Date", "Work Email"]), headerSig(["hire date", "work email"]));
+});
+test("reads an Excel file made by a spreadsheet program", { skip: (() => { try { execFileSync("python3", ["-c", "import openpyxl"]); return false; } catch { return "openpyxl not installed"; } })() }, async () => {
+  const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "x-")), "t.xlsx");
+  execFileSync("python3", ["-c", `import openpyxl,datetime
+wb=openpyxl.Workbook();ws=wb.active;ws.title="Team"
+ws.append(["Legal First Name","Legal Last Name","Work Email","Hire Date","Reports To"])
+ws.append(["Jamie","Rivera","jamie@x.co",datetime.date(2021,3,15),None])
+ws.append(["Sam","O'Brien & Co","sam@x.co",datetime.date(2024,8,5),"Rivera, Jamie"])
+wb.create_sheet("Other").append(["ignore"])
+wb.save(${JSON.stringify(f)})`]);
+  const rows = await readXlsx(fs.readFileSync(f));
+  const g = { header: rows[0], body: rows.slice(1) };
+  const out = checkRows(applyMap(g.body, autoMap(g.header)), [], TODAY);
+  assert.deepEqual(out.map((r) => [r.data.name, r.data.email, r.data.hire, r.action]), [["Jamie Rivera", "jamie@x.co", "2021-03-15", "add"], ["Sam O'Brien & Co", "sam@x.co", "2024-08-05", "add"]]);
+  assert.equal(out[1].data.mgr, "row:2");
 });

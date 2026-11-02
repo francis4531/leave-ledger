@@ -4,7 +4,7 @@ import {
   planFor as planForD, caseDates as caseDatesD, caseStatus as caseStatusD,
 } from "./engine.mjs";
 import { LETTERS, hasLetter, draftLetter, managerNotice, sensitiveNote, nextWorkday } from "./notices.mjs";
-import { COLUMNS, templateCSV, parseTable, checkRows, HR_SYSTEMS } from "./roster.mjs";
+import { COLUMNS, FIELDS, templateCSV, parseGrid, gridFromRows, autoMap, missingFields, applyMap, columnProfile, headerSig, checkRows, HR_SYSTEMS } from "./roster.mjs";
 import { LEAVES, RIGHTS, EDD, eddSteps } from "./guide.mjs";
 
 /* ---------- State ---------- */
@@ -27,7 +27,7 @@ const UI = {
   home: { busy: false, error: "", form: { name: "", city: "", headcount: 20, jobTitle: "", start: "sample", lockDomain: false, agree: false } },
   users: { list: null, domain: null, canLock: false, myDomain: null, email: "", role: "emp", empId: "", busy: false, error: "" },
   letter: null,          // {caseId, key, subject, body, sentOn, method, view: index of a sent letter}
-  imp: { open: false, rows: null, raw: null, missing: [], error: "", file: "", busy: false },
+  imp: { open: false, rows: null, raw: null, grid: null, map: {}, error: "", file: "", busy: false },
   appr: { caseId: null, notify: true, note: "" },
   addEmp: { open: false, name: "", email: "", role: "", hire: "", hours12: 1000, sick: 24, hiQuarter: 12000, shiftHours: 8, weeklyHours: 40, mgr: "", error: "" },
 };
@@ -530,15 +530,15 @@ function importPanel() {
     ${co.hris ? `<p class="small muted">Thanks. We will let you know when ${esc(co.hris)} sync is ready. Until then, upload a file.</p>` : ""}
     <div class="note-box">Made-up details only for now, as agreed when this workspace was set up. Real employee information comes after our security review.</div>
     <ol class="imp-steps">
-      <li><b>Download the template</b> and fill in one row per employee. Most HR and payroll systems can export these columns.
-        <div class="btns" style="margin-top:8px"><button class="btn" data-imp-template>Download template (CSV)</button></div>
-        <details class="more"><summary class="small">What each column means</summary><table class="cols small"><tbody>${COLUMNS.map((c) => `<tr><td><code>${c.label}</code>${c.req ? " <b>required</b>" : ""}</td><td>${esc(c.help)}</td></tr>`).join("")}</tbody></table></details></li>
-      <li><b>Upload it.</b> Save from Excel or Google Sheets as CSV. Employees already here are matched by email and updated; nobody is removed.
-        <div class="field" style="margin-top:8px"><input type="file" id="imp-file" accept=".csv,.tsv,.txt,text/csv,text/plain" data-imp-file aria-label="Employee file"></div>
+      <li><b>Export your employee list</b> from your HR or payroll system, as Excel or CSV. Any layout works: we match the columns, and you check them. Keeping employees in a spreadsheet instead? <button class="linkish" data-imp-template>Download our template</button>.
+        <details class="more"><summary class="small">What Leave Ledger needs</summary><p class="small" style="margin:6px 0">Needed: name, work email and hire date. Helpful: job title, manager, weekly hours, hours worked in the last 12 months, sick hours and highest quarter wages. Without hours worked, we estimate them from weekly hours.</p><table class="cols small"><tbody>${COLUMNS.map((c) => `<tr><td><code>${c.label}</code>${c.req ? " <b>needed</b>" : ""}</td><td>${esc(c.help)}</td></tr>`).join("")}</tbody></table></details></li>
+      <li><b>Upload it.</b> Employees already here are matched by email and updated; nobody is removed.
+        <div class="field" style="margin-top:8px"><input type="file" id="imp-file" accept=".xlsx,.csv,.tsv,.txt,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-imp-file aria-label="Employee file"></div>
         <details class="more"><summary class="small">Or paste rows copied from a spreadsheet</summary><textarea id="imp-paste" rows="5" placeholder="Copy the header row and the employee rows, then paste here"></textarea><div class="btns"><button class="btn sm" data-imp-paste>Check these rows</button></div></details></li>
     </ol>
     ${I.error ? `<p class="err" role="alert">${esc(I.error)}</p>` : ""}
-    ${I.rows ? `<div class="imp-sum"><b>${esc(I.file || "Pasted rows")}</b>: ${plural(n("add"), "new employee")}, ${plural(n("update"), "update")}${n("skip") ? `, <span class="bad-t">${plural(n("skip"), "row")} with problems</span>` : ""}.</div>
+    ${I.grid && I.showMap ? mapPanel() : I.grid && I.rows ? `<p class="small muted">${{ auto: "Columns matched from their headings.", saved: "Columns matched the same way as your last upload of this file.", clerk: "Columns matched by Clerk and checked by you.", you: "Columns matched by you." }[I.source]} <button class="linkish" data-map-open>Check or change the matches</button></p>` : ""}
+    ${I.rows && !I.showMap ? `<div class="imp-sum"><b>${esc(I.file || "Pasted rows")}</b>: ${plural(n("add"), "new employee")}, ${plural(n("update"), "update")}${n("skip") ? `, <span class="bad-t">${plural(n("skip"), "row")} with problems</span>` : ""}.</div>
       <div class="tw"><table class="cards"><thead><tr><th>Row</th><th>Employee</th><th>Hired</th><th>Manager</th><th>Result</th></tr></thead><tbody>
       ${I.rows.map((r) => `<tr><td data-l="Row" class="small mono">${r.line}</td><td class="full"><b>${esc(r.data.name || "(no name)")}</b><div class="small muted">${esc(r.data.email || "")}${r.data.role ? " · " + esc(r.data.role) : ""}</div></td><td data-l="Hired" class="small">${r.data.hire ? fmt(r.data.hire) : ""}</td><td data-l="Manager" class="small">${esc(mgrName(r))}</td>
         <td class="full">${pillFor[r.action]}${[...r.errors.map((x) => `<div class="small bad-t">${esc(x)}</div>`), ...r.warnings.map((x) => `<div class="small muted">${esc(x)}</div>`)].join("")}</td></tr>`).join("")}
@@ -546,13 +546,34 @@ function importPanel() {
       <div class="btns"><button class="btn primary" data-imp-go ${n("add") + n("update") && !I.busy ? "" : "disabled"}>Import ${plural(n("add") + n("update"), "employee")}</button><span class="small muted">Rows with problems are left out. Fix them and upload again.</span></div>` : ""}
   </section>`;
 }
-function readRoster(text, name) {
-  const t = parseTable(text);
-  if (!t.header.length) { UI.imp = { ...UI.imp, rows: null, error: "That file is empty." }; return; }
-  if (t.missing.length) { UI.imp = { ...UI.imp, rows: null, error: `The file needs these columns: ${t.missing.join(", ")}. Start from the template.` }; return; }
-  if (!t.rows.length) { UI.imp = { ...UI.imp, rows: null, error: "The file has a header row but no employees." }; return; }
-  if (t.rows.length > 1000) { UI.imp = { ...UI.imp, rows: null, error: "That is more than 1,000 rows. Split it into smaller files." }; return; }
-  UI.imp = { ...UI.imp, raw: t.rows, rows: checkRows(t.rows, D().employees, TODAY), file: name, error: "" };
+// Takes a file's rows, matches columns (saved matches first, then headings), and checks rows when nothing needed is missing.
+function readRoster(grid, name) {
+  const reset = { grid: null, rows: null, raw: null, showMap: false, unsure: [], clerkError: "" };
+  if (!grid.header.length) { UI.imp = { ...UI.imp, ...reset, error: "That file is empty." }; return; }
+  if (!grid.body.length) { UI.imp = { ...UI.imp, ...reset, error: "The file has headings but no employees." }; return; }
+  if (grid.body.length > 1000) { UI.imp = { ...UI.imp, ...reset, error: "That is more than 1,000 rows. Split it into smaller files." }; return; }
+  const sig = headerSig(grid.header), saved = (D().importMaps || {})[sig];
+  const map = saved ? { ...saved.map } : autoMap(grid.header);
+  UI.imp = { ...UI.imp, ...reset, grid, sig, map, file: name, error: "", source: saved ? "saved" : "auto" };
+  if (missingFields(map).length) UI.imp.showMap = true; else checkImport();
+}
+function checkImport() {
+  const I = UI.imp; I.raw = applyMap(I.grid.body, I.map); I.rows = checkRows(I.raw, D().employees, TODAY); I.showMap = false;
+}
+function mapPanel() {
+  const I = UI.imp, miss = missingFields(I.map), H = I.grid.header;
+  const example = (i) => { if (i === undefined || i === null) return ""; const v = I.grid.body.map((r) => r[i]).find((x) => x && String(x).trim()); return v ? String(v).slice(0, 40) : ""; };
+  const needed = (k) => (k === "email" || k === "hire_date" ? "needed" : ["name", "first_name", "last_name"].includes(k) ? "name" : "");
+  return `<div class="mapbox"><h4 style="margin:0 0 4px">Match your columns</h4>
+    <p class="small muted" style="margin:0 0 10px">${miss.length ? `We could not find ${miss.map((k) => ({ name: "a name", email: "a work email", hire_date: "a hire date" })[k]).join(", ")} in <b>${esc(I.file)}</b>. Pick the column for each.` : "Check what each column is used for, then continue."} Leave Ledger needs a work email, a hire date, and a name (one full name column, or first and last).</p>
+    ${S.ai.on ? `<div class="btns" style="margin-bottom:8px"><button class="btn sm" data-map-clerk ${I.clerkBusy ? "disabled" : ""}>✦ ${I.clerkBusy ? "Clerk is matching" : "Let Clerk match the columns"}</button><span class="small muted">Clerk sees only the column headings and the kind of data in each, never employee details.</span></div>` : ""}
+    ${I.clerkError ? `<p class="err">${esc(I.clerkError)}</p>` : ""}
+    <div class="tw"><table class="cols"><thead><tr><th>Leave Ledger needs</th><th>Column in your file</th><th>First value</th></tr></thead><tbody>
+    ${FIELDS.map((f) => `<tr class="${(I.unsure || []).includes(f.key) ? "unsure" : ""}"><td><b>${esc(f.label)}</b>${needed(f.key) === "needed" ? ` ${pill("needed", miss.includes(f.key) ? "bad" : "ok")}` : ""}${(I.unsure || []).includes(f.key) ? `<div class="small muted">Clerk was not sure. Please check.</div>` : ""}</td>
+      <td><select aria-label="Column for ${esc(f.label)}" data-map="${f.key}"><option value="">Not in my file</option>${H.map((h, i) => `<option value="${i}" ${I.map[f.key] === i ? "selected" : ""}>${esc(h || `Column ${i + 1}`)}</option>`).join("")}</select></td>
+      <td class="small muted mono">${esc(example(I.map[f.key]))}</td></tr>`).join("")}
+    </tbody></table></div>
+    <div class="btns"><button class="btn primary" data-map-done ${miss.length ? "disabled" : ""}>Check the rows</button>${miss.length ? `<span class="small muted">Pick ${miss.map((k) => ({ name: "a name", email: "the work email", hire_date: "the hire date" })[k]).join(" and ")} first.</span>` : ""}</div></div>`;
 }
 
 /* ---------- HR: approve a leave and tell the manager ---------- */
@@ -1209,18 +1230,26 @@ document.addEventListener("click", async (ev) => {
   if (b.dataset.returned) { await act({ type: "markReturned", caseId: b.dataset.returned, on: document.getElementById("ce-back")?.value }, "Marked as returned"); return; }
   if (b.dataset.unreturn) { await act({ type: "markReturned", caseId: b.dataset.unreturn, on: null }, "Return undone"); return; }
   if (b.dataset.openLetters) { ev.preventDefault(); const sec = b.closest(".panel"); const det = sec && sec.querySelector(".letter-item"); if (det) { det.open = true; det.scrollIntoView({ behavior: "smooth", block: "center" }); } return; }
-  if (b.hasAttribute("data-imp-open")) { UI.imp = { open: true, rows: null, raw: null, missing: [], error: "", file: "", busy: false }; UI.addEmp.open = false; render(); return; }
+  if (b.hasAttribute("data-imp-open")) { UI.imp = { open: true, rows: null, raw: null, grid: null, map: {}, error: "", file: "", busy: false }; UI.addEmp.open = false; render(); return; }
   if (b.hasAttribute("data-imp-close")) { UI.imp.open = false; render(); return; }
   if (b.hasAttribute("data-imp-template")) {
     const url = URL.createObjectURL(new Blob([templateCSV()], { type: "text/csv" }));
     const a = document.createElement("a"); a.href = url; a.download = "leave-ledger-employees.csv"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000); return;
   }
-  if (b.hasAttribute("data-imp-paste")) { readRoster(document.getElementById("imp-paste").value, "Pasted rows"); render(); return; }
+  if (b.hasAttribute("data-imp-paste")) { readRoster(parseGrid(document.getElementById("imp-paste").value), "Pasted rows"); render(); return; }
+  if (b.hasAttribute("data-map-open")) { UI.imp.showMap = true; render(); return; }
+  if (b.hasAttribute("data-map-done")) { checkImport(); render(); return; }
+  if (b.hasAttribute("data-map-clerk")) {
+    const I = UI.imp; I.clerkBusy = true; I.clerkError = ""; render();
+    try { const j = await api("roster/map", { columns: columnProfile(I.grid.header, I.grid.body) }); I.map = j.map; I.unsure = j.unsure || []; I.source = "clerk"; }
+    catch (e) { I.clerkError = e.message; }
+    I.clerkBusy = false; render(); return;
+  }
   if (b.hasAttribute("data-imp-go")) {
     UI.imp.busy = true; render();
-    const j = await act({ type: "importRoster", rows: UI.imp.raw });
+    const j = await act({ type: "importRoster", rows: UI.imp.raw, saveMap: { sig: UI.imp.sig, map: UI.imp.map } });
     UI.imp.busy = false;
-    if (j && j.imported) { const r = j.imported; UI.imp = { open: false, rows: null, raw: null, missing: [], error: "", file: "", busy: false }; render(); toast(`Imported: ${r.added} added, ${r.updated} updated${r.skipped ? `, ${r.skipped} left out` : ""}`); }
+    if (j && j.imported) { const r = j.imported; UI.imp = { open: false, rows: null, raw: null, grid: null, map: {}, error: "", file: "", busy: false }; render(); toast(`Imported: ${r.added} added, ${r.updated} updated${r.skipped ? `, ${r.skipped} left out` : ""}`); }
     else render();
     return;
   }
@@ -1357,11 +1386,17 @@ document.addEventListener("change", (ev) => {
   if (UI.letter && ["lt-on", "lt-how"].includes(el.id)) { readLetterFields(); return; }
   if (el.hasAttribute("data-imp-file")) {
     const f = el.files && el.files[0]; if (!f) return;
-    if (/\.(xlsx|xls|numbers)$/i.test(f.name)) { UI.imp.error = "That is a spreadsheet file. Save it as CSV first (File, Save As or Download, CSV), then upload that."; UI.imp.rows = null; render(); return; }
-    if (f.size > 2e6) { UI.imp.error = "That file is over 2 MB. Is it the right one?"; render(); return; }
-    f.text().then((t) => { readRoster(t, f.name); render(); }); return;
+    if (f.size > 5e6) { UI.imp.error = "That file is over 5 MB. Is it the right one?"; render(); return; }
+    if (/\.(xls|numbers|ods)$/i.test(f.name)) { UI.imp.error = "That spreadsheet type cannot be read here. Save it as Excel (.xlsx) or CSV, then upload that."; UI.imp.rows = null; UI.imp.grid = null; render(); return; }
+    (async () => {
+      try {
+        if (/\.xlsx$/i.test(f.name)) { const { readXlsx } = await import("./xlsx.mjs"); readRoster(gridFromRows(await readXlsx(await f.arrayBuffer())), f.name); }
+        else readRoster(parseGrid(await f.text()), f.name);
+      } catch (e) { UI.imp.error = "That file could not be read. Try saving it as CSV."; UI.imp.grid = null; UI.imp.rows = null; }
+      render();
+    })(); return;
   }
-  if (el.id === "ap-notify") { UI.appr.notify = el.checked; render(); return; }
+  if (el.dataset.map) { const v = el.value; if (v === "") delete UI.imp.map[el.dataset.map]; else { const i = +v; for (const k of Object.keys(UI.imp.map)) if (UI.imp.map[k] === i) delete UI.imp.map[k]; UI.imp.map[el.dataset.map] = i; } UI.imp.source = UI.imp.source === "clerk" ? "clerk" : "you"; render(); return; }  if (el.id === "ap-notify") { UI.appr.notify = el.checked; render(); return; }
   if (el.dataset.edd) { const [caseId, step] = el.dataset.edd.split("|"); act({ type: "eddCheck", caseId, step, done: el.checked }, el.checked ? "Nice. Ticked off." : "Unticked"); return; }
   if (el.dataset.task) { const [caseId, key] = el.dataset.task.split("|"); act({ type: "toggleTask", caseId, key, done: el.checked }, el.checked ? "Marked done" : "Reopened"); return; }
   if (el.dataset.emp) { const [id, field] = el.dataset.emp.split("|"); act({ type: "updateEmployee", id, field, value: el.value }, "Saved"); return; }

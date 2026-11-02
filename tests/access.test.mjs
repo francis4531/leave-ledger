@@ -577,3 +577,17 @@ describe("importing employees from a file", () => {
     assert.equal((await hr.post("/api/action", { type: "importRoster", rows: "nope" })).status, 400);
   });
 });
+
+describe("Clerk matches columns for an employee file", () => {
+  test("HR only; Clerk's answer is checked; matches are remembered on import", async () => {
+    const s = testSite(), hr = await signedIn(s, "grace@mesaverde.example");
+    const columns = [{ heading: "Employee", type: "text", filled: 100 }, { heading: "Login", type: "email", filled: 100 }, { heading: "Began", type: "date", filled: 100 }, { heading: "Boss", type: "text", filled: 50 }];
+    const r = await hr.post("/api/roster/map", { columns });
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.body.map, { name: 0, email: 1, hire_date: 2, manager_name: 3 }, "unknown fields and bad columns dropped");
+    for (const who of ["ben@mesaverde.example", "dana@mesaverde.example"]) assert.equal((await (await signedIn(s, who)).post("/api/roster/map", { columns })).status, 403);
+    const imp = await hr.post("/api/action", { type: "importRoster", rows: [{ name: "Jamie Rivera", email: "jamie@x.co", hire_date: "2021-03-15" }], saveMap: { sig: "employee|login|began|boss", map: { name: 0, email: 1, hire_date: 2, manager_name: 3, "__proto__": 1 } } });
+    assert.equal(imp.status, 200);
+    assert.deepEqual(imp.body.data.importMaps["employee|login|began|boss"].map, { name: 0, email: 1, hire_date: 2, manager_name: 3 });
+  });
+});
