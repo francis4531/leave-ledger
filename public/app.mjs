@@ -3,6 +3,7 @@ import {
   weeklyBenefit, eligibility, buildPlan, makeTasks,
   planFor as planForD, caseDates as caseDatesD, caseStatus as caseStatusD,
 } from "./engine.mjs";
+import { LETTERS, hasLetter, draftLetter } from "./notices.mjs";
 
 /* ---------- State ---------- */
 let S = null;          // {me, today, data}
@@ -23,6 +24,7 @@ const UI = {
   survey: { open: false, q: null, a: {}, busy: false, error: "", done: null, later: false },
   home: { busy: false, error: "", form: { name: "", city: "", headcount: 20, jobTitle: "", start: "sample", lockDomain: false, agree: false } },
   users: { list: null, domain: null, canLock: false, myDomain: null, email: "", role: "emp", empId: "", busy: false, error: "" },
+  letter: null,          // {caseId, key, subject, body, sentOn, method, view: index of a sent letter}
   addEmp: { open: false, name: "", role: "", hire: "", hours12: 1000, sick: 24, hiQuarter: 12000, shiftHours: 8, weeklyHours: 40, mgr: "", error: "" },
 };
 const store = {
@@ -230,13 +232,20 @@ function intakePanel(c, e) {
 }
 
 /* ---------- HR: Today ---------- */
-function taskRow(c, t, showWho) {
+function letterBtn(c, t) {
+  if (S.me.role !== "hr" || !hasLetter(c, t.key)) return "";
+  const sent = (c.notices || []).map((n, i) => [n, i]).filter(([n]) => n.key === t.key).pop();
+  if (sent) return `<button class="btn sm linkbtn" data-letter-view="${c.id}|${sent[1]}">View letter</button>`;
+  if (t.done) return "";
+  return `<button class="btn sm linkbtn" data-letter="${c.id}|${t.key}">${c.drafts && c.drafts[t.key] ? "Finish letter" : "Write letter"}</button>`;
+}
+function taskRow(c, t, showWho, compact) {
   const s = dueState(t), tx = taskText(c, t), e = emp(c.empId);
   return `<div class="qrow ${t.done ? "done" : ""}">
     <input type="checkbox" id="t-${c.id}-${t.key}" data-task="${c.id}|${t.key}" ${t.done ? "checked" : ""} ${!t.due && !t.done ? "disabled" : ""} aria-label="Mark done: ${esc(tx.label)}">
     <div><div class="t">${esc(tx.label)}${t.legal ? '<span class="bylaw" title="A deadline set by law">BY LAW</span>' : ""}</div>
-    <div class="s">${showWho ? `<button class="linkish" data-open="${c.id}">${esc(e.name)}</button> · ${esc(REASONS[c.reason].hr)}` : esc(tx.hint || "")}</div></div>
-    ${pill(s.t, s.cls)}</div>`;
+    ${compact ? "" : `<div class="s">${showWho ? `<button class="linkish" data-open="${c.id}">${esc(e.name)}</button> · ${esc(REASONS[c.reason].hr)}` : esc(tx.hint || "")}</div>`}${letterBtn(c, t)}</div>
+    ${compact ? (s.cls === "bad" && compact !== "first" ? pill(s.t, s.cls) : "<span></span>") : pill(s.t, s.cls)}</div>`;
 }
 function hrOverview() {
   const open = openTasks();
@@ -244,18 +253,17 @@ function hrOverview() {
   const out = D().cases.filter((c) => caseStatus(c).t === "On leave");
   const back30 = D().cases.filter((c) => { const d = caseDates(c); return d.end && d.end > TODAY && diffDays(TODAY, d.end) <= 30; });
   const active = D().cases.filter((c) => caseStatus(c).t !== "Returned");
-  const log = (D().log || []).slice(0, 6);
+  const log = (D().log || []).filter((l) => l.by !== "System").slice(0, 6);
   const sum = now.length
     ? `<span class="bad"><b>${now.length} ${now.length === 1 ? "thing needs" : "things need"} your attention now.</b></span> ${week.length ? `${week.length} more ${week.length === 1 ? "is" : "are"} due in the next 7 days.` : ""}`
     : week.length ? `Nothing is late. <b>${week.length}</b> ${week.length === 1 ? "thing is" : "things are"} due in the next 7 days.` : "You are all caught up.";
-  const group = (title, color, items) => items.length ? `<div class="qgroup"><div class="qhead"><span class="dot" style="background:${color}"></span>${title} · ${items.length}</div><div class="queue">${items.map(({ c, t }) => taskRow(c, t, true)).join("")}</div></div>` : "";
-  return `<div class="head"><div><h2 class="greet">${greeting()}, ${esc(first(S.me.name))}</h2><p class="sumline" style="margin-top:6px">${sum}</p></div><div class="btns"><button class="btn primary" data-tab="plan">Plan a leave</button></div></div>
-  <div class="stats">
-    <div class="stat ${now.length ? "alert" : ""}"><div class="label">Late or due today</div><div class="n">${now.length}</div></div>
-    <div class="stat"><div class="label">Due this week</div><div class="n">${week.length}</div></div>
-    <div class="stat"><div class="label">Out today</div><div class="n">${out.length}</div></div>
-    <div class="stat"><div class="label">Back within 30 days</div><div class="n">${back30.length}</div></div>
-  </div>
+  // One block per leave, so an employee with four steps due shows up once.
+  const byCase = (items) => { const m = new Map(); items.forEach((x) => { if (!m.has(x.c.id)) m.set(x.c.id, { c: x.c, ts: [] }); m.get(x.c.id).ts.push(x.t); }); return [...m.values()]; };
+  const caseBlock = ({ c, ts }) => { const e = emp(c.empId), s = dueState(ts[0]);
+    return `<div class="cgroup"><div class="cg-h"><div class="person">${avatar(e, "sm")}<div><button class="linkish" data-open="${c.id}">${esc(e.name)}</button><div class="s">${esc(REASONS[c.reason].hr)}</div></div></div>${pill(s.t, s.cls)}</div>
+      <div class="queue">${ts.map((t, i) => taskRow(c, t, false, i === 0 ? "first" : true)).join("")}</div></div>`; };
+  const group = (title, color, items) => items.length ? `<div class="qgroup"><div class="qhead"><span class="dot" style="background:${color}"></span>${title} · ${items.length} ${items.length === 1 ? "step" : "steps"}</div>${byCase(items).map(caseBlock).join("")}</div>` : "";
+  return `<div class="head"><div><h2 class="greet">${greeting()}, ${esc(first(S.me.name))}</h2><p class="sumline" style="margin-top:6px">${sum}</p></div></div>
   <div class="grid2">
     <section class="panel"><div class="panel-h"><h3>Your to-do list</h3><span class="small muted">Weekends and company holidays are skipped</span></div>
       ${!open.length ? `<div class="allclear">✓ Nothing to do. New leave requests will add their steps here.</div>` : ""}
@@ -263,10 +271,10 @@ function hrOverview() {
       ${later.length ? `<details class="more"><summary>Show ${later.length} later ${later.length === 1 ? "item" : "items"}</summary>${group("Later", "var(--line)", later)}</details>` : ""}
     </section>
     <div class="stack">
-      <section class="panel"><div class="panel-h"><h3>Who is out</h3><span class="small muted">${active.length} active</span></div>
+      <section class="panel"><div class="panel-h"><h3>Who is out</h3><span class="small muted">${out.length} out today · ${back30.length} back within 30 days</span></div>
         <div class="queue">${active.map((c) => { const d = caseDates(c), s = caseStatus(c), e = emp(c.empId); return `<div class="qrow" style="grid-template-columns:minmax(0,1fr) auto"><div class="person">${avatar(e, "sm")}<div><button class="linkish" data-open="${c.id}">${esc(e.name)}</button><div class="s">${esc(REASONS[c.reason].hr)}${d.end ? ` · <span class="mono">${range(d.start, d.end)}</span>` : ""}</div></div></div>${pill(s.t, s.cls)}</div>`; }).join("") || '<p class="muted">Nobody is out or scheduled.</p>'}</div>
       </section>
-      <section class="panel"><h3>Recent activity</h3><div class="queue">${log.map((l) => `<div class="qrow" style="grid-template-columns:minmax(0,1fr) auto"><div><div class="t" style="font-weight:500">${esc(l.text)}</div><div class="s">${esc(l.by)}</div></div><span class="small muted mono">${new Date(l.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" })}</span></div>`).join("") || '<p class="muted">Nothing yet.</p>'}</div></section>
+      ${log.length ? `<section class="panel"><h3>Recent activity</h3><div class="queue">${log.map((l) => `<div class="qrow" style="grid-template-columns:minmax(0,1fr) auto"><div><div class="t" style="font-weight:500">${esc(l.text)}</div><div class="s">${esc(l.by)}</div></div><span class="small muted mono">${new Date(l.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" })}</span></div>`).join("")}</div></section>` : ""}
     </div>
   </div>`;
 }
@@ -274,12 +282,95 @@ function hrOverview() {
 /* ---------- HR: Leaves ---------- */
 function hrCases() {
   if (UI.caseId) return hrCase(D().cases.find((c) => c.id === UI.caseId));
+  const F = UI.leavesFilter || "open", q = (UI.leavesQ || "").toLowerCase();
+  const groups = { open: (s) => s.t !== "Returned", past: (s) => s.t === "Returned", all: () => true };
+  const shown = D().cases.filter((c) => groups[F](caseStatus(c)) && (!q || emp(c.empId).name.toLowerCase().includes(q)));
+  const count = (k) => D().cases.filter((c) => groups[k](caseStatus(c))).length;
   return `<div class="head"><div><h2>Leaves</h2><p>Every request, where it came from, and what is left to do.</p></div><div class="btns"><button class="btn primary" data-tab="plan">Plan a leave</button></div></div>
+  <div class="filters"><div class="seg" role="group" aria-label="Show">${[["open", "Current and upcoming"], ["past", "Returned"], ["all", "All"]].map(([k, n]) => `<button data-lfilter="${k}" aria-pressed="${F === k}">${n} <span class="muted">${count(k)}</span></button>`).join("")}</div>
+    ${D().cases.length > 8 ? `<input type="search" id="lv-q" placeholder="Find an employee" value="${esc(UI.leavesQ || "")}" aria-label="Find an employee">` : ""}</div>
   <section class="panel"><div class="tw"><table class="cards"><thead><tr><th>Employee</th><th>Type</th><th>Dates</th><th>Status</th><th>To do</th></tr></thead><tbody>
-  ${D().cases.map((c) => { const d = caseDates(c), s = caseStatus(c), e = emp(c.empId); const late = c.tasks.filter((t) => !t.done && t.due && t.due <= TODAY).length; const left = c.tasks.filter((t) => !t.done && !t.optional).length;
-    return `<tr class="click" data-open="${c.id}" tabindex="0"><td class="full"><div class="person">${avatar(e, "sm")}<div><b>${esc(e.name)}</b><div class="small muted">${esc(e.role)} · from ${{ hr: "HR", employee: "employee", manager: "manager" }[c.source]}</div></div></div></td><td data-l="Type">${esc(REASONS[c.reason].hr)}</td><td data-l="Dates" class="small">${d.end ? `<span class="mono">${range(d.start, d.end)}</span>` : '<span class="muted">Not set yet</span>'}</td><td data-l="Status">${pill(s.t, s.cls)}</td><td data-l="To do">${late ? pill(late + " late", "bad") : left ? pill(left + " open", "") : pill("All done", "ok")}</td></tr>`; }).join("") || '<tr><td colspan="5" class="muted">No leaves yet.</td></tr>'}
+  ${shown.map((c) => { const d = caseDates(c), s = caseStatus(c), e = emp(c.empId); const late = c.tasks.filter((t) => !t.done && t.due && t.due <= TODAY).length; const left = c.tasks.filter((t) => !t.done && !t.optional).length;
+    return `<tr class="click" data-open="${c.id}" tabindex="0"><td class="full"><div class="person">${avatar(e, "sm")}<div><b>${esc(e.name)}</b><div class="small muted">${esc(e.role)} · from ${{ hr: "HR", employee: "employee", manager: "manager" }[c.source]}</div></div></div></td><td data-l="Type">${esc(REASONS[c.reason].hr)}</td><td data-l="Dates" class="small">${d.end ? `<span class="mono">${range(d.start, d.end)}</span>` : '<span class="muted">Not set yet</span>'}</td><td data-l="Status">${pill(s.t, s.cls)}</td><td data-l="To do">${late ? pill(late + " late", "bad") : left ? pill(left + " open", "") : pill("All done", "ok")}</td></tr>`; }).join("") || `<tr><td colspan="5" class="muted">${D().cases.length ? "Nothing here." : "No leaves yet."}</td></tr>`}
   </tbody></table></div></section>`;
 }
+/* ---------- HR: change dates, mark returned ---------- */
+function changePanel(c) {
+  const d = caseDates(c), started = c.opts.start <= TODAY;
+  return `<section class="panel"><h3>Change this leave</h3>
+    <p class="small muted">New dates or length? Steps already done stay done, and open deadlines move with the new plan.</p>
+    <div class="field"><label for="ce-start">First day off</label><input type="date" id="ce-start" value="${c.opts.start}"></div>
+    ${lengthFields("ce-", { ...c.opts, reason: c.reason })}
+    <div class="btns"><button class="btn" data-change="${c.id}">Save new dates</button></div>
+    <div class="sendrow">${c.returnedOn
+      ? `<p class="small" style="margin:0">Came back on <b>${fmt(c.returnedOn)}</b>.</p><button class="btn sm" data-unreturn="${c.id}">Undo</button>`
+      : started ? `<div class="field"><label for="ce-back">Came back to work on</label><input type="date" id="ce-back" value="${TODAY < d.end ? TODAY : d.end}" min="${c.opts.start}" max="${TODAY}"></div><button class="btn" data-returned="${c.id}">Mark returned</button>`
+      : `<p class="small muted" style="margin:0">You can mark the return once the leave has started.</p>`}</div>
+    <div class="btns" style="justify-content:flex-end"><button class="btn sm danger" data-delete="${c.id}">Delete this leave</button></div>
+  </section>`;
+}
+function readChange() {
+  const g = (id) => document.getElementById(id), n = (id) => (g(id) ? +g(id).value : undefined), o = { start: g("ce-start")?.value };
+  for (const [id, k] of [["ce-dis", "disWeeks"], ["ce-bond", "bondWeeks"], ["ce-wk", "weeks"], ["ce-dy", "days"], ["ce-hr", "hours"]]) if (g(id)) o[k] = n(id);
+  return o;
+}
+
+/* ---------- HR: letters ---------- */
+function openLetter(caseId, key) {
+  const c = D().cases.find((x) => x.id === caseId); if (!c) return;
+  const e = emp(c.empId), draft = (c.drafts || {})[key] || draftLetter(key, c, e, D().company, c.reason === "unknown" ? { el: null } : planFor(c), TODAY, S.me.name);
+  if (!draft) return;
+  UI.letter = { caseId, key, subject: draft.subject, body: draft.body, sentOn: TODAY, method: "email", view: null, saved: !!(c.drafts || {})[key] };
+  UI.tab = "cases"; UI.caseId = caseId;
+}
+const METHODS = { email: "Email", hand: "In person", mail: "Mail", other: "Other" };
+function letterPanel(c) {
+  const L = UI.letter; if (!L || L.caseId !== c.id) return "";
+  const e = emp(c.empId);
+  if (L.view != null) {
+    const n = (c.notices || [])[L.view]; if (!n) return "";
+    return `<section class="panel letter" aria-label="Sent letter"><div class="panel-h"><h3>${esc(n.subject)}</h3><button class="btn sm" data-letter-close>Close</button></div>
+      <p class="small muted">Sent to ${esc(e.name)} on ${fmt(n.sentOn)} · ${esc(METHODS[n.method] || n.method)} · by ${esc(n.by)}. ${esc(first(e.name))} can read this copy on their own leave page.</p>
+      <div class="letter-text">${esc(n.body)}</div>
+      <div class="btns"><button class="btn sm" data-letter-copy>Copy</button><button class="btn sm" data-letter-print>Print</button></div></section>`;
+  }
+  return `<section class="panel letter" aria-label="Letter to ${esc(e.name)}"><div class="panel-h"><h3>${esc(LETTERS[L.key])} · to ${esc(e.name)}</h3><button class="btn sm" data-letter-close>Close</button></div>
+    <p class="small muted">A first draft from the details of this leave. Read it, change anything that is not right, then send it by email or print it. Leave Ledger does not send it for you yet.</p>
+    <div class="field"><label for="lt-subject">Subject</label><input type="text" id="lt-subject" value="${esc(L.subject)}" maxlength="200"></div>
+    <div class="field"><label for="lt-body">Letter</label><textarea id="lt-body" class="letter-edit" rows="18">${esc(L.body)}</textarea></div>
+    <div class="btns"><button class="btn sm" data-letter-save>${L.saved ? "Save changes" : "Save draft"}</button><button class="btn sm" data-letter-copy>Copy</button><button class="btn sm" data-letter-print>Print</button><button class="btn sm" data-letter-reset>Start over</button></div>
+    <div class="sendrow"><div class="field"><label for="lt-on">Sent on</label><input type="date" id="lt-on" value="${esc(L.sentOn)}" max="${TODAY}"></div>
+      <div class="field"><label for="lt-how">How</label><select id="lt-how">${Object.entries(METHODS).map(([k, v]) => `<option value="${k}" ${L.method === k ? "selected" : ""}>${v}</option>`).join("")}</select></div>
+      <button class="btn primary" data-letter-send>Mark as sent</button></div>
+    <p class="small muted">Marking it sent completes this step, keeps a copy on the leave, and shows it to ${esc(first(e.name))}.</p></section>`;
+}
+function lettersSent(c) {
+  const list = c.notices || []; if (!list.length) return "";
+  return `<section class="panel"><h3>Letters sent</h3><div class="queue">${list.map((n, i) => `<div class="qrow" style="grid-template-columns:minmax(0,1fr) auto"><div><div class="t" style="font-weight:500">${esc(n.subject)}</div><div class="s">${fmt(n.sentOn)} · ${esc(METHODS[n.method] || n.method)}</div></div><button class="btn sm" data-letter-view="${c.id}|${i}">View</button></div>`).reverse().join("")}</div></section>`;
+}
+function readLetterFields() {
+  const L = UI.letter; if (!L) return;
+  const g = (id) => document.getElementById(id);
+  if (g("lt-subject")) L.subject = g("lt-subject").value;
+  if (g("lt-body")) L.body = g("lt-body").value;
+  if (g("lt-on")) L.sentOn = g("lt-on").value || TODAY;
+  if (g("lt-how")) L.method = g("lt-how").value;
+}
+function letterText() {
+  const L = UI.letter, c = D().cases.find((x) => x.id === L.caseId);
+  if (L.view != null) { const n = c.notices[L.view]; return { subject: n.subject, body: n.body }; }
+  return { subject: L.subject, body: L.body };
+}
+function printLetter() {
+  const { subject, body } = letterText();
+  const f = document.createElement("iframe");
+  f.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0";
+  document.body.appendChild(f);
+  const d = f.contentDocument;
+  d.open(); d.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(subject)}</title><style>body{font:12pt/1.5 Georgia,serif;margin:1in;color:#000}pre{white-space:pre-wrap;font:inherit}</style></head><body><pre>${esc(body)}</pre></body></html>`); d.close();
+  setTimeout(() => { f.contentWindow.focus(); f.contentWindow.print(); setTimeout(() => f.remove(), 1000); }, 50);
+}
+
 function hrCase(c) {
   if (!c) { UI.caseId = null; return hrCases(); }
   const e = emp(c.empId), s = caseStatus(c);
@@ -298,11 +389,12 @@ function hrCase(c) {
     <section class="panel"><h3>Does ${esc(first(e.name))} qualify?</h3>${eligHTML(p, c.reason)}${factsHTML(p)}</section>`;
   }
   return `<div class="head"><div><button class="linkish" data-back>← All leaves</button><div class="person" style="margin-top:10px">${avatar(e, "lg")}<div><h2>${esc(e.name)}</h2><p class="muted">${esc(e.role)} · hired ${fmt(e.hire)} · asked ${fmt(c.requested)}</p></div></div></div>${pill(s.t, s.cls)}</div>
-  <div class="grid2"><div class="stack">${body}</div>
+  <div class="grid2"><div class="stack">${letterPanel(c)}${body}</div>
   <div class="stack"><section class="panel"><h3>Steps for HR</h3><div class="queue">${items}</div></section>
+  ${lettersSent(c)}
   <section class="panel"><h3>Manager's coverage plan</h3><p class="small ${c.coverage ? "" : "muted"}">${esc(c.coverage || "Nothing yet. The manager adds this from their own view.")}</p></section>
-  <section class="panel"><div class="field"><label for="hrnote">Private HR notes</label><textarea id="hrnote" data-casenote="${c.id}" placeholder="Only HR sees this. Saves when you click away.">${esc(c.hrNote || "")}</textarea></div>
-  <div class="btns"><button class="btn sm" data-delete="${c.id}">Delete this leave</button></div></section></div></div>`;
+  <section class="panel"><div class="field"><label for="hrnote">Private HR notes</label><textarea id="hrnote" data-casenote="${c.id}" placeholder="Only HR sees this. Saves when you click away.">${esc(c.hrNote || "")}</textarea></div></section>
+  ${c.reason === "unknown" ? `<section class="panel"><div class="btns"><button class="btn sm danger" data-delete="${c.id}">Delete this leave</button></div></section>` : changePanel(c)}</div></div>`;
 }
 
 /* ---------- HR: Plan a leave ---------- */
@@ -428,11 +520,20 @@ function empView() {
     <div><span class="label">Family and medical leave</span><span class="v">${el.cfra.ok ? plural(el.cfra.remaining, "week") : "Not yet"}</span><div class="meter"><span style="width:${el.cfra.ok ? (el.cfra.remaining / 12) * 100 : 0}%"></span></div><span class="small muted">${el.cfra.ok ? "Your job is held for you" : "After 12 months and 1,250 hours"}</span></div>
     ${mine.some((c) => c.reason === "pregnancy_bonding") ? `<div><span class="label">Pregnancy leave</span><span class="v">Up to 4 months</span><span class="small muted">From your first day</span></div>` : ""}
     <div><span class="label">Bereavement</span><span class="v">${el.short.ok ? "5 days" : "After 30 days"}</span><span class="small muted">For each family loss</span></div>
-    <div><span class="label">State pay while out</span><span class="v">${wba ? "~" + money(wba.amount) + "/wk" : "Ask HR"}</span><span class="small muted">Paid by the state, not ${esc(co.name.split(" ")[0])}</span></div>
+    <div><span class="label">State pay while out</span><span class="v">${wba ? "~" + money(wba.amount) + "/wk" : "Ask HR"}</span><span class="small muted">Paid by the state, not your employer</span></div>
   </div></section>
-  <div class="grid2">
-    <div class="stack">${mine.length ? mine.map((c) => empCase(c)).join("") : `<section class="panel"><h3>No time off requested</h3><p class="muted">When you need time off, fill in the form. You will see what you qualify for before you send it, and HR replies within 5 business days.</p></section>`}</div>
-    <section class="panel" data-form="req"><h3>Ask for time off</h3>
+  ${(() => {
+    // Someone with a current leave sees it first; the request form waits behind a button.
+    const current = mine.filter((c) => caseStatus(c).t !== "Returned"), past = mine.filter((c) => caseStatus(c).t === "Returned");
+    const form = reqForm(f, R, p);
+    if (!current.length) return `<div class="grid2"><div class="stack">${past.length ? past.map((c) => empCase(c)).join("") : `<section class="panel"><h3>No time off requested</h3><p class="muted">When you need time off, fill in the form. You will see what you qualify for before you send it, and HR replies within 5 business days.</p></section>`}</div>${form}</div>`;
+    return `<div class="stack">${current.map((c) => empCase(c)).join("")}
+      ${UI.reqOpen ? form : `<section class="panel"><div class="panel-h"><h3>Need more time off?</h3><button class="btn" data-req-open>Ask for time off</button></div></section>`}
+      ${past.length ? `<details class="more"><summary>Past leaves (${past.length})</summary><div class="stack" style="margin-top:10px">${past.map((c) => empCase(c)).join("")}</div></details>` : ""}</div>`;
+  })()}`;
+}
+function reqForm(f, R, p) {
+  return `<section class="panel" data-form="req"><div class="panel-h"><h3>Ask for time off</h3>${UI.reqOpen ? `<button class="btn sm" data-req-close>Close</button>` : ""}</div>
       ${S.ai.on ? copilotBox() : ""}
       <div class="field"><label for="rq-reason">What is it for?</label><select id="rq-reason" data-bind="reason">${reasonOptions(f.reason, "emp")}</select></div>
       ${R.rel ? relSelect("rq-rel", R.rel, f.relation) : ""}
@@ -441,8 +542,7 @@ function empView() {
       ${previewHTML(p, f.reason)}
       <p class="small muted">HR keeps the reason private. Your manager only sees the dates you are out.${f.reason === "repro" ? " Nobody will ask you for documentation." : ""}</p>
       <div class="btns"><button class="btn primary" data-submitreq>Send to HR</button></div>
-    </section>
-  </div>`;
+    </section>`;
 }
 function empCase(c) {
   const p = planFor(c), steps = [];
@@ -456,9 +556,17 @@ function empCase(c) {
   if (c.reason === "bereavement") steps.push("HR may ask for proof of the death within 30 days of your first day off.");
   if (c.reason === "sick") steps.push("Your next pay stub will show your new balance.");
   const s = caseStatus(c);
-  return `<section class="panel"><div class="panel-h"><h3>${esc(REASONS[c.reason].emp)}</h3>${pill(s.t, s.cls)}</div>${timelineHTML(p)}
+  // Where the request stands: Sent, then HR reviewing, then Confirmed (the designation or confirmation letter).
+  const confirmKey = ["notice", "designate", "confirm", "record"].filter((k) => c.tasks.some((t) => t.key === k)).pop();
+  const reviewed = c.tasks.find((t) => t.key === "notice" || t.key === "confirm" || t.key === "record");
+  const confirmed = confirmKey && c.tasks.find((t) => t.key === confirmKey).done;
+  const stage = confirmed ? 3 : reviewed && reviewed.done ? 2 : 1;
+  const due = reviewed && !reviewed.done && reviewed.due ? ` · HR replies by ${fmtS(reviewed.due)}` : "";
+  const track = s.t === "Returned" ? "" : `<ol class="track" aria-label="Request status">${["Sent to HR", "HR reviewing", "Confirmed"].map((x, i) => `<li class="${i + 1 < stage ? "done" : i + 1 === stage ? "now" : ""}" ${i + 1 === stage ? 'aria-current="step"' : ""}><span>${x}</span></li>`).join("")}</ol><p class="small muted" style="margin:-4px 0 0">Asked ${fmt(c.requested)}${stage === 1 ? due : ""}${stage === 3 ? " · your dates are confirmed" : ""}</p>`;
+  return `<section class="panel"><div class="panel-h"><h3>${esc(REASONS[c.reason].emp)}</h3>${pill(s.t, s.cls)}</div>${track}${timelineHTML(p)}
   <div><div class="label" style="margin-bottom:8px">What happens next</div><ol class="steps">${steps.map((x) => `<li><span>${x}</span></li>`).join("")}</ol></div>
-  ${p.warnings.length ? `<div class="infobox">HR will go over a few details of this request with you before confirming dates.</div>` : ""}</section>`;
+  ${p.warnings.length ? `<div class="infobox">HR will go over a few details of this request with you before confirming dates.</div>` : ""}
+  ${(c.notices || []).length ? `<div><div class="label" style="margin-bottom:8px">Letters from HR</div><div class="stack" style="gap:8px">${c.notices.slice().reverse().map((n) => `<details class="more letter-item"><summary>${esc(n.subject)} <span class="muted small">· ${fmt(n.sentOn)}</span></summary><div class="letter-text">${esc(n.body)}</div></details>`).join("")}</div></div>` : ""}</section>`;
 }
 
 /* ---------- Manager ---------- */
@@ -574,7 +682,7 @@ function setChrome(on) {
   if (!(on && FB())) closeFeedback();
   document.getElementById("who").hidden = !on;
   if (!on) document.getElementById("tabs").hidden = true;
-  document.getElementById("coName").textContent = on ? `${D().company.name} · ${D().company.city}` : "California leave, made simple";
+  document.getElementById("coName").innerHTML = on ? `${esc(D().company.name)}<span class="city"> · ${esc(D().company.city)}</span>` : "California leave, made simple";
 }
 let RENDERING = false;
 function render() {
@@ -594,7 +702,15 @@ function renderNow() {
   const tabs = document.getElementById("tabs"), list = tabsFor(S.me.role);
   tabs.hidden = list.length < 2;
   const late = S.me.role === "hr" ? lateCount() : 0;
-  tabs.innerHTML = list.map(([k, n]) => `<button role="tab" class="${k === "myleave" && list.length > 2 ? "push" : ""}" data-tab="${k}" aria-selected="${UI.tab === k}">${n}${k === "overview" && late ? `<span class="count" title="${late} late or due today">${late}</span>` : ""}</button>`).join("");
+  // Phones get a bottom bar: up to 4 tabs, the rest under More.
+  const phone = window.matchMedia("(max-width:640px)").matches;
+  const tabBtn = ([k, n]) => `<button role="tab" class="${k === "myleave" && list.length > 2 && !phone ? "push" : ""}" data-tab="${k}" aria-selected="${UI.tab === k}">${n}${k === "overview" && late ? `<span class="count" title="${late} late or due today">${late}</span>` : ""}</button>`;
+  if (phone && list.length > 4) {
+    const main = list.slice(0, 3), rest = list.slice(3), inRest = rest.some(([k]) => k === UI.tab);
+    tabs.innerHTML = main.map(tabBtn).join("") + `<button class="more-tab" data-more aria-expanded="${!!UI.moreOpen}" aria-selected="${inRest}">More</button>`
+      + (UI.moreOpen ? `<div class="more-menu" role="menu">${rest.map(([k, n]) => `<button role="menuitem" data-tab="${k}" aria-current="${UI.tab === k}">${n}</button>`).join("")}</div>` : "");
+  } else tabs.innerHTML = list.map(tabBtn).join("");
+  document.body.classList.toggle("has-bottom-tabs", phone && list.length > 1);
   const focusId = document.activeElement && document.activeElement.id;
   const v = viewOf();
   const html = FB() && UI.survey.open ? surveyView() : v === "emp" ? empView() : v === "mgr" ? mgrView() : { overview: hrOverview, cases: hrCases, plan: hrPlan, employees: hrEmployees, access: hrUsers, settings: hrSettings }[UI.tab]();
@@ -844,6 +960,24 @@ document.addEventListener("click", async (ev) => {
   }
   if (b.dataset.decline) { await api("org/decline", { id: b.dataset.decline }).catch(() => {}); await loadMe(); renderHome(document.getElementById("root")); toast("Invitation declined"); return; }
   if (!S) return;
+  if (b.dataset.letter) { const [cid, key] = b.dataset.letter.split("|"); openLetter(cid, key); render(); window.scrollTo(0, 0); setTimeout(() => document.getElementById("lt-body")?.focus(), 0); return; }
+  if (b.dataset.letterView) { const [cid, i] = b.dataset.letterView.split("|"); UI.tab = "cases"; UI.caseId = cid; UI.letter = { caseId: cid, view: +i }; render(); window.scrollTo(0, 0); return; }
+  if (b.hasAttribute("data-letter-close")) { readLetterFields(); UI.letter = null; render(); return; }
+  if (b.hasAttribute("data-letter-copy")) { readLetterFields(); const { subject, body } = letterText(); try { await navigator.clipboard.writeText(`${subject}\n\n${body}`); toast("Copied. Paste it into your email."); } catch (e) { toast("Could not copy. Select the text and copy it."); } return; }
+  if (b.hasAttribute("data-letter-print")) { readLetterFields(); printLetter(); return; }
+  if (b.hasAttribute("data-letter-reset")) { const L = UI.letter, c = D().cases.find((x) => x.id === L.caseId); const d = draftLetter(L.key, c, emp(c.empId), D().company, c.reason === "unknown" ? { el: null } : planFor(c), TODAY, S.me.name); Object.assign(L, { subject: d.subject, body: d.body }); render(); toast("Back to the first draft"); return; }
+  if (b.hasAttribute("data-letter-save")) { readLetterFields(); const L = UI.letter; const j = await act({ type: "saveLetter", caseId: L.caseId, key: L.key, subject: L.subject, body: L.body }, "Draft saved"); if (j) L.saved = true; return; }
+  if (b.hasAttribute("data-letter-send")) {
+    readLetterFields(); const L = UI.letter;
+    const j = await act({ type: "sendLetter", caseId: L.caseId, key: L.key, subject: L.subject, body: L.body, sentOn: L.sentOn, method: L.method });
+    if (j) { const c = j.data.cases.find((x) => x.id === L.caseId); UI.letter = { caseId: L.caseId, view: c.notices.length - 1 }; render(); toast("Marked as sent. A copy is on the leave."); }
+    return;
+  }
+  if (b.hasAttribute("data-req-open")) { UI.reqOpen = true; render(); document.getElementById("rq-text")?.focus(); return; }
+  if (b.hasAttribute("data-req-close")) { UI.reqOpen = false; render(); return; }
+  if (b.dataset.change) { await act({ type: "updateCase", caseId: b.dataset.change, opts: readChange() }, "New dates saved. Deadlines updated."); return; }
+  if (b.dataset.returned) { await act({ type: "markReturned", caseId: b.dataset.returned, on: document.getElementById("ce-back")?.value }, "Marked as returned"); return; }
+  if (b.dataset.unreturn) { await act({ type: "markReturned", caseId: b.dataset.unreturn, on: null }, "Return undone"); return; }
   if (b.hasAttribute("data-addemp-open")) { UI.addEmp = { ...UI.addEmp, open: true, error: "", hire: UI.addEmp.hire || addDays(TODAY, -365) }; render(); document.getElementById("ae-name")?.focus(); return; }
   if (b.hasAttribute("data-addemp-cancel")) { UI.addEmp.open = false; render(); return; }
   if (b.hasAttribute("data-addemp")) {
@@ -889,7 +1023,9 @@ document.addEventListener("click", async (ev) => {
     UI.survey.a[b.dataset.svMulti] = [...cur]; render(); return;
   }
   if (b.hasAttribute("data-logout")) { await api("logout", {}).catch(() => {}); S = null; UI.login.error = ""; UI.survey.open = false; ACCOUNTS = FB() ? null : ACCOUNTS; if (FB()) await loadMe(); renderLogin(); window.scrollTo(0, 0); return; }
-  if (b.dataset.tab) { UI.tab = b.dataset.tab; UI.caseId = null; if (b.dataset.tab === "access") UI.users.list = null; render(); window.scrollTo(0, 0); return; }
+  if (b.dataset.lfilter) { UI.leavesFilter = b.dataset.lfilter; render(); return; }
+  if (b.hasAttribute("data-more")) { UI.moreOpen = !UI.moreOpen; render(); return; }
+  if (b.dataset.tab) { UI.moreOpen = false; UI.tab = b.dataset.tab; UI.caseId = null; if (b.dataset.tab === "access") UI.users.list = null; render(); window.scrollTo(0, 0); return; }
   if (b.dataset.open) { UI.tab = "cases"; UI.caseId = b.dataset.open; render(); window.scrollTo(0, 0); return; }
   if (b.hasAttribute("data-back")) { UI.caseId = null; render(); return; }
   if (b.hasAttribute("data-createcase")) {
@@ -899,7 +1035,7 @@ document.addEventListener("click", async (ev) => {
   if (b.hasAttribute("data-submitreq")) {
     const f = UI.req, A = UI.reqAI;
     const j = await act({ type: "createCase", empId: S.me.empId, reason: f.reason, opts: optsFrom(f), intake: A.draft ? { text: A.sent, ai: A.draft } : undefined });
-    if (j) UI.reqAI = { text: "", sent: "", draft: null, busy: false, error: "" };
+    if (j) { UI.reqAI = { text: "", sent: "", draft: null, busy: false, error: "" }; UI.reqOpen = false; render(); }
     if (j) { const c = j.data.cases.find((x) => x.id === j.createdId); const n = c && c.tasks.find((t) => t.key === "notice" || t.key === "confirm"); toast(n ? `Sent. HR will get back to you by ${fmtS(n.due)}.` : "Sent to HR."); window.scrollTo(0, 0); }
     return;
   }
@@ -954,6 +1090,7 @@ document.addEventListener("change", (ev) => {
   if (!S) return;
   if (el.dataset.userRole) { usersChange({ op: "role", email: el.dataset.userRole, role: el.value }, "Role changed"); return; }
   if (el.hasAttribute("data-lock")) { usersChange({ op: "lock", on: el.checked }, el.checked ? "Company accounts only" : "Any Google account can be invited"); return; }
+  if (UI.letter && ["lt-on", "lt-how"].includes(el.id)) { readLetterFields(); return; }
   if (el.dataset.task) { const [caseId, key] = el.dataset.task.split("|"); act({ type: "toggleTask", caseId, key, done: el.checked }, el.checked ? "Marked done" : "Reopened"); return; }
   if (el.dataset.emp) { const [id, field] = el.dataset.emp.split("|"); act({ type: "updateEmployee", id, field, value: el.value }, "Saved"); return; }
   if (el.dataset.co) {
@@ -967,6 +1104,8 @@ document.addEventListener("change", (ev) => {
 });
 document.addEventListener("input", (ev) => {
   const el = ev.target;
+  if (el.id === "lv-q") { UI.leavesQ = el.value; render(); const i = document.getElementById("lv-q"); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } return; }
+  if (UI.letter && ["lt-subject", "lt-body"].includes(el.id)) { UI.letter[el.id === "lt-body" ? "body" : "subject"] = el.value; return; }
   const formName = el.closest && el.closest("[data-form]")?.dataset.form;
   if (["home", "users", "addEmp"].includes(formName) && el.dataset.bind && el.type !== "checkbox" && el.type !== "radio") {
     const t = { home: UI.home.form, users: UI.users, addEmp: UI.addEmp }[formName];
@@ -986,6 +1125,7 @@ function bind(el) {
   if (form.dataset.form !== "flag") render();
 }
 
+window.matchMedia("(max-width:640px)").addEventListener("change", () => { if (S) render(); });
 // Pick up changes from other test users when the tab comes back into view.
 document.addEventListener("visibilitychange", async () => {
   if (document.visibilityState !== "visible" || !S) return;

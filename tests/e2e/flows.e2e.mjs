@@ -55,6 +55,26 @@ describe("test site", { skip }, () => {
     assert.deepEqual(errors, []);
   });
 
+  test("HR writes and sends a letter from the draft, and the employee reads it", async () => {
+    const { p, errors } = await page();
+    await p.goto(S.base);
+    await p.fill("#lg-pw", "test-pass-123");
+    await p.click('[data-pick="grace@mesaverde.example"]');
+    await p.click('[data-tab="cases"]');
+    await p.click('tr[data-open]:has-text("Marcus Bell")');
+    await p.click('[data-letter$="|notice"]');
+    await p.waitForSelector("#lt-body");
+    assert.match(await p.inputValue("#lt-body"), /California Family Rights Act/);
+    await p.fill("#lt-subject", "What you qualify for");
+    await p.click("[data-letter-send]");
+    await p.waitForSelector(".letter-text");
+    await p.click("[data-logout]");
+    await p.click('[data-pick="marcus@mesaverde.example"]');
+    await p.click(".letter-item summary");
+    assert.match(await p.textContent(".letter-item"), /What you qualify for/);
+    assert.deepEqual(errors, []);
+  });
+
   test("manager flags a possible leave and never sees the reason", async () => {
     const { p, errors } = await page();
     await p.goto(S.base);

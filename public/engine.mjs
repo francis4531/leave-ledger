@@ -304,12 +304,15 @@ export function caseDates(c, D){
   if (c.reason==='unknown') return {start:c.requested, end:null};
   const p = planFor(c, D);
   const s = p.segs.length ? p.segs.reduce((m,x)=>x.start<m?x.start:m, p.segs[0].start) : c.opts.start;
-  return {start:s, end:p.end};
+  // An early return ends the leave on the day the employee came back.
+  const end = c.returnedOn && c.returnedOn < p.end ? (c.returnedOn > s ? c.returnedOn : addDays(s, 1)) : p.end;
+  return {start:s, end, returnedOn: c.returnedOn || null};
 }
 export function caseStatus(c, D, today){
   if (c.reason==='unknown') return {t:'Needs intake', cls:'warn'};
   const {start,end} = caseDates(c, D);
   if (today < start) return {t:'Upcoming', cls:'acc'};
+  if (c.returnedOn && today >= c.returnedOn) return {t:'Returned', cls:'ok'};
   if (today < end) return {t:'On leave', cls:'poppy'};
   return {t:'Returned', cls:''};
 }

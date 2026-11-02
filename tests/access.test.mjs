@@ -357,3 +357,63 @@ describe("preview site: inbox tools", () => {
     assert.equal(st.clerk.runs[0].summary.cases, 50);
   });
 });
+
+describe("test site: letters", () => {
+  test("HR saves a draft and sends a letter; the employee sees the sent copy but never the draft; the manager sees neither", async () => {
+    const s = testSite();
+    const hr = await signedIn(s, "grace@mesaverde.example");
+    const c2 = (await hr.get("/api/state")).body.data.cases.find((c) => c.empId === "e2");
+    assert.equal((await hr.post("/api/action", { type: "saveLetter", caseId: c2.id, key: "designate", subject: "Draft subject", body: "DRAFT ONLY text" })).status, 200);
+    const sent = await hr.post("/api/action", { type: "sendLetter", caseId: c2.id, key: "notice", subject: "What you qualify for", body: "SENT letter text", sentOn: "2026-01-01", method: "hand" });
+    assert.equal(sent.status, 200);
+    const after = sent.body.data.cases.find((c) => c.id === c2.id);
+    assert.ok(after.tasks.find((t) => t.key === "notice").done, "sending completes the step");
+    assert.equal(after.notices[0].method, "hand");
+
+    const marcus = await signedIn(s, "marcus@mesaverde.example");
+    const mine = JSON.stringify((await marcus.get("/api/state")).body);
+    assert.ok(mine.includes("SENT letter text"));
+    assert.ok(!mine.includes("DRAFT ONLY"));
+    assert.equal((await marcus.post("/api/action", { type: "sendLetter", caseId: c2.id, key: "notice", subject: "x", body: "y" })).status, 403);
+
+    const mei = await signedIn(s, "mei@mesaverde.example");
+    const mgr = JSON.stringify((await mei.get("/api/state")).body);
+    assert.ok(!mgr.includes("SENT letter text") && !mgr.includes("DRAFT ONLY"));
+  });
+  test("a letter needs a subject and text, and cannot be dated in the future", async () => {
+    const s = testSite();
+    const hr = await signedIn(s, "grace@mesaverde.example");
+    const c = (await hr.get("/api/state")).body.data.cases.find((x) => x.empId === "e2");
+    assert.equal((await hr.post("/api/action", { type: "sendLetter", caseId: c.id, key: "notice", subject: "", body: "x" })).status, 400);
+    const r = await hr.post("/api/action", { type: "sendLetter", caseId: c.id, key: "notice", subject: "s", body: "b", sentOn: "2099-01-01" });
+    assert.notEqual(r.body.data.cases.find((x) => x.id === c.id).notices[0].sentOn, "2099-01-01");
+  });
+});
+
+describe("test site: changing a leave", () => {
+  test("HR can change dates; finished steps stay finished and the plan moves", async () => {
+    const s = testSite();
+    const hr = await signedIn(s, "grace@mesaverde.example");
+    const st = (await hr.get("/api/state")).body;
+    const c = st.data.cases.find((x) => x.empId === "e4"); // Jordan, own health, some steps done
+    const doneBefore = c.tasks.filter((t) => t.done).map((t) => t.key).sort();
+    const r = await hr.post("/api/action", { type: "updateCase", caseId: c.id, opts: { weeks: 10 } });
+    assert.equal(r.status, 200);
+    const after = r.body.data.cases.find((x) => x.id === c.id);
+    assert.equal(after.opts.weeks, 10);
+    assert.deepEqual(after.tasks.filter((t) => t.done).map((t) => t.key).sort(), doneBefore);
+  });
+  test("marking a return ends the leave and completes the return step; employees cannot do it", async () => {
+    const s = testSite();
+    const hr = await signedIn(s, "grace@mesaverde.example");
+    const st = (await hr.get("/api/state")).body;
+    const c = st.data.cases.find((x) => x.empId === "e4");
+    const ben = await signedIn(s, "jordan@mesaverde.example");
+    assert.equal((await ben.post("/api/action", { type: "markReturned", caseId: c.id, on: st.today })).status, 403);
+    assert.equal((await hr.post("/api/action", { type: "markReturned", caseId: c.id, on: "2099-01-01" })).status, 400);
+    const r = await hr.post("/api/action", { type: "markReturned", caseId: c.id, on: st.today });
+    const after = r.body.data.cases.find((x) => x.id === c.id);
+    assert.equal(after.returnedOn, st.today);
+    assert.ok(after.tasks.find((t) => t.key === "return").done);
+  });
+});

@@ -60,7 +60,8 @@ export function viewFor(D, acct, today, env = {}, space = { kind: "test" }) {
   const out = { me: { email: acct.email, name: me.name, role: acct.role, label: acct.label, empId: me.id, views: VIEWS[acct.role] }, today, mode: isFeedback(env) ? "feedback" : "test", space, ai: { on: !!env.ANTHROPIC_API_KEY, model: env.LL_MODEL || DEFAULT_MODEL } };
   if (acct.role === "hr") return { ...out, data: D };
   // Employees get their own cases without HR notes, the manager's flag note, or intake text someone else wrote.
-  const own = D.cases.filter((c) => c.empId === me.id && c.reason !== "unknown").map(({ hrNote, notes, intake, ...c }) => (intake && intake.source === "employee" ? { ...c, intake } : c));
+  // Letter drafts stay with HR; employees see only the letters HR marked as sent.
+  const own = D.cases.filter((c) => c.empId === me.id && c.reason !== "unknown").map(({ hrNote, notes, intake, drafts, ...c }) => (intake && intake.source === "employee" ? { ...c, intake } : c));
   const data = { company: D.company, employees: [me], cases: own, team: [], teamCases: [] };
   if (acct.role === "mgr") {
     data.team = D.employees.filter((e) => e.mgr === me.id).map((e) => ({ id: e.id, name: e.name, role: e.role }));
@@ -155,6 +156,46 @@ function apply(D, acct, a, today, kind = "test") {
       c.tasks = E.makeTasks(c.reason, c.requested, plan, D.company).map((t) => { const o = done.find((x) => x.key === t.key); return o ? { ...t, done: true, doneOn: o.doneOn } : t; });
       if (a.intake) attachIntake(D, c, { intake: { ...a.intake, text: c.notes || a.intake.text } }, today, "manager");
       log(`Set leave type for ${emp(c.empId).name}: ${E.REASONS[c.reason].hr}`); return null;
+    }
+    case "updateCase": {
+      // New dates or length. Steps already done stay done; open deadlines move with the new plan.
+      if (!hr) return "HR only";
+      const c = kase(a.caseId); if (!c || c.reason === "unknown") return "Case not found";
+      const bad = validOpts(c.reason, { ...c.opts, ...(a.opts || {}) }); if (bad) return bad;
+      const before = E.caseDates(c, D);
+      c.opts = cleanOpts({ ...c.opts, ...(a.opts || {}) });
+      const done = c.tasks.filter((t) => t.done);
+      const plan = E.buildPlan(emp(c.empId), D.company, c.reason, c.opts);
+      c.tasks = E.makeTasks(c.reason, c.requested, plan, D.company).map((t) => { const o = done.find((x) => x.key === t.key); return o ? { ...t, done: true, doneOn: o.doneOn } : t; });
+      const certDone = c.tasks.find((t) => t.key === "cert" && t.done); if (certDone) E.markTask(c, "cert", true, certDone.doneOn, D.company.holidays);
+      const after = E.caseDates(c, D);
+      log(`Changed dates for ${emp(c.empId).name}: ${before.start} to ${before.end} became ${after.start} to ${after.end}`); return null;
+    }
+    case "markReturned": {
+      if (!hr) return "HR only";
+      const c = kase(a.caseId); if (!c || c.reason === "unknown") return "Case not found";
+      if (a.on === null) { delete c.returnedOn; log(`Undid the return for ${emp(c.empId).name}`); return null; }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(a.on || "") || a.on > today) return "Pick the day they came back, today or earlier";
+      if (a.on < c.opts.start) return "The return date is before the leave started";
+      c.returnedOn = a.on;
+      E.markTask(c, "return", true, a.on, D.company.holidays);
+      log(`${emp(c.empId).name} returned to work on ${a.on}`); return null;
+    }
+    case "saveLetter":
+    case "sendLetter": {
+      if (!hr) return "HR only";
+      const c = kase(a.caseId); if (!c) return "Case not found";
+      if (!c.tasks.some((t) => t.key === a.key)) return "Task not found";
+      const subject = trim(a.subject, 200).trim(), body = trim(a.body, 20000).trim();
+      if (!subject || !body) return "The letter needs a subject and some text";
+      c.drafts = c.drafts || {};
+      if (a.type === "saveLetter") { c.drafts[a.key] = { subject, body, at: new Date().toISOString(), by: who }; return null; }
+      const sentOn = /^\d{4}-\d{2}-\d{2}$/.test(a.sentOn || "") && a.sentOn <= today ? a.sentOn : today;
+      const method = ["email", "hand", "mail", "other"].includes(a.method) ? a.method : "email";
+      c.notices = [...(c.notices || []), { key: a.key, subject, body, sentOn, method, by: who, at: new Date().toISOString() }].slice(-50);
+      delete c.drafts[a.key];
+      E.markTask(c, a.key, true, sentOn, D.company.holidays);
+      log(`Sent "${subject}" to ${emp(c.empId).name}`); return null;
     }
     case "deleteCase": {
       if (!hr) return "HR only";
