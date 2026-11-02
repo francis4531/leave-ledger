@@ -1,5 +1,5 @@
 import {
-  addDays, diffDays, fmt, fmtS, money, esc, plural, RULES, REASONS, REL, relName,
+  addDays, diffDays, fmt, fmtS, money, esc, plural, RULES, REASONS, REL, relName, sickUseCap, sickBalanceCap, sickUsable, shiftOf, weeklyOf, pdlHours,
   weeklyBenefit, eligibility, buildPlan, makeTasks,
   planFor as planForD, caseDates as caseDatesD, caseStatus as caseStatusD,
 } from "./engine.mjs";
@@ -23,7 +23,7 @@ const UI = {
   survey: { open: false, q: null, a: {}, busy: false, error: "", done: null, later: false },
   home: { busy: false, error: "", form: { name: "", city: "", headcount: 20, jobTitle: "", start: "sample", lockDomain: false, agree: false } },
   users: { list: null, domain: null, canLock: false, myDomain: null, email: "", role: "emp", empId: "", busy: false, error: "" },
-  addEmp: { open: false, name: "", role: "", hire: "", hours12: 1000, sick: 24, hiQuarter: 12000, mgr: "", error: "" },
+  addEmp: { open: false, name: "", role: "", hire: "", hours12: 1000, sick: 24, hiQuarter: 12000, shiftHours: 8, weeklyHours: 40, mgr: "", error: "" },
 };
 const store = {
   get(k, s = localStorage) { try { return s.getItem(k); } catch (e) { return null; } },
@@ -174,7 +174,7 @@ function lawRows() {
     ["Pregnancy leave", "PDL", c5, "Up to 4 months while unable to work due to pregnancy. No minimum time on the job.", "Applies at 5 or more employees"],
     ["Federal FMLA", "FMLA", c50, `Runs at the same time as the state leaves.${c50 && !co.within75 ? " Employees qualify only if 50 or more employees work within 75 miles of their worksite." : ""}`, "Starts at 50 employees"],
     ["State pay while out", "SDI and PFL", true, "The state pays about 70 to 90% of wages, up to $1,765 a week in 2026. The employer does not pay this.", ""],
-    ["Paid sick leave", "", true, "40 hours a year, for the employee or a sick family member.", ""],
+    ["Paid sick leave", "", true, "40 hours or 5 days a year, whichever is more, for the employee or a sick family member.", ""],
     ["Bereavement leave", "", c5, "5 days for each family death, within 3 months.", "Applies at 5 or more employees"],
     ["Reproductive loss leave", "", c5, "5 days per loss, up to 20 a year. No documentation.", "Applies at 5 or more employees"],
   ];
@@ -339,6 +339,8 @@ function addEmployeePanel() {
     <div class="row"><div class="field"><label for="ae-h">Hours worked, last 12 months</label><input type="number" id="ae-h" data-bind="hours12" data-num value="${A.hours12}"><span class="hint">1,250 or more is needed for family leave.</span></div>
       <div class="field"><label for="ae-s">Sick hours available</label><input type="number" id="ae-s" data-bind="sick" data-num value="${A.sick}"></div>
       <div class="field"><label for="ae-q">Wages in highest quarter ($)</label><input type="number" id="ae-q" data-bind="hiQuarter" data-num value="${A.hiQuarter}"><span class="hint">Used for the state pay estimate.</span></div></div>
+    <div class="row"><div class="field"><label for="ae-sh">Usual shift (hours)</label><input type="number" id="ae-sh" data-bind="shiftHours" data-num min="1" max="24" value="${A.shiftHours}"><span class="hint">Sets the yearly sick leave limit: 40 hours or 5 shifts, whichever is more.</span></div>
+      <div class="field"><label for="ae-wh">Hours a week</label><input type="number" id="ae-wh" data-bind="weeklyHours" data-num min="1" max="80" value="${A.weeklyHours}"><span class="hint">Part-time employees get pregnancy leave in proportion to their hours.</span></div></div>
     <div class="field"><label for="ae-mgr">Manager</label><select id="ae-mgr" data-bind="mgr"><option value="">None</option>${emps.map((e) => `<option value="${e.id}" ${A.mgr === e.id ? "selected" : ""}>${esc(e.name)}</option>`).join("")}</select></div>
     ${A.error ? `<p class="err" role="alert">${esc(A.error)}</p>` : ""}
     <div class="btns"><button class="btn" data-addemp-cancel>Cancel</button><button class="btn primary" data-addemp>Add employee</button></div>
@@ -349,14 +351,15 @@ function hrEmployees() {
   const mgrSel = (e) => `<select aria-label="Manager for ${esc(e.name)}" data-emp="${e.id}|mgr"><option value="">None</option>${emps.filter((x) => x.id !== e.id).map((x) => `<option value="${x.id}" ${e.mgr === x.id ? "selected" : ""}>${esc(x.name)}</option>`).join("")}</select>`;
   return `<div class="head"><div><h2>Employees</h2><p>Who qualifies for what, as of today. Hours and sick balances come from payroll; change them right here.</p></div></div>
   ${org ? addEmployeePanel() : ""}
-  <section class="panel"><div class="tw"><table class="cards"><thead><tr><th>Employee</th><th>Hired</th><th class="num">Hours, last 12 months</th><th class="num">Family leave left</th><th class="num">Sick hours</th><th>Qualifies today for</th>${org ? "<th>Manager</th><th></th>" : ""}</tr></thead><tbody>
+  <section class="panel"><div class="tw"><table class="cards"><thead><tr><th>Employee</th><th>Hired</th><th class="num">Hours, last 12 months</th><th class="num">Family leave left</th><th class="num">Sick hours</th><th class="num">Schedule</th><th>Qualifies today for</th>${org ? "<th>Manager</th><th></th>" : ""}</tr></thead><tbody>
   ${D().employees.map((e) => { const el = eligibility(e, co, TODAY); const q = [["Family leave", el.cfra.ok], ...(el.fmla.covered ? [["FMLA", el.fmla.ok]] : []), ...(D().cases.some((c) => c.empId === e.id && c.reason === "pregnancy_bonding") ? [["Pregnancy leave", el.pdl.ok]] : []), ["Bereavement", el.short.ok], ["Sick leave", el.sick.ok]];
     return `<tr><td class="full"><div class="person">${avatar(e, "sm")}<div><b>${esc(e.name)}</b><div class="small muted">${esc(e.role)}</div></div></div></td><td data-l="Hired" class="small mono">${org ? `<input type="date" aria-label="Hire date for ${esc(e.name)}" data-emp="${e.id}|hire" value="${e.hire}" max="${TODAY}">` : fmt(e.hire)}</td>
   <td data-l="Hours, 12 mo" class="num"><input type="number" aria-label="Hours worked in the last 12 months for ${esc(e.name)}" id="h-${e.id}" data-emp="${e.id}|hours12" value="${e.hours12}" style="width:90px;text-align:right"></td>
   <td data-l="Family leave left" class="num">${el.cfra.ok ? plural(el.cfra.remaining, "week") : '<span class="muted">Not yet</span>'}</td>
   <td data-l="Sick hours" class="num"><input type="number" aria-label="Sick hours for ${esc(e.name)}" id="s-${e.id}" data-emp="${e.id}|sick" value="${e.sick}" style="width:72px;text-align:right"></td>
+  <td data-l="Schedule" class="num small"><div style="display:flex;gap:4px;align-items:center;justify-content:flex-end;white-space:nowrap"><input type="number" aria-label="Usual shift hours for ${esc(e.name)}" data-emp="${e.id}|shiftHours" value="${shiftOf(e)}" min="1" max="24" style="width:52px;text-align:right"> h/day <input type="number" aria-label="Hours a week for ${esc(e.name)}" data-emp="${e.id}|weeklyHours" value="${weeklyOf(e)}" min="1" max="80" style="width:56px;text-align:right"> h/wk</div></td>
   <td class="full"><div class="btns" style="gap:4px">${q.map(([n, ok]) => pill((ok ? "✓ " : "✕ ") + n, ok ? "ok" : "")).join("")}</div></td>${org ? `<td data-l="Manager">${mgrSel(e)}</td><td>${e.id === S.me.empId ? "" : `<button class="btn sm" data-emp-remove="${e.id}">Remove</button>`}</td>` : ""}</tr>`; }).join("")}
-  </tbody></table></div><p class="small muted">Sick leave builds up at 1 hour for every 30 worked. You can cap the balance at 80 hours and yearly use at 40. Pregnancy leave is available to any employee from their first day; it shows here once someone takes it.</p></section>`;
+  </tbody></table></div><p class="small muted">Sick leave builds up at 1 hour for every 30 worked. You can cap the balance at 80 hours or 10 days, and yearly use at 40 hours or 5 days, whichever is more for each employee's usual shift. Pregnancy leave is available to any employee from their first day; it shows here once someone takes it.</p></section>`;
 }
 
 /* ---------- HR: Settings ---------- */
@@ -416,12 +419,12 @@ function previewHTML(p, reason) {
 function empView() {
   const e = emp(S.me.empId), co = D().company, el = eligibility(e, co, TODAY), f = UI.req, R = REASONS[f.reason];
   const mine = D().cases.filter((c) => c.empId === e.id && c.reason !== "unknown");
-  const avail = Math.min(e.sick, Math.max(0, 40 - e.sickUsedYr));
+  const avail = sickUsable(e);
   const wba = weeklyBenefit(e, co);
   const p = buildPlan(e, co, f.reason, optsFrom(f));
   return `<div class="head"><div class="person">${avatar(e, "lg")}<div><h2 class="greet">Hi ${esc(first(e.name))}</h2><p class="muted">Your time off, your requests, and what to do next.</p></div></div></div>
   <section class="panel"><h3>What you have</h3><div class="balance">
-    <div><span class="label">Sick leave</span><span class="v">${e.sick} hours</span><div class="meter"><span style="width:${Math.min(100, (e.sick / 80) * 100)}%"></span></div><span class="small muted">${avail} you can use this year</span></div>
+    <div><span class="label">Sick leave</span><span class="v">${e.sick} hours</span><div class="meter"><span style="width:${Math.min(100, (e.sick / sickBalanceCap(e)) * 100)}%"></span></div><span class="small muted">${avail} you can use this year</span></div>
     <div><span class="label">Family and medical leave</span><span class="v">${el.cfra.ok ? plural(el.cfra.remaining, "week") : "Not yet"}</span><div class="meter"><span style="width:${el.cfra.ok ? (el.cfra.remaining / 12) * 100 : 0}%"></span></div><span class="small muted">${el.cfra.ok ? "Your job is held for you" : "After 12 months and 1,250 hours"}</span></div>
     ${mine.some((c) => c.reason === "pregnancy_bonding") ? `<div><span class="label">Pregnancy leave</span><span class="v">Up to 4 months</span><span class="small muted">From your first day</span></div>` : ""}
     <div><span class="label">Bereavement</span><span class="v">${el.short.ok ? "5 days" : "After 30 days"}</span><span class="small muted">For each family loss</span></div>
@@ -845,7 +848,7 @@ document.addEventListener("click", async (ev) => {
   if (b.hasAttribute("data-addemp-cancel")) { UI.addEmp.open = false; render(); return; }
   if (b.hasAttribute("data-addemp")) {
     const A = UI.addEmp;
-    try { const j = await api("action", { type: "addEmployee", employee: { name: A.name, role: A.role, hire: A.hire || addDays(TODAY, -365), hours12: A.hours12, sick: A.sick, hiQuarter: A.hiQuarter, mgr: A.mgr } }); accept(j); UI.addEmp = { open: false, name: "", role: "", hire: "", hours12: 1000, sick: 24, hiQuarter: 12000, mgr: "", error: "" }; render(); toast("Employee added"); }
+    try { const j = await api("action", { type: "addEmployee", employee: { name: A.name, role: A.role, hire: A.hire || addDays(TODAY, -365), hours12: A.hours12, sick: A.sick, hiQuarter: A.hiQuarter, shiftHours: A.shiftHours, weeklyHours: A.weeklyHours, mgr: A.mgr } }); accept(j); UI.addEmp = { open: false, name: "", role: "", hire: "", hours12: 1000, sick: 24, hiQuarter: 12000, shiftHours: 8, weeklyHours: 40, mgr: "", error: "" }; render(); toast("Employee added"); }
     catch (e) { if (e.message !== "signed out") { A.error = e.message; render(); } }
     return;
   }

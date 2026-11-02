@@ -121,6 +121,7 @@ export async function runIntake(text, today, env, fetchImpl = fetch) {
     r = await fetchImpl("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
+      signal: AbortSignal.timeout(8000), // stay inside the function time limit
       body: JSON.stringify({
         model: env.LL_MODEL || DEFAULT_MODEL,
         max_tokens: 1200,

@@ -66,6 +66,7 @@ function check(c) {
       const prot = P.segs.filter((s) => s.lane === "protect" && s.cls !== "none").map((s) => s.end).sort();
       eq("plan.jobProtectedUntil", prot.length ? prot[prot.length - 1] : null, p.jobProtectedUntil);
     }
+    for (const m of p.factsMention || []) if (!P.facts.some((f) => f.t.includes(m))) problems.push(`plan.facts: expected a note mentioning "${m}"`);
     if (p.warnsAbout) {
       const got = tagsOf(P.warnings, P.facts);
       for (const t of p.warnsAbout) if (!got.includes(t)) problems.push(`plan.warnsAbout: expected "${t}", engine gave ${JSON.stringify(got)}`);

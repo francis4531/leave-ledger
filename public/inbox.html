@@ -79,7 +79,7 @@ details summary{cursor:pointer;font-weight:600}
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const when = (iso) => iso ? new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
 const root = document.getElementById("root");
-let ST = null, ERR = "", NEW = null, FILTER = "";
+let ST = null, ERR = "", NEW = null, FILTER = "", SHOWTEST = false;
 const link = (code) => `${location.origin}/?invite=${code}`;
 function toast(m) { const t = document.getElementById("toast"); t.textContent = m; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), 2500); }
 
@@ -119,7 +119,7 @@ if (AUTH_ERR) { _u.searchParams.delete("auth_error"); history.replaceState(null,
 function render() {
   const S = ST.summary, inv = ST.invites, fbCount = (c) => ST.feedback.filter((f) => f.invite === c).length;
   const pct = (n) => S.responses ? Math.round((n / S.responses) * 100) + "%" : "-";
-  const fb = ST.feedback.filter((f) => !FILTER || f.invite === FILTER);
+  const fb = ST.feedback.filter((f) => (!FILTER || f.invite === FILTER) && (SHOWTEST || !f.test));
   const qName = Object.fromEntries(ST.questions.map((q) => [q.id, q.q]));
   root.innerHTML = `
   <div class="head"><div><h1>Feedback inbox</h1><p class="muted">Leave Ledger early preview. Each invite gets its own copy of the sample company.</p></div>
@@ -134,8 +134,10 @@ function render() {
       <div class="stat"><b>${S.usefulAvg ?? "-"}</b><span>Average usefulness (1 to 5)</span></div>
       <div class="stat"><b>${S.payYes}</b><span>Would pay $4 per employee per month (${pct(S.payYes)}); ${S.payMaybe} maybe at a lower price</span></div>
     </div>
-    <p class="small muted">Kill criteria check on Nov 23: at least 3 of 10 feel the pain, and at least 2 of 10 would pay $4 per employee per month.</p>
+    <p class="small muted">Kill criteria check on Nov 23: at least 3 of 10 feel the pain, and at least 2 of 10 would pay $4 per employee per month.${S.testExcluded ? ` ${S.testExcluded} test ${S.testExcluded === 1 ? "survey is" : "surveys are"} left out of these numbers.` : ""}</p>
   </section>
+
+  ${clerkPanel()}
 
   <section class="panel">
     <h2>Invite a prospect</h2>
@@ -150,7 +152,7 @@ function render() {
     <div class="scroll"><table class="tbl">
       <thead><tr><th>Invite</th><th>Status</th><th>Last active</th><th>Activity</th><th>Feedback</th><th>Survey</th><th></th></tr></thead>
       <tbody>${inv.length ? inv.map((i) => { const A = i.activity; return `<tr>
-        <td><b>${esc(i.name)}</b>${i.note ? `<div class="small muted">${esc(i.note)}</div>` : ""}${i.email ? `<div class="small muted">For ${esc(i.email)}</div>` : ""}${(i.users || []).map((u) => `<div class="small">Signed in: ${esc(u.name)} · ${esc(u.email)}</div>`).join("")}<div class="small muted">Created ${when(i.created)}</div></td>
+        <td><b>${esc(i.name)}</b>${i.test ? ` <span class="pill warn">Test</span>` : ""}${i.note ? `<div class="small muted">${esc(i.note)}</div>` : ""}${i.email ? `<div class="small muted">For ${esc(i.email)}</div>` : ""}${(i.users || []).map((u) => `<div class="small">Signed in: ${esc(u.name)} · ${esc(u.email)}</div>`).join("")}<div class="small muted">Created ${when(i.created)}</div></td>
         <td>${i.disabled ? `<span class="pill bad">Off</span>` : i.joined ? `<span class="pill ok">Joined</span>` : `<span class="pill warn">Not opened</span>`}</td>
         <td>${A ? when(A.last) : "-"}</td>
         <td class="small">${A ? `${A.actions} actions, ${A.intakes} Clerk, ${Object.keys(A.personas || {}).length} of 10 users tried` : "-"}</td>
@@ -158,7 +160,8 @@ function render() {
         <td>${i.survey ? `<span class="pill ok">Done</span>` : "-"}</td>
         <td><div class="btns"><button class="btn sm" data-copy="${i.code}">Copy link</button>
           <button class="btn sm" data-toggle="${i.code}" data-off="${i.disabled ? "0" : "1"}">${i.disabled ? "Turn on" : "Turn off"}</button>
-          <button class="btn sm" data-reset="${i.code}">Reset data</button></div></td></tr>`; }).join("") : `<tr><td colspan="7" class="muted">No invites yet.</td></tr>`}</tbody>
+          <button class="btn sm" data-reset="${i.code}">Reset data</button>
+          <button class="btn sm" data-test-invite="${i.code}" data-on="${i.test ? "0" : "1"}">${i.test ? "Not a test" : "Mark as test"}</button></div></td></tr>`; }).join("") : `<tr><td colspan="7" class="muted">No invites yet.</td></tr>`}</tbody>
     </table></div>
   </section>
 
@@ -168,25 +171,25 @@ function render() {
     <div class="scroll"><table class="tbl">
       <thead><tr><th>Workspace</th><th>Status</th><th>Users</th><th>Employees</th><th>Leaves</th><th>Last active</th><th>Survey</th><th></th></tr></thead>
       <tbody>${(ST.orgs || []).length ? ST.orgs.map((o) => `<tr>
-        <td><b>${esc(o.name)}</b><div class="small muted">${esc(o.ownerEmail)}${o.domain ? ` · @${esc(o.domain)} only` : ""}</div><div class="small muted">Created ${when(o.created)}</div></td>
+        <td><b>${esc(o.name)}</b>${o.test ? ` <span class="pill warn">Test</span>` : ""}<div class="small muted">${esc(o.ownerEmail)}${o.domain ? ` · @${esc(o.domain)} only` : ""}</div><div class="small muted">Created ${when(o.created)}</div></td>
         <td>${o.disabled ? `<span class="pill bad">Off</span>` : `<span class="pill ok">On</span>`}</td>
         <td>${o.joined} of ${o.users} signed in</td><td>${o.employees}</td><td>${o.cases}</td>
         <td>${o.activity ? when(o.activity.last) : "-"}</td><td>${o.survey ? `<span class="pill ok">Done</span>` : "-"}</td>
-        <td><button class="btn sm" data-org="${o.id}" data-off="${o.disabled ? "0" : "1"}">${o.disabled ? "Turn on" : "Turn off"}</button></td></tr>`).join("") : `<tr><td colspan="8" class="muted">No workspaces yet.</td></tr>`}</tbody>
+        <td><div class="btns"><button class="btn sm" data-org="${o.id}" data-off="${o.disabled ? "0" : "1"}">${o.disabled ? "Turn on" : "Turn off"}</button><button class="btn sm" data-test-org="${o.id}" data-on="${o.test ? "0" : "1"}">${o.test ? "Not a test" : "Mark as test"}</button></div></td></tr>`).join("") : `<tr><td colspan="8" class="muted">No workspaces yet.</td></tr>`}</tbody>
     </table></div>
   </section>
 
   <section class="panel">
     <div class="head"><h2>Feedback${FILTER ? ` from ${esc((inv.find((i) => i.code === FILTER) || {}).name)}` : ""}</h2>
-      <div class="btns">${FILTER ? `<button class="btn sm" data-filter="">Show all</button>` : ""}<button class="btn sm" data-csv="feedback">Download CSV</button></div></div>
+      <div class="btns"><button class="btn sm" data-showtest>${SHOWTEST ? "Hide test feedback" : "Show test feedback"}</button>${FILTER ? `<button class="btn sm" data-filter="">Show all</button>` : ""}<button class="btn sm" data-csv="feedback">Download CSV</button></div></div>
     <div class="list">${fb.length ? fb.map((f) => `<div class="fb">
-      <div class="meta"><b>${esc(f.who)}</b><span>${esc(f.screen)}</span><span>as ${esc(f.persona.split("@")[0])}</span>${f.user ? `<span>${esc(f.user)}</span>` : ""}<span>${when(f.at)}</span>${f.rating ? `<span class="pill">${f.rating} of 5</span>` : ""}${f.kind ? `<span class="pill">${esc({ like: "Likes it", confusing: "Confusing", bug: "Something broke", idea: "Idea" }[f.kind])}</span>` : ""}</div>
+      <div class="meta"><b>${esc(f.who)}</b>${f.test ? `<span class="pill warn">Test</span>` : ""}<span>${esc(f.screen)}</span><span>as ${esc(f.persona.split("@")[0])}</span>${f.user ? `<span>${esc(f.user)}</span>` : ""}<span>${when(f.at)}</span>${f.rating ? `<span class="pill">${f.rating} of 5</span>` : ""}${f.kind ? `<span class="pill">${esc({ like: "Likes it", confusing: "Confusing", bug: "Something broke", idea: "Idea" }[f.kind])}</span>` : ""}</div>
       ${f.note ? `<p>${esc(f.note)}</p>` : ""}</div>`).join("") : `<p class="muted">Nothing yet.</p>`}</div>
   </section>
 
   <section class="panel">
     <div class="head"><h2>Survey answers</h2><button class="btn sm" data-csv="survey">Download CSV</button></div>
-    <div class="list">${ST.surveys.length ? ST.surveys.map((s) => `<details class="fb"><summary>${esc(s.who)} <span class="muted small">${when(s.at)} · pain ${s.answers.pain ?? "-"} · pay: ${esc(s.answers.pay || "-")}</span></summary>
+    <div class="list">${ST.surveys.length ? ST.surveys.map((s) => `<details class="fb"><summary>${esc(s.who)}${s.test ? ` <span class="pill warn">Test</span>` : ""} <span class="muted small">${when(s.at)} · pain ${s.answers.pain ?? "-"} · pay: ${esc(s.answers.pay || "-")}</span></summary>
       <dl class="ans">${Object.entries(s.answers).map(([k, v]) => `<dt>${esc(qName[k] || k)}</dt><dd>${esc(Array.isArray(v) ? v.join("; ") : v)}</dd>`).join("")}</dl></details>`).join("") : `<p class="muted">No surveys yet.</p>`}</div>
   </section>`;
   document.getElementById("nf").onsubmit = async (e) => {
@@ -198,12 +201,41 @@ function render() {
 
 // Cells that start like a formula are prefixed so a spreadsheet shows them as text.
 const cell = (v) => { let t = String(v ?? ""); if (/^[=+\-@\t\r]/.test(t)) t = "'" + t; return `"${t.replace(/"/g, '""')}"`; };
+let EVAL = { busy: false, done: 0, total: 0, error: "" };
+function clerkPanel() {
+  const C = ST.clerk || { on: false, runs: [] }, last = C.runs[0], s = last && last.summary;
+  return `<section class="panel">
+    <div class="head"><h2>Clerk accuracy</h2><button class="btn sm primary" data-eval ${!C.on || EVAL.busy ? "disabled" : ""}>${EVAL.busy ? `Running... ${EVAL.done} of ${EVAL.total}` : "Run Clerk test"}</button></div>
+    <p class="small muted">Sends the ${C.cases || 50} test requests to the live model and scores what Clerk reads. Costs about one cent. Kill criteria: at least 90% right on leave type.${C.on ? "" : " Add ANTHROPIC_API_KEY in Netlify to run it."}</p>
+    ${EVAL.error ? `<p class="err">${esc(EVAL.error)}</p>` : ""}
+    ${s ? `<div class="stats">
+      <div class="stat"><b>${s.reasonPct}%</b><span>Leave type right <span class="pill ${s.reasonPct >= 90 ? "ok" : "bad"}">${s.reasonPct >= 90 ? "meets" : "below"} 90%</span></span></div>
+      <div class="stat"><b>${s.rowsPct}%</b><span>Every field right</span></div>
+      <div class="stat"><b>${s.fieldsPct}%</b><span>Fields right</span></div>
+      <div class="stat"><b>${s.adversarialPct}%</b><span>Tricky requests handled</span></div>
+      <div class="stat"><b>${(s.avgMs / 1000).toFixed(1)}s</b><span>Average reply time</span></div>
+    </div>
+    <p class="small muted">Last run ${when(last.at)} · ${esc(s.model)} · ${s.cases} cases${s.errors ? ` · ${s.errors} errors` : ""}.${C.runs.length > 1 ? ` Earlier: ${C.runs.slice(1).map((r) => `${r.summary.reasonPct}% (${when(r.at)})`).join(", ")}.` : ""}</p>
+    ${s.misses.length ? `<details><summary>${s.misses.length} misses</summary><div class="list" style="margin-top:8px">${s.misses.map((m) => `<div class="fb small"><b>${esc(m.id)}</b>${m.adversarial ? ` <span class="pill">tricky</span>` : ""} ${esc(m.bad.join("; "))}</div>`).join("")}</div></details>` : ""}` : `<p class="muted small">No runs yet.</p>`}
+  </section>`;
+}
+async function runEval() {
+  EVAL = { busy: true, done: 0, total: 0, error: "" }; render();
+  try {
+    const s = await api("admin/eval/start", {}); EVAL.total = s.total; render();
+    for (let from = 0; from < s.total; from += s.batch) {
+      const r = await api("admin/eval/batch", { run: s.run, from }); EVAL.done = r.count; render();
+    }
+    EVAL.busy = false; await refresh(); toast("Clerk test finished");
+  } catch (e) { if (e.message !== "signed out") { EVAL.busy = false; EVAL.error = e.message; render(); } }
+}
 function csv(rows) { return rows.map((r) => r.map(cell).join(",")).join("\n"); }
 function download(name, text) { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type: "text/csv" })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); }
 
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("button"); if (!b || !ST) return;
   try {
+    if (b.hasAttribute("data-eval")) { runEval(); return; }
     if (b.hasAttribute("data-refresh")) { await refresh(); toast("Up to date"); }
     else if (b.hasAttribute("data-out")) { await api("admin/logout", {}); ST = null; renderLogin(); }
     else if (b.dataset.copy) { const t = link(b.dataset.copy); try { await navigator.clipboard.writeText(t); toast("Link copied"); } catch (er) { prompt("Copy this link", t); } }
@@ -212,10 +244,13 @@ document.addEventListener("click", async (e) => {
       if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Tap again to reset"; b.classList.add("primary"); return; }
       await api("admin/invite/update", { code: b.dataset.reset, resetData: true }); await refresh(); toast("Their copy is back to the sample data");
     }
+    else if (b.dataset.testInvite) { await api("admin/invite/update", { code: b.dataset.testInvite, test: b.dataset.on === "1" }); await refresh(); toast(b.dataset.on === "1" ? "Marked as test" : "Counted again"); }
+    else if (b.dataset.testOrg) { await api("admin/org/update", { id: b.dataset.testOrg, test: b.dataset.on === "1" }); await refresh(); toast(b.dataset.on === "1" ? "Marked as test" : "Counted again"); }
+    else if (b.hasAttribute("data-showtest")) { SHOWTEST = !SHOWTEST; render(); }
     else if (b.dataset.org) { await api("admin/org/update", { id: b.dataset.org, disabled: b.dataset.off === "1" }); await refresh(); toast(b.dataset.off === "1" ? "Workspace turned off" : "Workspace turned on"); }
     else if ("filter" in b.dataset) { FILTER = b.dataset.filter; render(); }
-    else if (b.dataset.csv === "feedback") download("leave-ledger-feedback.csv", csv([["When", "From", "Screen", "Signed in as", "Google account", "Rating", "Type", "Note"], ...ST.feedback.map((f) => [f.at, f.who, f.screen, f.persona, f.user || "", f.rating, f.kind, f.note])]));
-    else if (b.dataset.csv === "survey") { const qs = ST.questions; download("leave-ledger-survey.csv", csv([["When", "Invite", ...qs.map((q) => q.q)], ...ST.surveys.map((s) => [s.at, s.who, ...qs.map((q) => { const v = s.answers[q.id]; return Array.isArray(v) ? v.join("; ") : v; })])])); }
+    else if (b.dataset.csv === "feedback") download("leave-ledger-feedback.csv", csv([["When", "From", "Test", "Screen", "Signed in as", "Google account", "Rating", "Type", "Note"], ...ST.feedback.map((f) => [f.at, f.who, f.test ? "yes" : "", f.screen, f.persona, f.user || "", f.rating, f.kind, f.note])]));
+    else if (b.dataset.csv === "survey") { const qs = ST.questions; download("leave-ledger-survey.csv", csv([["When", "Invite", "Test", ...qs.map((q) => q.q)], ...ST.surveys.map((s) => [s.at, s.who, s.test ? "yes" : "", ...qs.map((q) => { const v = s.answers[q.id]; return Array.isArray(v) ? v.join("; ") : v; })])])); }
   } catch (er) { if (er.message !== "signed out") toast(er.message); }
 });
 

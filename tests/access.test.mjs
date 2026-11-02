@@ -314,3 +314,46 @@ describe("preview site: company workspaces", () => {
     assert.equal((await sam.post("/api/action", { type: "reset" })).status, 403);
   });
 });
+
+describe("preview site: inbox tools", () => {
+  test("surveys from invites marked as test are left out of the numbers", async () => {
+    const p = preview();
+    const a = await adminClient(p);
+    const real = (await a.post("/api/admin/invite", { name: "Real" })).body.code;
+    const mine = (await a.post("/api/admin/invite", { name: "Mine" })).body.code;
+    const answers = { role: "Owner or founder", size: "5 to 19", leaves: "1 or 2", pain: 5, pay: "Yes" };
+    for (const [code, ip] of [[real, "8.1.1.1"], [mine, "8.2.2.2"]]) {
+      const c = p.as({ ip }); await c.post("/api/join", { code }); await c.post("/api/login", { email: "ben@mesaverde.example" });
+      assert.equal((await c.post("/api/survey", { answers })).status, 200);
+    }
+    assert.equal((await a.get("/api/admin/state")).body.summary.responses, 2);
+    await a.post("/api/admin/invite/update", { code: mine, test: true });
+    const st = (await a.get("/api/admin/state")).body;
+    assert.equal(st.summary.responses, 1);
+    assert.equal(st.summary.testExcluded, 1);
+    assert.ok(st.surveys.find((s) => s.invite === mine).test);
+  });
+  test("workspaces the site admin creates are marked as test", async () => {
+    const p = preview();
+    const o = p.as(); await o.google(ACCTS.owner);
+    const r = await o.post("/api/org/create", { name: "Owner Trial", headcount: 10, start: "empty", agree: true });
+    assert.equal(r.status, 200);
+    const a = await adminClient(p);
+    assert.equal((await a.get("/api/admin/state")).body.orgs[0].test, true);
+  });
+  test("the Clerk test runs in batches and only for the admin", async () => {
+    const p = preview();
+    const prospect = p.as(); await prospect.google(ACCTS.pat);
+    assert.equal((await prospect.post("/api/admin/eval/start", {})).status, 401);
+    const a = await adminClient(p);
+    const s = (await a.post("/api/admin/eval/start", {})).body;
+    assert.equal(s.total, 50);
+    let last;
+    for (let from = 0; from < s.total; from += s.batch) last = (await a.post("/api/admin/eval/batch", { run: s.run, from })).body;
+    assert.equal(last.done, true);
+    assert.equal(last.summary.cases, 50);
+    assert.ok(last.summary.reasonPct > 0 && last.summary.reasonPct < 100, "the stand-in model always answers family_care, so some rows must miss");
+    const st = (await a.get("/api/admin/state")).body;
+    assert.equal(st.clerk.runs[0].summary.cases, 50);
+  });
+});

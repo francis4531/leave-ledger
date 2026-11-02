@@ -4300,5 +4300,220 @@
     "capped": false
    }
   }
+ },
+ {
+  "id": "sick-10h-shift-cap",
+  "area": "sick",
+  "desc": "A 10-hour-shift employee who used 40 hours this year still has 10 usable hours, because the limit is 5 days (50 hours).",
+  "source": "Lab. Code \u00a7 246(i)(1) and (d), as amended by SB 616 (2023): employer may limit use to 40 hours or 5 days per year, whichever is more; accrual cap 80 hours or 10 days. https://www.dir.ca.gov/dlse/Paid_Sick_Leave.htm",
+  "input": {
+   "employee": {
+    "hire": "2022-01-10",
+    "hours12": 1800,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 60,
+    "sickUsedYr": 40,
+    "reproUsed": 0,
+    "hiQuarter": 15000,
+    "shiftHours": 10
+   },
+   "company": {
+    "headcount": 20,
+    "within75": false,
+    "holidays": [],
+    "band90": 16279.9,
+    "band70": 20931.3,
+    "wbaMax": 1765,
+    "wbaMin": 50
+   },
+   "today": "2026-11-16",
+   "reason": "sick",
+   "opts": {
+    "start": "2026-11-16",
+    "hours": 10
+   },
+   "requested": "2026-11-16"
+  },
+  "expect": {
+   "elig": {
+    "sick": true
+   }
+  }
+ },
+ {
+  "id": "sick-8h-shift-cap",
+  "area": "sick",
+  "desc": "An 8-hour-shift employee who used 40 hours this year has none left, since 5 days is also 40 hours.",
+  "source": "Lab. Code \u00a7 246(i)(1) and (d), as amended by SB 616 (2023): employer may limit use to 40 hours or 5 days per year, whichever is more; accrual cap 80 hours or 10 days. https://www.dir.ca.gov/dlse/Paid_Sick_Leave.htm",
+  "input": {
+   "employee": {
+    "hire": "2022-01-10",
+    "hours12": 1800,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 60,
+    "sickUsedYr": 40,
+    "reproUsed": 0,
+    "hiQuarter": 15000,
+    "shiftHours": 8
+   },
+   "company": {
+    "headcount": 20,
+    "within75": false,
+    "holidays": [],
+    "band90": 16279.9,
+    "band70": 20931.3,
+    "wbaMax": 1765,
+    "wbaMin": 50
+   },
+   "today": "2026-11-16",
+   "reason": "sick",
+   "opts": {
+    "start": "2026-11-16",
+    "hours": 8
+   },
+   "requested": "2026-11-16"
+  },
+  "expect": {
+   "elig": {
+    "sick": false
+   },
+   "plan": {
+    "warnsAbout": [
+     "sick_over_available"
+    ]
+   }
+  }
+ },
+ {
+  "id": "sick-10h-two-days",
+  "area": "sick",
+  "desc": "20 sick hours for a 10-hour-shift employee is 2 workdays, Monday and Tuesday.",
+  "source": "Lab. Code \u00a7 246(i)(1) and (d), as amended by SB 616 (2023): employer may limit use to 40 hours or 5 days per year, whichever is more; accrual cap 80 hours or 10 days. https://www.dir.ca.gov/dlse/Paid_Sick_Leave.htm",
+  "input": {
+   "employee": {
+    "hire": "2022-01-10",
+    "hours12": 1800,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 60,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000,
+    "shiftHours": 10
+   },
+   "company": {
+    "headcount": 20,
+    "within75": false,
+    "holidays": [],
+    "band90": 16279.9,
+    "band70": 20931.3,
+    "wbaMax": 1765,
+    "wbaMin": 50
+   },
+   "today": "2026-11-16",
+   "reason": "sick",
+   "opts": {
+    "start": "2026-11-16",
+    "hours": 20
+   },
+   "requested": "2026-11-16"
+  },
+  "expect": {
+   "plan": {
+    "end": "2026-11-18"
+   }
+  }
+ },
+ {
+  "id": "pdl-part-time-calendar",
+  "area": "pdl",
+  "desc": "A 20-hour-a-week employee unable to work for 20 weeks still gets PDL for 17 1/3 calendar weeks when the leave is continuous.",
+  "source": "2 CCR \u00a7 11042(a): four months means the time the employee would normally work in 17 1/3 weeks; part-time employees are prorated. https://www.law.cornell.edu/regulations/california/2-CCR-11042",
+  "input": {
+   "employee": {
+    "hire": "2022-01-10",
+    "hours12": 1800,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 60,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000,
+    "weeklyHours": 20
+   },
+   "company": {
+    "headcount": 20,
+    "within75": false,
+    "holidays": [],
+    "band90": 16279.9,
+    "band70": 20931.3,
+    "wbaMax": 1765,
+    "wbaMin": 50
+   },
+   "today": "2026-12-01",
+   "reason": "pregnancy_bonding",
+   "opts": {
+    "start": "2026-12-01",
+    "disWeeks": 20,
+    "bondWeeks": 0
+   },
+   "requested": "2026-11-20"
+  },
+  "expect": {
+   "plan": {
+    "pdlEnd": "2027-04-01",
+    "factsMention": [
+     "346.6 hours"
+    ],
+    "warnsAbout": [
+     "pdl_over_4_months"
+    ]
+   }
+  }
+ },
+ {
+  "id": "pdl-full-time-hours",
+  "area": "pdl",
+  "desc": "A 40-hour-a-week employee has about 693 hours of pregnancy leave.",
+  "source": "2 CCR \u00a7 11042(a): four months means the time the employee would normally work in 17 1/3 weeks; part-time employees are prorated. https://www.law.cornell.edu/regulations/california/2-CCR-11042",
+  "input": {
+   "employee": {
+    "hire": "2022-01-10",
+    "hours12": 1800,
+    "cfraUsed": 0,
+    "fmlaUsed": 0,
+    "sick": 60,
+    "sickUsedYr": 0,
+    "reproUsed": 0,
+    "hiQuarter": 15000,
+    "weeklyHours": 40
+   },
+   "company": {
+    "headcount": 20,
+    "within75": false,
+    "holidays": [],
+    "band90": 16279.9,
+    "band70": 20931.3,
+    "wbaMax": 1765,
+    "wbaMin": 50
+   },
+   "today": "2026-12-01",
+   "reason": "pregnancy_bonding",
+   "opts": {
+    "start": "2026-12-01",
+    "disWeeks": 10,
+    "bondWeeks": 0
+   },
+   "requested": "2026-11-20"
+  },
+  "expect": {
+   "plan": {
+    "factsMention": [
+     "693.2 hours"
+    ]
+   }
+  }
  }
 ]

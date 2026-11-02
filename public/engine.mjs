@@ -63,6 +63,19 @@ export function weeklyBenefit(emp, co){
 // 12 months of service: the same date one year later (Feb 29 hires reach it on Mar 1).
 export function oneYearAfter(d){ const [y,m,dd] = d.split('-').map(Number); return iso(Date.UTC(y+1, m-1, dd)); }
 
+/* ---------- Work schedule ---------- */
+// Usual shift length and weekly hours. Unknown values fall back to a full-time 8-hour, 40-hour schedule.
+export const shiftOf = (emp) => Math.max(1, Math.min(24, +emp.shiftHours || 8));
+export const weeklyOf = (emp) => Math.max(1, Math.min(80, +emp.weeklyHours || 40));
+// Sick leave: the employer may limit yearly use to 40 hours or 5 days, whichever is more,
+// and the balance to 80 hours or 10 days, whichever is more (Lab. Code § 246, as amended by SB 616).
+export const sickUseCap = (emp) => Math.max(RULES.sick.use, 5 * shiftOf(emp));
+export const sickBalanceCap = (emp) => Math.max(RULES.sick.accrualCap, 10 * shiftOf(emp));
+export const sickUsable = (emp) => Math.min(emp.sick, Math.max(0, sickUseCap(emp) - emp.sickUsedYr));
+// Pregnancy leave: up to 4 months of the employee's normal schedule (17 1/3 weeks), so part-time
+// employees get proportionally fewer hours. Taken continuously, it spans the same calendar weeks.
+export const pdlHours = (emp) => Math.round(weeklyOf(emp) * RULES.pdl.weeks * 10) / 10;
+
 /* ---------- Eligibility ---------- */
 export function eligibility(emp, co, start){
   const tenure = diffDays(emp.hire, start);
@@ -70,7 +83,7 @@ export function eligibility(emp, co, start){
   // FMLA: the employer is covered at 50+ employees; the 75-mile test is part of the employee's eligibility.
   const cfraCo = co.headcount >= RULES.cfra.minCo, fmlaCo = co.headcount >= RULES.fmla.minCo, near = !!co.within75;
   // Sick leave can be used from the 90th day of employment, counting the hire date as day 1.
-  const sickDay = tenure >= RULES.sick.useAfter - 1, sickLeft = Math.min(emp.sick, Math.max(0, RULES.sick.use - emp.sickUsedYr));
+  const sickDay = tenure >= RULES.sick.useAfter - 1, sickLeft = sickUsable(emp);
   const tenureTxt = tenure >= 365 ? `${(tenure/365).toFixed(1)} years` : `${Math.max(0,Math.floor(tenure/30.44))} months`;
   return {
     tenure,
@@ -135,6 +148,7 @@ export function buildPlan(emp, co, reason, o){
     seg('pay','pfl','Family leave pay', pdlEnd, pflEnd, `PFL from the state · ${plural(pflW,'week')} · ${amt}`); P.pays.pfl = pflW>0;
     seg('pay','unpaid','Unpaid', pflEnd, bondEnd, 'Vacation or PTO can cover');
     P.end = bondEnd;
+    P.facts.push({t:`Pregnancy leave is up to 4 months of this employee's normal schedule: about ${pdlHours(emp)} hours at ${weeklyOf(emp)} hours a week. It can be taken all at once or in parts, and it applies per pregnancy.`, c:'2 CCR § 11042'});
     P.facts.push({t:'PDL and CFRA bonding are separate entitlements. Together they can reach about 7 months of job protection.', c:RULES.pdl.cite});
     P.facts.push({t:'CFRA bonding must be finished within one year of the birth.', c:RULES.cfra.cite});
     P.facts.push({t:'Keep group health coverage on the same terms during PDL and CFRA.', c:'Gov. Code § 12945(a)(2)'});
@@ -198,13 +212,13 @@ export function buildPlan(emp, co, reason, o){
     P.end = sp.end;
   }
   else if (reason==='sick'){
-    const days = Math.max(1, Math.ceil(o.hours/8));
+    const days = Math.max(1, Math.ceil(o.hours/shiftOf(emp)));
     const sp = bizSpan(o.start, days, hol);
-    const avail = Math.min(emp.sick, Math.max(0, RULES.sick.use - emp.sickUsedYr));
+    const avail = sickUsable(emp), cap = sickUseCap(emp);
     seg('protect','short','Sick leave', sp.start, sp.end, `${o.hours} hours`);
     seg('pay','sick','Paid from sick balance', sp.start, sp.end, `${Math.min(o.hours, avail)} of ${o.hours} hours paid`);
     if (!el.sick.ok) P.warnings.push({bad:true, t:'Employee can start using sick leave on day 90 of employment.'});
-    if (o.hours > avail) P.warnings.push({t:`Only ${avail} hours are usable (balance ${emp.sick}, ${emp.sickUsedYr} of 40 used this year). The rest may be unpaid or PTO.`});
+    if (o.hours > avail) P.warnings.push({t:`Only ${avail} hours are usable (balance ${emp.sick}, ${emp.sickUsedYr} of ${cap} used this year). The rest may be unpaid or PTO.`});
     P.facts.push({t:'Usable for the employee or a family member, including kin care. Do not require a doctor note as a condition of using it.', c:RULES.sick.cite});
     P.facts.push({t:'Pay at the regular rate by the next regular payday, and show the balance on the pay stub.', c:'Lab. Code §§ 246(i), 246(l)'});
     P.end = sp.end;
@@ -254,7 +268,7 @@ export function sampleData(TODAY){
   const employees = [
     {id:'e1', name:'Priya Raman', role:'Roaster', hire:'2023-03-14', hours12:1980, cfraUsed:0, fmlaUsed:0, sick:32, sickUsedYr:8, reproUsed:0, hiQuarter:17550, mgr:'e9'},
     {id:'e2', name:'Marcus Bell', role:'Barista lead', hire:'2025-08-04', hours12:1410, cfraUsed:0, fmlaUsed:0, sick:24, sickUsedYr:16, reproUsed:0, hiQuarter:13200, mgr:'e10'},
-    {id:'e3', name:'Sofia Delgado', role:'Barista, part time', hire:'2026-02-02', hours12:820, cfraUsed:0, fmlaUsed:0, sick:18, sickUsedYr:6, reproUsed:0, hiQuarter:7900, mgr:'e10'},
+    {id:'e3', name:'Sofia Delgado', role:'Barista, part time', shiftHours:5, weeklyHours:20, hire:'2026-02-02', hours12:820, cfraUsed:0, fmlaUsed:0, sick:18, sickUsedYr:6, reproUsed:0, hiQuarter:7900, mgr:'e10'},
     {id:'e4', name:'Jordan Kim', role:'Wholesale accounts', hire:'2021-06-01', hours12:2050, cfraUsed:4, fmlaUsed:0, sick:40, sickUsedYr:0, reproUsed:0, hiQuarter:24600, mgr:'e9'},
     {id:'e5', name:'Alana Fuentes', role:'Packaging', hire:'2026-09-28', hours12:140, cfraUsed:0, fmlaUsed:0, sick:4, sickUsedYr:0, reproUsed:0, hiQuarter:9800, mgr:'e9'},
     {id:'e6', name:'Tomás Herrera', role:'Delivery driver', hire:'2022-11-10', hours12:1190, cfraUsed:0, fmlaUsed:0, sick:40, sickUsedYr:24, reproUsed:0, hiQuarter:11400, mgr:'e9'},

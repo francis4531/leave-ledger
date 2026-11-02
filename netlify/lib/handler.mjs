@@ -6,6 +6,8 @@ import * as E from "../../public/engine.mjs";
 import STRATEGY from "./strategy-data.mjs";
 import { runIntake, validate as validateDraft, changedFields, DEFAULT_MODEL } from "./intake.mjs";
 import { DKEY, loadDecisions, cleanDecision, mirrorToGitHub } from "./decisions.mjs";
+import GOLDEN from "./golden-data.mjs";
+import { runCases, summarizeRun } from "./eval.mjs";
 import { IKEY, FKEY, SKEY, SURVEY, loadInvites, validCode, newCode, addFeedback, cleanFeedback, cleanSurvey, summarize, aiGlobalOk, dict } from "./feedback.mjs";
 import { json, err, redirect, withCookies, signObj, readObj, cookieOf, setCookie, safeEqual } from "./session.mjs";
 import { googleOn, startGoogle, finishGoogle, upsertUser, userCookie, clearUserCookie, currentUser, saveUser, isAdminEmail, safeNext, baseUrl } from "./google.mjs";
@@ -163,6 +165,8 @@ function apply(D, acct, a, today, kind = "test") {
       if (!hr) return "HR only";
       const e = emp(a.id); if (!e) return "Employee not found";
       if (["hours12", "sick", "sickUsedYr", "cfraUsed", "hiQuarter"].includes(a.field)) e[a.field] = Math.max(0, Math.min(1e6, +a.value || 0));
+      else if (a.field === "shiftHours") e.shiftHours = Math.max(1, Math.min(24, +a.value || 8));
+      else if (a.field === "weeklyHours") e.weeklyHours = Math.max(1, Math.min(80, +a.value || 40));
       else if (a.field === "name" || a.field === "role") { const v = trim(a.value, 80).trim(); if (!v) return "Enter a value"; e[a.field] = v; }
       else if (a.field === "hire") { if (!/^\d{4}-\d{2}-\d{2}$/.test(a.value || "") || a.value > today) return "Pick a hire date on or before today"; e.hire = a.value; }
       else if (a.field === "mgr") { if (a.value && (!emp(a.value) || a.value === e.id)) return "Pick a manager"; e.mgr = a.value || null; if (a.value) emp(a.value).isMgr = true; }
@@ -189,7 +193,7 @@ function apply(D, acct, a, today, kind = "test") {
       if (e.mgr && !emp(e.mgr)) return "Pick a manager";
       const n = (v, hi) => Math.max(0, Math.min(hi, Math.round(+v || 0)));
       const id = "e" + crypto.randomBytes(4).toString("hex");
-      D.employees.push({ id, name, role: trim(e.role, 80).trim() || "Employee", hire: e.hire, hours12: n(e.hours12, 4000), cfraUsed: 0, fmlaUsed: 0, sick: n(e.sick, 400), sickUsedYr: 0, reproUsed: 0, hiQuarter: n(e.hiQuarter, 1e6), mgr: e.mgr || null });
+      D.employees.push({ id, name, role: trim(e.role, 80).trim() || "Employee", hire: e.hire, hours12: n(e.hours12, 4000), cfraUsed: 0, fmlaUsed: 0, sick: n(e.sick, 400), sickUsedYr: 0, reproUsed: 0, hiQuarter: n(e.hiQuarter, 1e6), shiftHours: Math.max(1, Math.min(24, +e.shiftHours || 8)), weeklyHours: Math.max(1, Math.min(80, +e.weeklyHours || 40)), mgr: e.mgr || null });
       if (e.mgr) emp(e.mgr).isMgr = true;
       log(`Added ${name}`); a._id = id; return null;
     }
@@ -383,6 +387,7 @@ async function route_(req, store, env) {
     const o = cleanCreate(await req.json().catch(() => ({})), R.user);
     if (o.error) return err(o.error);
     const { meta, D } = createOrg(o, R.user, today);
+    if (isAdminEmail(env, R.user.email)) meta.test = true; // the site admin's own workspaces are trials
     await store.setJSON(orgDataKey(meta.id), D);
     await saveOrg(store, meta);
     R.user.orgs = [...(R.user.orgs || []), meta.id]; R.user.orgsCreated = (R.user.orgsCreated || 0) + 1; await saveUser(store, R.user);
@@ -579,6 +584,7 @@ async function surveyOf(store, id) {
 }
 
 /* ---------- Admin inbox (preview site only) ---------- */
+const EVKEY = "clerk-eval-v1";
 // A valid admin cookie: Google sign-in by an email in LL_ADMIN_EMAILS, or the admin password.
 function adminSession(req, env) {
   const o = readObj(cookieOf(req, "ll_admin"), env);
@@ -614,19 +620,49 @@ async function handleAdmin(req, route, store, env, today) {
       const D = await store.get(orgDataKey(id), { type: "json" });
       orgs.push({ id, name: meta.name, ownerEmail: meta.ownerEmail, created: meta.created, disabled: !!meta.disabled, domain: meta.domain,
         users: meta.members.length, joined: meta.members.filter((m) => m.sub).length, employees: D ? D.employees.length : 0, cases: D ? D.cases.length : 0,
-        activity: D && D.activity ? D.activity : null, survey: !!sv.byInvite["org:" + id] });
+        activity: D && D.activity ? D.activity : null, survey: !!sv.byInvite["org:" + id], test: !!meta.test });
     }
     orgs.sort((a, b) => b.created.localeCompare(a.created));
+    // Test copies (the admin's own trials) are left out of the survey numbers.
+    const isTest = (k) => k.startsWith("org:") ? !!orgs.find((o) => o.id === k.slice(4) && o.test) : !!(invites.items[k] && invites.items[k].test);
+    const real = Object.fromEntries(Object.entries(sv.byInvite).filter(([k]) => !isTest(k)));
     const name = (f) => f.org ? ((ix.items[f.org] || {}).name || "Workspace") + " (workspace)" : (invites.items[f.invite] && invites.items[f.invite].name) || f.invite;
     const sname = (k) => k.startsWith("org:") ? ((ix.items[k.slice(4)] || {}).name || "Workspace") + " (workspace)" : (invites.items[k] && invites.items[k].name) || k;
     return json({
       invites: list, orgs,
-      feedback: fb.items.map((f) => ({ ...f, who: name(f) })),
-      surveys: Object.entries(sv.byInvite).map(([k, s]) => ({ invite: k, who: sname(k), ...s })).sort((a, b) => b.at.localeCompare(a.at)),
-      summary: summarize(sv.byInvite),
+      feedback: fb.items.map((f) => ({ ...f, who: name(f), test: isTest(f.org ? "org:" + f.org : f.invite || "") })),
+      surveys: Object.entries(sv.byInvite).map(([k, s]) => ({ invite: k, who: sname(k), test: isTest(k), ...s })).sort((a, b) => b.at.localeCompare(a.at)),
+      summary: { ...summarize(real), testExcluded: Object.keys(sv.byInvite).length - Object.keys(real).length },
       questions: SURVEY,
       google: googleOn(env),
+      clerk: { on: !!env.ANTHROPIC_API_KEY, cases: GOLDEN.cases.length, runs: ((await store.get(EVKEY, { type: "json" })) || { runs: [] }).runs.filter((r) => r.summary).map(({ results, ...r }) => r).slice(0, 5) },
     });
+  }
+  /* Clerk accuracy run: the 50-case golden set against the live model, 10 cases per request so each
+     request stays well inside the function time limit. Results are kept for the last 10 runs. */
+  if (route === "admin/eval/start" && req.method === "POST") {
+    if (!env.ANTHROPIC_API_KEY) return err("Add ANTHROPIC_API_KEY in Netlify first.", 503);
+    const o = (await store.get(EVKEY, { type: "json" })) || { runs: [] };
+    const day = new Date().toISOString().slice(0, 10);
+    if (o.runs.filter((r) => r.at.startsWith(day)).length >= 5) return err("That is 5 runs today. Try again tomorrow.", 429);
+    const run = { id: "r" + Date.now().toString(36), at: new Date().toISOString(), model: env.LL_MODEL || DEFAULT_MODEL, total: GOLDEN.cases.length, results: [], summary: null };
+    o.runs = [run, ...o.runs].slice(0, 10);
+    await store.setJSON(EVKEY, o);
+    return json({ run: run.id, total: run.total, batch: 10 });
+  }
+  if (route === "admin/eval/batch" && req.method === "POST") {
+    const body = await req.json().catch(() => ({}));
+    const from = Math.max(0, Math.floor(+body.from || 0));
+    const o = (await store.get(EVKEY, { type: "json" })) || { runs: [] };
+    const run = o.runs.find((r) => r.id === body.run);
+    if (!run || run.summary) return err("That run is finished or missing.", 404);
+    const slice = GOLDEN.cases.slice(from, from + 10).filter((c) => !run.results.some((r) => r.id === c.id));
+    const res = await runCases(slice, GOLDEN.today, env);
+    const fresh = (await store.get(EVKEY, { type: "json" })) || o, r2 = fresh.runs.find((r) => r.id === run.id) || run;
+    r2.results = [...r2.results, ...res];
+    if (r2.results.length >= r2.total) r2.summary = summarizeRun(r2.results, r2.model);
+    await store.setJSON(EVKEY, fresh);
+    return json({ done: !!r2.summary, count: r2.results.length, total: r2.total, summary: r2.summary });
   }
   if (route === "admin/invite" && req.method === "POST") {
     const body = await req.json().catch(() => ({}));
@@ -644,6 +680,7 @@ async function handleAdmin(req, route, store, env, today) {
     const inv = invites.items[body.code];
     if (!inv) return err("Invite not found", 404);
     if ("disabled" in body) inv.disabled = !!body.disabled;
+    if ("test" in body) inv.test = !!body.test;
     if ("name" in body) inv.name = String(body.name || "").slice(0, 80).trim() || inv.name;
     if ("note" in body) inv.note = String(body.note || "").slice(0, 300).trim();
     await store.setJSON(IKEY, invites);
@@ -659,6 +696,7 @@ async function handleAdmin(req, route, store, env, today) {
     const meta = await loadOrg(store, body.id);
     if (!meta) return err("Workspace not found", 404);
     if ("disabled" in body) meta.disabled = !!body.disabled;
+    if ("test" in body) meta.test = !!body.test;
     await saveOrg(store, meta);
     return json({ ok: true });
   }
