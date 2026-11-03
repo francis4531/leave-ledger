@@ -193,6 +193,26 @@ describe("test site", { skip }, () => {
     assert.deepEqual(errors, []);
   });
 
+  test("after HR browses the HR walkthrough, a manager and an employee on the same browser see only their own", async () => {
+    const { p, errors } = await page();
+    await p.goto(S.base);
+    await p.fill("#lg-pw", "test-pass-123");
+    await p.click('[data-pick="grace@mesaverde.example"]');
+    await p.click('[data-tab="guide"]');
+    await p.waitForSelector("[data-walk-flow]");
+    await p.click('[data-walk-flow="hr"]'); await p.click('[data-walk="1"]');
+    for (const [who, title] of [["mei", "Leave for managers"], ["marcus", "Asking for time off"]]) {
+      await p.click("[data-logout]");
+      await p.click('[data-pick="' + who + '@mesaverde.example"]');
+      await p.click('[data-tab="guide"]');
+      await p.waitForSelector(".walk h4");
+      assert.equal(await p.textContent(".walk h3"), title, who);
+      assert.match(await p.textContent(".walk-text"), /Step 1 of/);
+      assert.equal((await p.$$("[data-walk-flow]")).length, 0);
+    }
+    assert.deepEqual(errors, []);
+  });
+
   test("every HR screen opens without errors", async () => {
     const { p, errors } = await page();
     await p.goto(S.base);

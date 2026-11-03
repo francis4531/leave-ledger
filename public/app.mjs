@@ -72,6 +72,8 @@ async function api(path, body) {
 function accept(j) {
   S = { me: j.me, today: j.today, data: j.data, ai: j.ai || { on: false }, space: j.space || { kind: "test" }, caps: j.caps || {}, mail: j.mail || { on: false } }; TODAY = j.today;
   if (j.mode) MODE = j.mode;
+  const who = `${S.space.kind}:${S.space.id || ""}:${S.me.email}`;
+  if (UI.who !== who) { UI.who = who; UI.walk = null; UI.wiz = null; UI.caseId = null; UI.letter = null; UI.appr = { caseId: null, notify: true, note: "" }; }
   if (UI.backups.space !== S.space.id) UI.backups = { loaded: false, busy: false, days: null, keep: 14, space: S.space.id };
   if (!UI.tab || !tabsFor(S.me.role).some(([k]) => k === UI.tab)) UI.tab = tabsFor(S.me.role)[0][0];
   if (!UI.planner.start) UI.planner.start = addDays(TODAY, 14);
@@ -351,7 +353,9 @@ let WALK = null;
 function walkthroughView() {
   if (WALK === null) { WALK = false; fetch("/guides/walkthroughs.json").then((r) => r.json()).then((j) => { WALK = j; if (UI.tab === "guide") render(); }).catch(() => {}); }
   if (!WALK) return "";
-  const own = S.me.role, key = UI.walk && WALK[UI.walk.flow] ? UI.walk.flow : own, F = WALK[key]; if (!F) return "";
+  // Only HR may look at other roles' walkthroughs. Managers and employees always get their own.
+  const own = S.me.role, allowed = own === "hr" ? ["hr", "mgr", "emp"] : [own];
+  const key = UI.walk && allowed.includes(UI.walk.flow) && WALK[UI.walk.flow] ? UI.walk.flow : own, F = WALK[key]; if (!F) return "";
   const i = Math.min(UI.walk && UI.walk.flow === key ? UI.walk.i : 0, F.steps.length - 1), st = F.steps[i];
   const others = own === "hr" ? [["hr", "HR"], ["mgr", "Managers"], ["emp", "Employees"]] : [];
   return `<section class="panel walk" aria-roledescription="walkthrough">
@@ -1278,8 +1282,8 @@ document.addEventListener("click", async (ev) => {
   }
   if (b.hasAttribute("data-req-open")) { UI.reqOpen = true; render(); document.getElementById("rq-text")?.focus(); return; }
   if (b.hasAttribute("data-req-close")) { UI.reqOpen = false; render(); return; }
-  if (b.dataset.walkFlow) { UI.walk = { flow: b.dataset.walkFlow, i: 0 }; render(); return; }
-  if (b.dataset.walk || b.dataset.walkTo) { const key = (UI.walk && UI.walk.flow) || S.me.role, cur = UI.walk && UI.walk.flow === key ? UI.walk.i : 0; UI.walk = { flow: key, i: b.dataset.walkTo ? +b.dataset.walkTo : Math.max(0, cur + +b.dataset.walk) }; render(); return; }
+  if (b.dataset.walkFlow) { if (S.me.role !== "hr") return; UI.walk = { flow: b.dataset.walkFlow, i: 0 }; render(); return; }
+  if (b.dataset.walk || b.dataset.walkTo) { const key = (S.me.role === "hr" && UI.walk && UI.walk.flow) || S.me.role, cur = UI.walk && UI.walk.flow === key ? UI.walk.i : 0; UI.walk = { flow: key, i: b.dataset.walkTo ? +b.dataset.walkTo : Math.max(0, cur + +b.dataset.walk) }; render(); return; }
   if (b.hasAttribute("data-wiz-start")) { UI.wiz = { step: 1, need: null, relation: "parent", start: (() => { let d = addDays(TODAY, 14); while (new Date(d + "T00:00:00Z").getUTCDay() !== 1) d = addDays(d, 1); return d; })(), due: addDays(TODAY, 90), bond: true, weeks: 4, days: 3, hours: 8 }; render(); window.scrollTo(0, 0); return; }
   if (b.dataset.wizNeed) { UI.wiz.need = b.dataset.wizNeed; UI.wiz.step = 2; render(); window.scrollTo(0, 0); return; }
   if (b.hasAttribute("data-wiz-back")) { UI.wiz.step = Math.max(1, UI.wiz.step - 1); render(); return; }
