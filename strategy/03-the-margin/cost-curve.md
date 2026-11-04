@@ -28,7 +28,17 @@ Per company per month for the 20-employee reference company (PEPM in brackets = 
 | Payments (not in the template, added) | $2.46 | $60 × 2.9% + $0.30 = $2.04, plus $60 × 0.7% = $0.42. |
 | **Total AI COGS** | **$0.006 per company** | AI is 0.04% of all costs. Total cost to serve is about $14.47 at 10 companies and $12.87 at 100. |
 
-**Gross margin by company size** (all estimates, card monthly, 15 minutes support):
+**Update Nov 4: price lowered to $2 PEPM.** Same cost assumptions (card fees about 3.6% + $0.30, $2 hosting share, 15 minutes of support at $40 an hour, Clerk about $0.01):
+
+| Company | Revenue at $2 | Cost | Gross margin | Without support time | Support minutes before it costs money |
+|---|---|---|---|---|---|
+| 5 employees | $10 | $12.67 | **about −27%** | 73% | about 11 |
+| 20 employees | $40 | $13.75 | **about 66%** | 91% | about 54 |
+| 49 employees | $98 | $15.84 | **about 84%** | 94% | about 138 |
+
+Break-even on running costs ($40 a month): 2 paying 20-employee companies (each contributes about $28 after payments, Clerk and support). Companies of 5 never cover it if they get 15 minutes of support; with no support it takes 5 of them. What makes $2 work: self-serve support below 10 employees, annual prepay by bank transfer (cuts the $0.30 card fee per charge to one a year), or a monthly minimum (for example $20, which a 10-employee company pays anyway). The tables below are at the earlier $3 price.
+
+**Gross margin by company size at $3** (all estimates, card monthly, 15 minutes support):
 
 | Company | Revenue | Cost at 10 companies | Gross margin | Without support time |
 |---|---|---|---|---|

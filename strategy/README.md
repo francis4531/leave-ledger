@@ -32,8 +32,8 @@
 - **Top Risk:** Distribution. Small businesses buy HR through their payroll provider. If Gusto or Rippling ships California leave first, a standalone tool has no way in.
 - **Confidence:** L (until 10 customer interviews)
 - **Prototype:** Netlify test site, 10 test accounts (link in `01-the-bet/prototype.md`)
-- **Kill Criteria:** Under 3 of 10 interviewees feel the pain, or under 2 of 10 would pay $3 per employee per month (our price), by Nov 23; or a payroll platform ships California leave stacking before we have 5 paying employers.
-- **Changed by Nov 2 product decisions:** first segment narrowed to 5 to 49 employees (state leaves only, no FMLA), owner is the buyer, price set at $3 per employee per month (free for 1 to 4). Kill criterion 2 changed from $4 to $3 on Nov 3 to test the price we will charge (Week 3 question 2).
+- **Kill Criteria:** Under 3 of 10 interviewees feel the pain, or under 2 of 10 would pay $2 per employee per month (our price), by Nov 23; or a payroll platform ships California leave stacking before we have 5 paying employers.
+- **Changed by Nov 2 product decisions:** first segment narrowed to 5 to 49 employees (state leaves only, no FMLA), owner is the buyer, price set at $3 per employee per month (free for 1 to 4), lowered to $2 on Nov 4. Kill criterion 2 follows the price we will charge: $4, then $3 (Nov 3), now $2 (Nov 4).
 
 → Details: [`01-the-bet/`](01-the-bet/)
 
@@ -58,9 +58,9 @@
 
 **Will this make money or bleed it?**
 
-- **Gross Margin (current):** About 76% for a 20-employee company at $3 per employee per month ($60), with 10 companies on the platform (79% at 100). 14% at 5 employees, 88% at 49. Estimates; support time (15 minutes a month at $40 an hour, assumed) is the biggest cost, then card fees.
+- **Gross Margin (current):** At $2 per employee per month (Nov 4): about 66% for a 20-employee company ($40), 84% at 49 employees, and **negative (about −27%) at 5 employees** with 15 minutes of support a month. A 5-employee company covers about 11 minutes of support before it costs money. Estimates; support time ($40 an hour, assumed) is the biggest cost, then card fees. At $3 these were 76%, 88% and 14%.
 - **Gross Margin (AI-adjusted):** The same. One Clerk intake costs about $0.0003 (Haiku 5.5 at $0.10 / $0.50 per million tokens, about 1,650 in and 250 out), so a month of Clerk for 20 employees is under one cent. AI moves margin by 0.01 points. Upside if Clerk cuts support by 5 minutes a company a month: about 81%.
-- **Pricing Model:** Seat-based, $3 per employee per month, free for 1 to 4 (decided Nov 2). Clerk included, not metered. Proposed: annual prepay by bank transfer and email-only support below 10 employees. Tilt now lists $2.50 (plus $0.60 for integrations), so price alone is a thin edge.
+- **Pricing Model:** Seat-based, $2 per employee per month (lowered from $3 on Nov 4), free for 1 to 4. Clerk included, not metered. Below Tilt ($2.50, or $3.10 with integrations). Small companies only work with self-serve support and annual prepay; consider a monthly minimum.
 - **Cascading Strategy:** Rules engine and template letters first (free, no model); Haiku 5.5 only for free text; when unsure, ask HR rather than a bigger model. Sonnet 5.5 is the fallback only if Haiku fails the 90% leave type bar, and would still cost $0.12 a month per company.
 - **Break-even at:** Running costs about $40 a month (Netlify Pro, Resend Pro). 1 paying 20-employee company, or 10 paying 5-employee companies, covers them. One-time lawyer review (no quote yet) and trademark clearance come on top: each $1,000 is about 21 company-months at 20 employees. Draft, for partner challenge.
 

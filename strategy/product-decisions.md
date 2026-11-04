@@ -13,7 +13,7 @@
 | 5 | Employer | A personal side venture with no connection to Francis's employer. | Nothing to build. |
 | 6 | Name | Keep "Leave Ledger" for now; clear it properly before spending on brand. | See trademark notes below. |
 | 7 | First segment | California employers with 5 to 49 employees. | State leaves only (no federal FMLA). This is where the California-only complexity is the edge. |
-| 8 | Price | $3 per employee per month. Free for 1 to 4 employees (decided Nov 2). | Companies under 5 owe only sick leave, so the free tier does not overlap the 5 to 49 target. No billing built yet. |
+| 8 | Price | $2 per employee per month (lowered from $3 on Nov 4). Free for 1 to 4 employees (decided Nov 2). | Below Tilt's $2.50 ($3.10 with Gusto sync). Companies under 5 owe only sick leave, so the free tier does not overlap the 5 to 49 target. At $2, a 5-employee company loses money with 15 minutes of support a month (see 03-the-margin). No billing built yet. |
 | 9 | Buyer | The owner. | Pitch and onboarding speak to the owner: risk, time saved, cost. HR or the office manager runs it day to day. |
 | 10 | Pilot | Design partners, free for 3 months. | In return: a weekly 20-minute check-in and permission to quote them. |
 | 11 | Payroll connection | Gusto first. | Next: apply to Gusto's developer and app partner program. File import covers everyone else until then. |
