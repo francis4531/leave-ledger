@@ -768,7 +768,14 @@ async function route_(req, store, env) {
     const g = FB ? await aiGlobalOk(store, today, +(env.LL_AI_DAY || 400)) : null;
     if (g && !g.ok) return err(limitMsg, 429);
     const res = route === "roster/map" ? await runColumnMap(body.columns, env) : await runIntake(body.text, today, env);
-    if (res.error) return err(res.error, res.status || 502);
+    if (res.error) {
+      if (res.upstream) {
+        // The AI provider refused or failed. Logged for Netlify's function logs and kept for the admin inbox.
+        console.error("AI provider error", JSON.stringify(res.upstream));
+        await store.setJSON("ai-last-error", { at: new Date().toISOString(), route, model: env.LL_MODEL || DEFAULT_MODEL, ...res.upstream });
+      }
+      return err(res.error, res.status || 502);
+    }
     if (g) await g.bump();
     const mk = today.slice(0, 7);
     u.count++; u.by[acct.email] = (u.by[acct.email] || 0) + 1; u.input += res.usage.input; u.output += res.usage.output;
@@ -889,7 +896,7 @@ async function handleAdmin(req, route, store, env, today) {
       summary: { ...summarize(real), testExcluded: Object.keys(sv.byInvite).length - Object.keys(real).length },
       questions: SURVEY,
       google: googleOn(env),
-      clerk: { on: !!env.ANTHROPIC_API_KEY, cases: GOLDEN.cases.length, runs: ((await store.get(EVKEY, { type: "json" })) || { runs: [] }).runs.filter((r) => r.summary).map(({ results, ...r }) => r).slice(0, 5) },
+      clerk: { on: !!env.ANTHROPIC_API_KEY, lastError: await store.get("ai-last-error", { type: "json" }), cases: GOLDEN.cases.length, runs: ((await store.get(EVKEY, { type: "json" })) || { runs: [] }).runs.filter((r) => r.summary).map(({ results, ...r }) => r).slice(0, 5) },
     });
   }
   /* Clerk accuracy run: the 50-case golden set against the live model, 10 cases per request so each

@@ -209,6 +209,7 @@ function clerkPanel() {
     <div class="head"><h2>Clerk accuracy</h2><button class="btn sm primary" data-eval ${!C.on || EVAL.busy ? "disabled" : ""}>${EVAL.busy ? `Running... ${EVAL.done} of ${EVAL.total}` : "Run Clerk test"}</button></div>
     <p class="small muted">Sends the ${C.cases || 50} test requests to the live model and scores what Clerk reads. Costs about one cent. Kill criteria: at least 90% right on leave type.${C.on ? "" : " Add ANTHROPIC_API_KEY in Netlify to run it."}</p>
     ${EVAL.error ? `<p class="err">${esc(EVAL.error)}</p>` : ""}
+    ${C.lastError ? `<div class="err small" style="margin:6px 0">Last AI error ${when(C.lastError.at)}: ${esc(String(C.lastError.status))} ${esc(C.lastError.type || "")} · ${esc(C.lastError.message || "no message")} <span class="muted">(model ${esc(C.lastError.model)})</span></div>` : ""}
     ${s ? `<div class="stats">
       <div class="stat"><b>${s.reasonPct}%</b><span>Leave type right <span class="pill ${s.reasonPct >= 90 ? "ok" : "bad"}">${s.reasonPct >= 90 ? "meets" : "below"} 90%</span></span></div>
       <div class="stat"><b>${s.rowsPct}%</b><span>Every field right</span></div>

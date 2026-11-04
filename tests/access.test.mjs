@@ -704,3 +704,24 @@ describe("workspace data: export, daily backups, restore and delete", () => {
     assert.ok(!s.orgs.some((o) => o.id === id)); assert.equal(s.deleted[0].name, "Bayside Dental");
   });
 });
+
+describe("when the AI provider fails", () => {
+  test("the employee gets a clear message and the admin sees the provider's reason", async () => {
+    const p = preview(), f = globalThis.fetch;
+    const code = await makeInvite(p, { name: "X" });
+    globalThis.fetch = async (url, init) => String(url).includes("api.anthropic.com")
+      ? new Response(JSON.stringify({ type: "error", error: { type: "authentication_error", message: "invalid x-api-key" } }), { status: 401 })
+      : f(url, init);
+    try {
+      const c = p.as({ ip: "9.9.9.9" });
+      await c.post("/api/join", { code });
+      await c.post("/api/login", { email: "ben@mesaverde.example" });
+      const r = await c.post("/api/intake", { text: "I need to visit my ailing parents" });
+      assert.equal(r.status, 502);
+      assert.match(r.body.error, /not working right now/);
+      const admin = await adminClient(p);
+      const e = (await admin.get("/api/admin/state")).body.clerk.lastError;
+      assert.equal(e.status, 401); assert.equal(e.type, "authentication_error");
+    } finally { globalThis.fetch = f; }
+  });
+});

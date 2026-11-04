@@ -133,7 +133,12 @@ export async function runIntake(text, today, env, fetchImpl = fetch) {
     return { error: "Could not reach the AI service. Try again in a moment, or fill in the form yourself.", status: 502 };
   }
   const body = await r.json().catch(() => null);
-  if (!r.ok || !body) return { error: "The AI service did not answer. Fill in the form yourself for now.", status: 502, detail: body?.error?.message };
+  if (!r.ok || !body) {
+    // Tell the user something useful, and keep the provider's own reason for the site admin.
+    const busy = r.status === 429 || r.status === 529 || r.status >= 500;
+    return { error: busy ? "Clerk is busy right now. Try again in a minute, or fill in the form yourself." : "Clerk is not working right now. Fill in the form yourself; the site admin has been told.", status: 502,
+      upstream: { status: r.status, type: body?.error?.type || null, message: String(body?.error?.message || "").slice(0, 300) } };
+  }
   const textOut = (body.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
   const draft = validate(extractJSON(textOut), today);
   if (!draft) return { error: "Clerk could not read that. Fill in the form yourself, or try rewording it.", status: 502 };

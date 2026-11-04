@@ -51,7 +51,7 @@ export async function runColumnMap(columns, env, fetchImpl = fetch) {
     });
   } catch (e) { return { error: "Clerk could not be reached. Match the columns yourself.", status: 502 }; }
   const body = await r.json().catch(() => null);
-  if (!r.ok || !body) return { error: "Clerk did not answer. Match the columns yourself.", status: 502 };
+  if (!r.ok || !body) return { error: "Clerk did not answer. Match the columns yourself.", status: 502, upstream: { status: r.status, type: body?.error?.type || null, message: String(body?.error?.message || "").slice(0, 300) } };
   const text = (body.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
   let parsed = null; try { parsed = JSON.parse((text.match(/\{[\s\S]*\}/) || [])[0]); } catch (e) {}
   const res = validateMap(parsed, cols);
