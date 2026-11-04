@@ -28,6 +28,18 @@
 
 **Answer:** Make it the default.   We need to build the trust from our customers to have automated prepay.
 
+### 4. Clerk's first numbers
+
+**Question:** Week 2's "turn on Clerk" is done, but no score is recorded yet. Add the golden set result (inbox, Clerk test run: % right on leave type, out of 50 cases) and HR Settings' requests and AI cost this month to `02-the-moat/kill-switch.md`, or paste them in this answer. They replace this week's token estimate and set the Week 4 baseline.
+
+**Status:** Decided · Nov 4, 2026 · Site admin
+
+**Answer:** Done. First valid golden set run, Nov 3, 10:27 PM PT: 100% right on leave type out of 50 cases (target 90%). Every field right 100%, tricky requests handled 100%, average reply 2.3 seconds, 0 errors. A full 50-case run costs about one cent. Requests and AI cost this month in HR Settings are near zero, since only test runs have used Clerk so far.
+
+An earlier run the same evening failed all 50 because the API key was invalid; it is excluded. Recorded in 02-the-moat/kill-switch.md as the Week 4 baseline.
+
+Caveat: we wrote the 50 cases alongside the prompt, so 100% is the ceiling. The real measure is “Sent without changes” once design partners use it. Next: add 10 to 20 real phrasings from interviews to the test set.
+
 ## Week 2 · The Moat
 
 ### 1. Partner challenge on Tilt
