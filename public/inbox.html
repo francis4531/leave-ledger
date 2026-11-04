@@ -132,9 +132,9 @@ function render() {
       <div class="stat"><b>${S.handledLeave}</b><span>Handled a leave in the last 12 months</span></div>
       <div class="stat"><b>${S.painAvg ?? "-"}</b><span>Average pain (1 to 5); ${S.painful} said 4 or 5</span></div>
       <div class="stat"><b>${S.usefulAvg ?? "-"}</b><span>Average usefulness (1 to 5)</span></div>
-      <div class="stat"><b>${S.payYes}</b><span>Would pay $4 per employee per month (${pct(S.payYes)}); ${S.payMaybe} maybe at a lower price</span></div>
+      <div class="stat"><b>${S.payYes}</b><span>Would pay $3 per employee per month (${pct(S.payYes)}); ${S.payMaybe} maybe at a lower price</span></div>
     </div>
-    <p class="small muted">Kill criteria check on Nov 23: at least 3 of 10 feel the pain, and at least 2 of 10 would pay $4 per employee per month.${S.testExcluded ? ` ${S.testExcluded} test ${S.testExcluded === 1 ? "survey is" : "surveys are"} left out of these numbers.` : ""}</p>
+    <p class="small muted">Kill criteria check on Nov 23: at least 3 of 10 feel the pain, and at least 2 of 10 would pay $3 per employee per month.${S.testExcluded ? ` ${S.testExcluded} test ${S.testExcluded === 1 ? "survey is" : "surveys are"} left out of these numbers.` : ""}</p>
   </section>
 
   ${clerkPanel()}

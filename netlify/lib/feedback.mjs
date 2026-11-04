@@ -36,7 +36,7 @@ export function cleanFeedback(b) {
   return { screen: trim(b.screen, 60), rating: rating >= 1 && rating <= 5 ? rating : null, note, kind: ["idea", "bug", "confusing", "like"].includes(b.kind) ? b.kind : "" };
 }
 
-// Survey questions. Tied to the kill criteria: pain, leaves handled, willingness to pay $4 per employee per month.
+// Survey questions. Tied to the kill criteria: pain, leaves handled, willingness to pay $3 per employee per month (our price).
 export const SURVEY = [
   { id: "role", q: "What is your role?", type: "choice", options: ["Owner or founder", "Office or operations manager", "HR generalist or HR lead", "Bookkeeper or payroll", "Other"] },
   { id: "size", q: "How many employees does your company have?", type: "choice", options: ["Under 5", "5 to 19", "20 to 49", "50 to 200", "Over 200"] },
@@ -44,7 +44,7 @@ export const SURVEY = [
   { id: "pain", q: "How painful is handling a leave today?", type: "scale", low: "Easy", high: "Very painful" },
   { id: "tool", q: "What do you use today?", type: "multi", options: ["My payroll tool (Gusto, ADP, Rippling, other)", "Spreadsheet or calendar", "An employment lawyer or HR consultant", "A leave vendor (Tilt or similar)", "Nothing in particular"] },
   { id: "useful", q: "How useful would this app be for you?", type: "scale", low: "Not useful", high: "Very useful" },
-  { id: "pay", q: "Would your company pay $4 per employee per month for this?", type: "choice", options: ["Yes", "Maybe, at a lower price", "No"] },
+  { id: "pay", q: "Would your company pay $3 per employee per month for this?", type: "choice", options: ["Yes", "Maybe, at a lower price", "No"] },
   { id: "price", q: "If not $4, what price would feel right?", type: "text", optional: true },
   { id: "missing", q: "What is missing, or what would stop you from using it?", type: "text", optional: true },
   { id: "contact", q: "Email, if you are open to a 20-minute follow-up call", type: "text", optional: true },

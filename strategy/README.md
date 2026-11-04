@@ -32,8 +32,8 @@
 - **Top Risk:** Distribution. Small businesses buy HR through their payroll provider. If Gusto or Rippling ships California leave first, a standalone tool has no way in.
 - **Confidence:** L (until 10 customer interviews)
 - **Prototype:** Netlify test site, 10 test accounts (link in `01-the-bet/prototype.md`)
-- **Kill Criteria:** Under 3 of 10 interviewees feel the pain, or under 2 of 10 would pay $4 per employee per month, by Nov 23; or a payroll platform ships California leave stacking before we have 5 paying employers.
-- **Changed by Nov 2 product decisions:** first segment narrowed to 5 to 49 employees (state leaves only, no FMLA), owner is the buyer, price set at $3 per employee per month (free for 1 to 4); kill criterion 2 still tests $4 (Week 3 question 2).
+- **Kill Criteria:** Under 3 of 10 interviewees feel the pain, or under 2 of 10 would pay $3 per employee per month (our price), by Nov 23; or a payroll platform ships California leave stacking before we have 5 paying employers.
+- **Changed by Nov 2 product decisions:** first segment narrowed to 5 to 49 employees (state leaves only, no FMLA), owner is the buyer, price set at $3 per employee per month (free for 1 to 4). Kill criterion 2 changed from $4 to $3 on Nov 3 to test the price we will charge (Week 3 question 2).
 
 → Details: [`01-the-bet/`](01-the-bet/)
 

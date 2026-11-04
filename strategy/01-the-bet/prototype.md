@@ -51,7 +51,7 @@ Stop, or pivot to an add-on inside a payroll platform, if any of these happen:
 | # | Evidence that kills or changes the bet | Check by |
 |---|---|---|
 | 1 | Fewer than 3 of 10 interviewed California office managers or HR generalists handled a CFRA or PDL leave in the last 12 months and called it painful | Nov 23, 2026 |
-| 2 | Fewer than 2 of those 10 would pay at least $4 per employee per month (Tilt's lowest tier) or a flat monthly price of similar size | Nov 23, 2026 |
+| 2 | Fewer than 2 of those 10 would pay at least $3 per employee per month (our price; was $4, Tilt's lowest tier when first set, changed Nov 3) or a flat monthly price of similar size | Nov 23, 2026 |
 | 3 | Gusto or Rippling ships California-specific leave stacking with a notice clock before Leave Ledger has 5 paying employers | Ongoing; review monthly |
 | 4 | AI intake classifies under 90% of a 50-case golden set into the right leave type | Built and tested in Module 4 |
 
