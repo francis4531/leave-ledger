@@ -2,6 +2,16 @@
 
 > Answered on the /strategy page of the test site and copied here automatically. Newest week first. Edit them on the page, not in this file; the page overwrites it.
 
+## Week 3 · The Margin
+
+### 1. Tilt's $2.50 price
+
+**Question:** Tilt now lists Essentials at $2.50 per employee per month (plus $0.60 for Gusto and Rippling sync), below our $3. Keep $3 and sell the notice clock and setup in minutes, or change the price? Either way, ask each interviewee what they would pay with Tilt's list price in front of them.
+
+**Status:** Decided · Nov 3, 2026 · Site admin
+
+**Answer:** Keep the same price as Tilt.  We compete on both price and value.
+
 ## Week 2 · The Moat
 
 ### 1. Partner challenge on Tilt
