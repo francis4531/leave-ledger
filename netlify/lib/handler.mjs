@@ -468,7 +468,21 @@ async function claimInviteEmails(store, user) {
   }
 }
 
+// Settings pasted into Netlify often pick up a stray space, line break or wrapping quotes. None of our settings
+// can contain line breaks, and none start or end with spaces or quotes, so those are removed before use.
+export function cleanEnv(env = {}) {
+  const out = {};
+  for (const [k, v] of Object.entries(env)) {
+    if (typeof v !== "string") { out[k] = v; continue; }
+    let t = v.replace(/[\r\n\u200B\uFEFF]/g, "").trim();
+    if (t.length >= 2 && ((t[0] === '"' && t.at(-1) === '"') || (t[0] === "'" && t.at(-1) === "'"))) t = t.slice(1, -1).trim();
+    out[k] = t === "" ? undefined : t;
+  }
+  return out;
+}
+
 export async function handle(req, store, env) {
+  env = cleanEnv(env);
   try { return await route_(req, store, env); }
   catch (e) { if (String(e.message).startsWith("Set LL_SECRET")) return err(e.message, 503); throw e; }
 }

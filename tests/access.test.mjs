@@ -725,3 +725,19 @@ describe("when the AI provider fails", () => {
     } finally { globalThis.fetch = f; }
   });
 });
+
+describe("settings pasted with stray characters", () => {
+  test("spaces, line breaks and wrapping quotes are removed; inner spaces stay", async () => {
+    const { cleanEnv } = await import("../netlify/lib/handler.mjs");
+    const e = cleanEnv({ ANTHROPIC_API_KEY: '  "sk-ant-api03-abc\n"  ', LL_MAIL_FROM: " Leave Ledger <notices@leaveledger.ai>\r\n", LL_MODEL: "\u200Bclaude-haiku-5-5 ", LL_AI_REAL_DATA_OK: "'yes'", EMPTY: "  \n ", N: undefined });
+    assert.equal(e.ANTHROPIC_API_KEY, "sk-ant-api03-abc");
+    assert.equal(e.LL_MAIL_FROM, "Leave Ledger <notices@leaveledger.ai>");
+    assert.equal(e.LL_MODEL, "claude-haiku-5-5");
+    assert.equal(e.LL_AI_REAL_DATA_OK, "yes");
+    assert.equal(e.EMPTY, undefined); assert.equal(e.N, undefined);
+  });
+  test("a key pasted with a trailing line break still works end to end", async () => {
+    const s = memoryStore(), c = client(s, { ...TEST_ENV, LL_TEST_PASSWORD: " test-pass-123\n" });
+    assert.equal((await c.post("/api/login", { email: "grace@mesaverde.example", password: "test-pass-123" })).status, 200);
+  });
+});
