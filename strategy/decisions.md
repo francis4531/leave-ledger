@@ -12,6 +12,14 @@
 
 **Answer:** Keep the same price as Tilt.  We compete on both price and value.
 
+### 3. Small companies: billing and support
+
+**Question:** At 5 employees and 15 minutes of support a month, gross margin is about 14% (18 minutes and the company costs money). Make annual prepay by bank transfer the default and support email-only below 10 employees, set a monthly minimum, or leave it until design partners show real support time?
+
+**Status:** Decided · Nov 3, 2026 · Site admin
+
+**Answer:** Make it the default.   We need to build the trust from our customers to have automated prepay.
+
 ## Week 2 · The Moat
 
 ### 1. Partner challenge on Tilt
