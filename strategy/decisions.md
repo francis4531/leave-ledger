@@ -12,6 +12,14 @@
 
 **Answer:** Keep the same price as Tilt.  We compete on both price and value.
 
+### 2. Kill criterion 2 price
+
+**Question:** Criterion 2 still asks whether 2 of 10 would pay at least $4 per employee per month, set when Tilt's lowest tier looked like $4. Our price is now $3 and Tilt's is $2.50. Change the bar to $3 (our price), keep $4, or something else?
+
+**Status:** Decided · Nov 4, 2026 · Site admin
+
+**Answer:** Lower it below Tilt's $2.50 and bring it to $2.00
+
 ### 3. Small companies: billing and support
 
 **Question:** At 5 employees and 15 minutes of support a month, gross margin is about 14% (18 minutes and the company costs money). Make annual prepay by bank transfer the default and support email-only below 10 employees, set a monthly minimum, or leave it until design partners show real support time?
