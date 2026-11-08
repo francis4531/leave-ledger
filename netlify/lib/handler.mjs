@@ -86,7 +86,7 @@ const lockAllowed = (R) => R.meta.start === "empty" && !!R.user.hd;
 
 export function viewFor(D, acct, today, env = {}, space = { kind: "test" }) {
   const me = D.employees.find((e) => e.id === acct.empId);
-  const out = { me: { email: acct.email, name: me.name, role: acct.role, label: acct.label, empId: me.id, views: VIEWS[acct.role] }, today, mode: isFeedback(env) ? "feedback" : "test", space, caps: capsFor(space.kind, acct.role), mail: { on: space.kind === "org" && mailOn(env) }, ai: aiInfo(env, space) };
+  const out = { me: { email: acct.email, name: me.name, role: acct.role, label: acct.label, empId: me.id, views: VIEWS[acct.role] }, today, mode: isFeedback(env) ? "feedback" : "test", space, caps: { ...capsFor(space.kind, acct.role), ...(space.sandbox ? { inviteUsers: false } : {}) }, mail: { on: space.kind === "org" && mailOn(env) }, ai: aiInfo(env, space) };
   if (acct.role === "hr") return { ...out, data: D };
   // Employees get their own cases without HR notes, the manager's flag note, or intake text someone else wrote.
   // Letter drafts stay with HR; employees see only the letters HR marked as sent.
@@ -407,7 +407,7 @@ async function resolve(req, store, env, today) {
   const user = await currentUser(req, store, env);
   const R = { kind: null, user, s };
   if (s && s.t) {
-    const invites = await loadInvites(store), inv = invites.items[s.t];
+    const invites = await loadInvites(store), inv = invites.items[s.t] || (validCode(s.t) ? await store.get(sandboxKey(s.t), { type: "json" }) : null);
     // A copy opened through Google sign-in (s.u) stays open only while that account still has access.
     const stillIn = !s.u || (user && user.sub === s.u && previewAllowed(inv, user));
     if (inv && !inv.disabled && stillIn) return { ...R, kind: "preview", id: s.t, key: tenantKey(s.t), invite: inv, invites, acct: s.e ? ACCOUNTS.find((a) => a.email === s.e) || null : null, u: s.u || null };
@@ -421,7 +421,26 @@ async function resolve(req, store, env, today) {
   }
   return R;
 }
-const spaceInfo = (R) => R.kind === "org" ? { kind: "org", id: R.id, name: R.meta.name, domain: R.meta.domain, user: R.user.email, realData: !!R.meta.realData } : R.kind === "preview" ? { kind: "preview", id: R.id, user: R.user ? R.user.email : null } : { kind: "test" };
+const spaceInfo = (R) => R.kind === "org" ? { kind: "org", id: R.id, name: R.meta.name, domain: R.meta.domain, user: R.user.email, realData: !!R.meta.realData } : R.kind === "preview" ? { kind: "preview", id: R.id, user: R.user ? R.user.email : null, sandbox: !!(R.invite && R.invite.sandbox) } : { kind: "test" };
+
+/* ---------- Sandbox: anyone, no sign-up, one made-up copy per visitor ----------
+   A sandbox is a sample copy (like an invite's) whose record lives under sb/<code>, not in the invite list,
+   so it never shows among invites, cannot be linked to a Google account or used to create a workspace,
+   and is deleted with its data after SANDBOX_DAYS by the daily job. */
+export const SANDBOX_DAYS = 7;
+export const sandboxKey = (code) => `sb/${code}`;
+export async function cleanupSandboxes(store, now = Date.now()) {
+  let removed = 0, cursor;
+  do {
+    const r = await store.list({ prefix: "sb/", ...(cursor ? { cursor } : {}) });
+    for (const { key } of r.blobs || []) {
+      const rec = await store.get(key, { type: "json" }), code = key.slice(3);
+      if (!rec || now - Date.parse(rec.created) > SANDBOX_DAYS * 864e5) { await store.delete(tenantKey(code)); await store.delete(key); removed++; }
+    }
+    cursor = r.cursor;
+  } while (cursor);
+  return removed;
+}
 const surveyId = (R) => (R.kind === "org" ? "org:" + R.id : R.id);
 
 // The spaces a signed-in user can open: preview copies from invites, and company workspaces.
@@ -429,6 +448,8 @@ async function spacesFor(store, user, linkCode) {
   const invites = await loadInvites(store), out = [];
   const codes = new Set([...(user ? user.invites || [] : []), ...(linkCode ? [linkCode] : [])]);
   for (const c of codes) { const inv = invites.items[c]; if (inv && !inv.disabled) out.push({ kind: "preview", id: c, name: "Mesa Verde Coffee Roasters", note: "Sample company, your own copy" }); }
+  // The sandbox this browser is in (never linked to an account, so only listed while its cookie is here).
+  if (linkCode && !invites.items[linkCode] && validCode(linkCode) && (await store.get(sandboxKey(linkCode), { type: "json" }))) out.push({ kind: "preview", id: linkCode, name: "Mesa Verde Coffee Roasters", note: "Sandbox, deleted after 7 days", sandbox: true });
   if (user) for (const id of user.orgs || []) {
     const meta = await loadOrg(store, id), m = memberFor(meta, user);
     if (meta && m) out.push({ kind: "org", id, name: meta.name, role: m.role, roleName: ROLES[m.role], disabled: !!meta.disabled, domainBlocked: !domainOk(meta, user), mine: meta.createdBy === user.sub });
@@ -443,7 +464,7 @@ function canCreate(env, user, spaces) {
   // Counts every workspace this user has ever created, so handing off HR does not reset the limit.
   const owned = Math.max(user.orgsCreated || 0, spaces.filter((x) => x.kind === "org" && x.mine).length);
   if (owned >= 2) return { ok: false, why: "You can create up to 2 workspaces in the preview." };
-  if (rule === "open" || spaces.some((x) => x.kind === "preview")) return { ok: true };
+  if (rule === "open" || spaces.some((x) => x.kind === "preview" && !x.sandbox)) return { ok: true }; // a sandbox is not an invite
   return { ok: false, why: "Creating a workspace needs an invite to the preview." };
 }
 
@@ -551,9 +572,9 @@ async function route_(req, store, env) {
     if (body.kind === "preview") {
       const inv0 = (await loadInvites(store)).items[body.id];
       const ok = (R.kind === "preview" && R.id === body.id) || (R.user && inv0 && previewAllowed(inv0, R.user));
-      const all = await loadInvites(store), inv = all.items[body.id];
+      const all = await loadInvites(store), inv = all.items[body.id] || (ok && R.invite && R.invite.sandbox ? R.invite : null);
       if (!ok || !inv || inv.disabled) return err("That preview is not available.", 403);
-      if (!inv.joined) { inv.joined = new Date().toISOString(); await store.setJSON(IKEY, all); }
+      if (!inv.joined && !inv.sandbox) { inv.joined = new Date().toISOString(); await store.setJSON(IKEY, all); }
       await load(store, today, tenantKey(body.id));
       return json({ ok: true }, 200, { "set-cookie": sessCookie({ t: body.id, ...(R.user ? { u: R.user.sub } : {}) }, env) });
     }
@@ -587,7 +608,22 @@ async function route_(req, store, env) {
     const list = ACCOUNTS.map(({ email, label, empId, name, role }) => ({ email, label, empId, name, role }));
     if (!FB) return json({ mode: "test", accounts: list, configured: !!env.LL_TEST_PASSWORD });
     const pv = R.kind === "preview";
-    return json({ mode: "feedback", invited: pv, accounts: pv ? list : [], configured: !!(env.LL_SECRET || env.LL_ADMIN_PASSWORD), surveyDone: !!(pv && (await surveyOf(store, R.id))) });
+    return json({ mode: "feedback", invited: pv, sandbox: !!(pv && R.invite.sandbox), sandboxOn: String(env.LL_SANDBOX || "on").toLowerCase() !== "off", accounts: pv ? list : [], configured: !!(env.LL_SECRET || env.LL_ADMIN_PASSWORD), surveyDone: !!(pv && (await surveyOf(store, R.id))) });
+  }
+
+  if (FB && route === "sandbox" && req.method === "POST") {
+    if (String(env.LL_SANDBOX || "on").toLowerCase() === "off") return err("The sandbox is closed right now.", 403);
+    if (await throttled(store, req, "sandbox", 5)) return err("Too many sandboxes from here. Wait 15 minutes, or keep using the one you have.", 429);
+    const max = Number(env.LL_SANDBOX_DAILY) || 200, day = (await store.get("sandbox-day", { type: "json" })) || { day: today, n: 0 };
+    if (day.day !== today) { day.day = today; day.n = 0; }
+    if (day.n >= max) return err("The sandbox is full for today. Try again tomorrow.", 429);
+    day.n++; await store.setJSON("sandbox-day", day);
+    await failed(store, req, "sandbox"); // counts creations per address for the limit above
+    let code = newCode(); while ((await loadInvites(store)).items[code] || (await store.get(sandboxKey(code), { type: "json" }))) code = newCode();
+    const now = new Date().toISOString();
+    await store.setJSON(sandboxKey(code), { name: "Sandbox visitor", sandbox: true, created: now, joined: now, disabled: false, users: [], colleagues: [] });
+    await load(store, today, tenantKey(code));
+    return json({ ok: true }, 200, { "set-cookie": sessCookie({ t: code }, env) });
   }
 
   if (FB && route === "join" && req.method === "POST") {
@@ -688,13 +724,14 @@ async function route_(req, store, env) {
   /* ----- Sample copy users: the sample people (Try as) and colleagues invited by Google email ----- */
   if (R.kind === "preview" && route === "preview/members") {
     if (acct.role !== "hr") return err("HR only", 403);
-    const inv = R.invites.items[R.id];
+    const inv = R.invite;
     const out = () => json({
       sample: ACCOUNTS.map(({ email, name, role, label, empId }) => ({ email, name, role, label, empId })),
       colleagues: (inv.colleagues || []).map((c) => ({ ...c, joined: (inv.users || []).some((u) => u.email === c.email) })),
       signedIn: (inv.users || []).map(({ email, name }) => ({ email, name })),
     });
     if (req.method === "GET") return out();
+    if (inv.sandbox) return err("A sandbox is just for you. Each visitor gets their own copy.", 403);
     if (req.method === "POST") {
       const body = await req.json().catch(() => ({}));
       const email = String(body.email || "").toLowerCase().trim();
@@ -899,15 +936,21 @@ async function handleAdmin(req, route, store, env, today) {
     orgs.sort((a, b) => b.created.localeCompare(a.created));
     const backups = await lastBackupRun(store), deleted = ((await store.get("deleted-orgs", { type: "json" })) || { items: [] }).items.slice(0, 20);
     // Test copies (the admin's own trials) are left out of the survey numbers.
-    const isTest = (k) => k.startsWith("org:") ? !!orgs.find((o) => o.id === k.slice(4) && o.test) : !!(invites.items[k] && invites.items[k].test);
+    // Sandbox visitors are anonymous, so their surveys are counted apart from the kill criteria too.
+    const isSandbox = (k) => !k.startsWith("org:") && !invites.items[k];
+    const isTest = (k) => k.startsWith("org:") ? !!orgs.find((o) => o.id === k.slice(4) && o.test) : !!(invites.items[k] && invites.items[k].test) || isSandbox(k);
+    let active = 0, cur;
+    do { const r = await store.list({ prefix: "sb/", ...(cur ? { cursor: cur } : {}) }); active += (r.blobs || []).length; cur = r.cursor; } while (cur);
+    const sday = (await store.get("sandbox-day", { type: "json" })) || {};
+    const sandboxes = { active, today: sday.day === today ? sday.n : 0, surveys: Object.keys(sv.byInvite).filter(isSandbox).length };
     const real = Object.fromEntries(Object.entries(sv.byInvite).filter(([k]) => !isTest(k)));
-    const name = (f) => f.org ? ((ix.items[f.org] || {}).name || "Workspace") + " (workspace)" : (invites.items[f.invite] && invites.items[f.invite].name) || f.invite;
-    const sname = (k) => k.startsWith("org:") ? ((ix.items[k.slice(4)] || {}).name || "Workspace") + " (workspace)" : (invites.items[k] && invites.items[k].name) || k;
+    const name = (f) => f.org ? ((ix.items[f.org] || {}).name || "Workspace") + " (workspace)" : (invites.items[f.invite] && invites.items[f.invite].name) || "Sandbox visitor";
+    const sname = (k) => k.startsWith("org:") ? ((ix.items[k.slice(4)] || {}).name || "Workspace") + " (workspace)" : (invites.items[k] && invites.items[k].name) || "Sandbox visitor";
     return json({
-      invites: list, orgs, backups, deleted,
+      invites: list, orgs, backups, deleted, sandboxes,
       feedback: fb.items.map((f) => ({ ...f, who: name(f), test: isTest(f.org ? "org:" + f.org : f.invite || "") })),
       surveys: Object.entries(sv.byInvite).map(([k, s]) => ({ invite: k, who: sname(k), test: isTest(k), ...s })).sort((a, b) => b.at.localeCompare(a.at)),
-      summary: { ...summarize(real), testExcluded: Object.keys(sv.byInvite).length - Object.keys(real).length },
+      summary: { ...summarize(real), testExcluded: Object.keys(sv.byInvite).filter((k) => !isSandbox(k)).length - Object.keys(real).length, sandboxExcluded: Object.keys(sv.byInvite).filter(isSandbox).length },
       questions: SURVEY,
       google: googleOn(env),
       clerk: { on: !!env.ANTHROPIC_API_KEY, lastError: await store.get("ai-last-error", { type: "json" }), cases: GOLDEN.cases.length, runs: ((await store.get(EVKEY, { type: "json" })) || { runs: [] }).runs.filter((r) => r.summary).map(({ results, ...r }) => r).slice(0, 5) },

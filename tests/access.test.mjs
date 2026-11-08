@@ -741,3 +741,57 @@ describe("settings pasted with stray characters", () => {
     assert.equal((await c.post("/api/login", { email: "grace@mesaverde.example", password: "test-pass-123" })).status, 200);
   });
 });
+
+describe("public sandbox: anyone, no sign-up, one copy per visitor", () => {
+  const open = async (p, ip) => { const c = p.as({ ip }); const r = await c.post("/api/sandbox", {}); return { c, r }; };
+  test("each visitor gets a private copy with the full product, but cannot invite colleagues", async () => {
+    const p = preview();
+    const { c: a, r } = await open(p, "5.5.5.1");
+    assert.equal(r.status, 200);
+    const acc = (await a.get("/api/accounts")).body;
+    assert.equal(acc.invited, true); assert.equal(acc.sandbox, true);
+    let v = (await a.post("/api/login", { email: "grace@mesaverde.example" })).body;
+    assert.equal(v.space.sandbox, true); assert.equal(v.caps.settings, true); assert.equal(v.caps.inviteUsers, false);
+    await a.post("/api/action", { type: "updateCompany", field: "name", value: "Visitor A Co" });
+    const { c: b } = await open(p, "5.5.5.2");
+    v = (await b.post("/api/login", { email: "grace@mesaverde.example" })).body;
+    assert.notEqual(v.data.company.name, "Visitor A Co", "copies are separate");
+    assert.equal((await a.get("/api/preview/members")).status, 200, "Try as list still works");
+    assert.equal((await a.post("/api/preview/members", { op: "invite", email: "x@y.co" })).status, 403);
+    const admin = await adminClient(p), st = (await admin.get("/api/admin/state")).body;
+    assert.equal(st.invites.length, 0, "sandboxes are not invites"); assert.equal(st.sandboxes.active, 2); assert.equal(st.sandboxes.today, 2);
+  });
+  test("limits: 5 per address in 15 minutes, a daily cap, and a switch to close it", async () => {
+    const p = preview();
+    for (let i = 0; i < 5; i++) assert.equal((await open(p, "6.6.6.6")).r.status, 200);
+    assert.equal((await open(p, "6.6.6.6")).r.status, 429);
+    const q = preview({ ...PREVIEW_ENV, LL_SANDBOX_DAILY: "2" });
+    assert.equal((await open(q, "7.0.0.1")).r.status, 200); assert.equal((await open(q, "7.0.0.2")).r.status, 200);
+    assert.equal((await open(q, "7.0.0.3")).r.status, 429);
+    const off = preview({ ...PREVIEW_ENV, LL_SANDBOX: "off" });
+    assert.equal((await open(off, "7.0.0.4")).r.status, 403);
+    assert.equal((await off.as().get("/api/accounts")).body.sandboxOn, false);
+  });
+  test("copies older than 7 days are deleted with their data, and the visitor is signed out of it", async () => {
+    const p = preview();
+    const { c } = await open(p, "8.8.0.1");
+    const { cleanupSandboxes } = await import("../netlify/lib/handler.mjs");
+    assert.equal(await cleanupSandboxes(p.store, Date.now()), 0, "a new copy stays");
+    assert.equal(await cleanupSandboxes(p.store, Date.now() + 8 * 864e5), 1);
+    assert.deepEqual([...p.store.map.keys()].filter((k) => k.startsWith("sb/") || k.startsWith("t/")), []);
+    assert.equal((await c.get("/api/accounts")).body.invited, false);
+  });
+  test("a sandbox never lets a Google account create a workspace, and its surveys stay out of the kill criteria", async () => {
+    const p = preview();
+    const { c } = await open(p, "9.9.0.1");
+    await c.google(ACCTS.pat);
+    const me = (await c.get("/api/me")).body;
+    assert.equal(me.create.ok, false);
+    assert.ok(me.spaces.some((x) => x.sandbox), "the current sandbox is listed");
+    assert.equal((await c.post("/api/org/create", { name: "X", headcount: 10, start: "empty", agree: true })).status, 403);
+    await c.post("/api/login", { email: "ben@mesaverde.example" });
+    assert.equal((await c.post("/api/survey", { answers: { role: "Owner or founder", size: "5 to 19", leaves: "1 or 2", pain: 5, pay: "Yes" } })).status, 200);
+    const s = (await (await adminClient(p)).get("/api/admin/state")).body;
+    assert.equal(s.summary.responses, 0); assert.equal(s.summary.sandboxExcluded, 1);
+  });
+});

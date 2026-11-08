@@ -324,10 +324,29 @@ describe("preview site", { skip }, () => {
     assert.deepEqual(errors, []);
   });
 
-  test("a visitor without an invite sees only the invite-only page, and /strategy is not found", async () => {
+  test("a visitor with no invite opens their own sandbox and gets the full product, labeled", async () => {
+    const { p, errors } = await page();
+    await p.goto(S.base);
+    await p.click("[data-sandbox]");
+    await p.waitForSelector("[data-pick]");
+    assert.equal(await p.textContent(".envtag"), "Sandbox");
+    assert.match(await p.textContent(".welcome"), /deleted after 7 days/);
+    await p.click('[data-pick="grace@mesaverde.example"]');
+    await p.waitForSelector("#tabs button");
+    assert.equal(await p.textContent(".envtag"), "Sandbox");
+    await p.click('[data-tab="access"]');
+    await p.waitForSelector("text=Just you");
+    assert.equal(await p.$("[data-invite-colleague]"), null, "no colleague invites in a sandbox");
+    await p.click('[data-tab="cases"]');
+    await p.click("tr[data-open]");
+    assert.ok(await p.$("[data-letter], [data-letter-view]"), "letters work");
+    assert.deepEqual(errors, []);
+  });
+
+  test("a visitor without an invite sees the landing page with the sandbox, and /strategy is not found", async () => {
     const { p } = await page();
     await p.goto(S.base);
-    await p.waitForSelector("text=invite only");
+    await p.waitForSelector("text=Invited to the early preview?"); await p.waitForSelector("[data-sandbox]");
     await p.goto(S.base + "/strategy");
     await p.waitForSelector("text=Page not found");
   });

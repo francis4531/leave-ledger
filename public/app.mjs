@@ -921,14 +921,15 @@ function renderPreviewLogin(root) {
     root.innerHTML = `<section class="login" style="grid-template-columns:minmax(0,520px);justify-content:center">
       <div class="panel welcome" style="gap:14px"><h1>Leave Ledger</h1>
         <p class="lede">California leave of absence, worked out for you: which leaves apply, what the state pays, and the notices and deadlines you owe.</p>
-        <p>This early preview is invite only. Open the link you were sent to get in. If it has stopped working, ask the sender for a new one.</p>
+        ${ACCOUNTS && ACCOUNTS.sandboxOn ? `<div class="sandbox-cta"><button class="btn primary" data-sandbox>Try it with a made-up company</button><span class="small muted">No sign-up. Your own copy, deleted after 7 days.</span></div>` : ""}
+        <p>Invited to the early preview? Open the link you were sent. If it has stopped working, ask the sender for a new one.</p>
         ${L.error ? `<p class="err" role="alert">${esc(L.error)}</p>` : ""}
       </div></section>`;
     return;
   }
   root.innerHTML = `<section class="login">
     <div class="panel welcome" style="gap:16px">
-      <div><h1>Welcome</h1><p class="lede" style="margin-top:6px">Thanks for trying Leave Ledger. You have your own copy of Mesa Verde Coffee Roasters, a made-up coffee company in Oakland, with a few leaves already in progress.</p></div>
+      <div><h1>Welcome</h1><p class="lede" style="margin-top:6px">Thanks for trying Leave Ledger. You have your own copy of Mesa Verde Coffee Roasters, a made-up coffee company in Oakland, with a few leaves already in progress.${ACCOUNTS.sandbox ? " It is just for you and is deleted after 7 days." : ""}</p></div>
       <ol class="small" style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px">
         <li>Start as <b>Grace</b>, the HR admin, to see the leaves that need attention.</li>
         <li>Switch to an employee such as <b>Ben</b> and ask for time off in your own words.</li>
@@ -958,7 +959,8 @@ async function signIn(email) {
 /* ---------- Shell ---------- */
 function setChrome(on) {
   document.getElementById("views").hidden = true;
-  const tag = document.querySelector(".envtag"); if (tag) { tag.textContent = FB() ? "Early preview" : "Test"; tag.hidden = false; }
+  const sbx = (S && S.space && S.space.sandbox) || (!on && ACCOUNTS && ACCOUNTS.sandbox);
+  const tag = document.querySelector(".envtag"); if (tag) { tag.textContent = sbx ? "Sandbox" : FB() ? "Early preview" : "Test"; tag.hidden = false; }
   document.getElementById("fbBtn").hidden = !(on && FB());
   if (!(on && FB())) closeFeedback();
   document.getElementById("who").hidden = !on;
@@ -996,7 +998,7 @@ function renderNow() {
   const v = viewOf();
   const html = FB() && UI.survey.open ? surveyView() : UI.tab === "guide" ? guideView() : v === "emp" ? empView() : v === "mgr" ? mgrView() : { overview: hrOverview, cases: hrCases, plan: hrPlan, employees: hrEmployees, access: hrUsers, settings: hrSettings }[UI.tab]();
   const foot = FB()
-    ? `<span>${ORG() ? (REAL() ? "Design partner workspace." : "Early preview workspace. Use made-up employee details only.") : "Early preview with a made-up company."} Rules checked October 2026 for California employers. Not legal advice. <a href="/privacy">Privacy</a></span>${UI.survey.open ? "" : `<button class="btn sm" data-survey>${UI.survey.done ? "Edit your survey answers" : "Take the 2-minute survey"}</button>`}`
+    ? `<span>${ORG() ? (REAL() ? "Design partner workspace." : "Early preview workspace. Use made-up employee details only.") : S.space.sandbox ? "Sandbox with a made-up company, just for you. Deleted after 7 days." : "Early preview with a made-up company."} Rules checked October 2026 for California employers. Not legal advice. <a href="/privacy">Privacy</a></span>${UI.survey.open ? "" : `<button class="btn sm" data-survey>${UI.survey.done ? "Edit your survey answers" : "Take the 2-minute survey"}</button>`}`
     : `<span>Test site with a made-up company. Rules checked October 2026 for California employers. Not legal advice.</span><a href="/strategy">Product strategy progress</a>`;
   document.getElementById("root").innerHTML = `<main>${surveyBanner()}${html}<div class="foot">${foot}</div></main>`;
   if (focusId) { const el = document.getElementById(focusId); if (el) el.focus(); }
@@ -1014,7 +1016,7 @@ const G_ICON = `<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="tru
 const gButton = (label = "Sign in with Google") => `<a class="btn gbtn" href="/api/auth/google/start?next=/">${G_ICON}<span>${label}</span></a>`;
 function googleBar() {
   if (!ME || !ME.google) return "";
-  if (!ME.user) return `<div class="gbar"><p class="small">Want to come back from another device, or set up your own workspace? Sign in with Google.</p>${gButton()}</div>`;
+  if (!ME.user) return ACCOUNTS && ACCOUNTS.sandbox ? "" : `<div class="gbar"><p class="small">Want to come back from another device, or set up your own workspace? Sign in with Google.</p>${gButton()}</div>`; // a sandbox stays in this browser
   return `<div class="gbar"><p class="small">Signed in as <b>${esc(ME.user.email)}</b>.</p><div class="btns"><button class="btn sm" data-home>Your spaces</button><button class="btn sm" data-signout>Sign out</button></div></div>`;
 }
 function renderHome(root) {
@@ -1025,7 +1027,8 @@ function renderHome(root) {
     root.innerHTML = `<section class="login" style="grid-template-columns:minmax(0,520px);justify-content:center">
       <div class="panel welcome" style="gap:14px"><h1>Leave Ledger</h1>
         <p class="lede">California leave of absence, worked out for you: which leaves apply, what the state pays, and the notices and deadlines you owe.</p>
-        <p>This early preview is invite only. Open the link you were sent, or sign in with the Google account your invite went to.</p>
+        ${ACCOUNTS && ACCOUNTS.sandboxOn ? `<div class="sandbox-cta"><button class="btn primary" data-sandbox>Try it with a made-up company</button><span class="small muted">No sign-up. Your own copy, deleted after 7 days.</span></div>` : ""}
+        <p>Invited to the early preview? Open the link you were sent, or sign in with the Google account your invite went to.</p>
         ${ME && ME.google ? gButton() : ""}
         ${err ? `<p class="err" role="alert">${esc(err)}</p>` : ""}
         <p class="small muted"><a href="/privacy">Privacy</a></p>
@@ -1034,7 +1037,7 @@ function renderHome(root) {
   }
   const sp = ME.spaces || [];
   const card = (x) => `<button type="button" class="acct space" data-space="${x.kind}|${x.id}" ${x.disabled || x.domainBlocked ? "disabled" : ""}>
-    <div><b>${esc(x.name)}</b><span class="scn">${x.kind === "preview" ? "Sample company, your own copy" : esc(x.roleName)}${x.disabled ? " · turned off" : ""}${x.domainBlocked ? " · needs your company Google account" : ""}</span></div></button>`;
+    <div><b>${esc(x.name)}</b><span class="scn">${x.kind === "preview" ? (x.sandbox ? "Sandbox, deleted after 7 days" : "Sample company, your own copy") : esc(x.roleName)}${x.disabled ? " · turned off" : ""}${x.domainBlocked ? " · needs your company Google account" : ""}</span></div></button>`;
   const C = ME.create || { ok: false };
   root.innerHTML = `<section class="login">
     <div class="panel welcome" style="gap:14px">
@@ -1046,7 +1049,7 @@ function renderHome(root) {
     <div class="stack">
       ${(ME.pending || []).length ? `<div class="grp"><span class="label">Invitations</span>${ME.pending.map((x) => `<div class="banner"><span><b>${esc(x.name)}</b> invited you as ${esc(x.roleName)}<span class="small muted"> · from ${esc(x.invitedBy)}</span>${x.domainBlocked ? `<br><span class="small">Needs a Google Workspace account on @${esc(x.domain)}.</span>` : ""}</span><span class="btns" style="margin:0"><button class="btn sm" data-decline="${esc(x.id)}">Decline</button>${x.domainBlocked ? "" : `<button class="btn sm primary" data-accept="${esc(x.id)}">Accept</button>`}</span></div>`).join("")}<p class="small muted">Only accept invitations you expect.</p></div>` : ""}
       <div class="grp"><span class="label">Your spaces</span>
-        ${sp.length ? `<div class="accts">${sp.map(card).join("")}</div>` : `<div class="infobox">Nothing here yet. If you were invited, ask the sender to use ${esc(u.email)}, or open the invite link you were sent.</div>`}
+        ${sp.length ? `<div class="accts">${sp.map(card).join("")}</div>` : `<div class="infobox">Nothing here yet. If you were invited, ask the sender to use ${esc(u.email)}, or open the invite link you were sent.</div>${ACCOUNTS && ACCOUNTS.sandboxOn ? `<div class="sandbox-cta" style="margin-top:8px"><button class="btn primary" data-sandbox>Try it with a made-up company</button><span class="small muted">No sign-up. Your own copy, deleted after 7 days.</span></div>` : ""}`}
       </div>
       ${C.ok ? `<section class="panel" data-form="home"><h3>Set up a workspace for your company</h3>
         <p class="small muted">Your own workspace, where you invite your HR team, managers and employees with their Google accounts. Each user sees only what their role allows.</p>
@@ -1104,15 +1107,16 @@ function sampleUsers() {
   const U = UI.users;
   if (!U.sample) { queueMicrotask(loadSampleUsers); return `<div class="head"><div><h2>Users</h2></div></div><section class="panel"><p class="muted">Loading...</p></section>`; }
   const roleOf = { hr: "HR admin", mgr: "Manager", emp: "Employee" };
-  return `<div class="head"><div><h2>Users</h2><p>Everyone who can use your copy of ${esc(D().company.name)}. Try the app as any of them, or invite a colleague to explore it with you.</p></div></div>
+  const solo = S.space.sandbox;
+  return `<div class="head"><div><h2>Users</h2><p>Everyone who can use your copy of ${esc(D().company.name)}. Try the app as any of them${solo ? "" : ", or invite a colleague to explore it with you"}.</p></div></div>
   <div class="grid2 form">
-    <section class="panel" data-form="users"><h3>Invite a colleague</h3>
+    ${solo ? `<section class="panel"><h3>Just you</h3><p class="small muted">A sandbox is a private copy for one visitor and cannot be shared. Each colleague can open their own from the home page.</p></section>` : `<section class="panel" data-form="users"><h3>Invite a colleague</h3>
       <p class="small muted">They sign in at this site with Google using this email, and see this same copy, with your changes.</p>
       <div class="field"><label for="us-email">Google account email</label><input type="email" id="us-email" data-bind="email" value="${esc(U.email)}" placeholder="name@company.com" autocomplete="off"></div>
       ${U.error ? `<p class="err" role="alert">${esc(U.error)}</p>` : ""}
       <div class="btns"><button class="btn primary" data-invite-colleague ${U.busy ? "disabled" : ""}>Invite</button></div>
       ${U.colleagues.length ? `<div class="queue">${U.colleagues.map((c) => `<div class="qrow" style="grid-template-columns:minmax(0,1fr) auto auto"><div class="small">${esc(c.email)}</div>${c.joined ? pill("Signed in", "ok") : pill("Invited", "")}<button class="btn sm" data-uncolleague="${esc(c.email)}">Remove</button></div>`).join("")}</div>` : `<p class="small muted">No colleagues invited yet.</p>`}
-    </section>
+    </section>`}
     <section class="panel"><h3>${U.sample.length} sample users</h3>
       <div class="tw"><table><thead><tr><th>User</th><th>Role</th><th></th></tr></thead><tbody>
       ${U.sample.map((a) => `<tr><td><div class="person">${avatar({ id: a.empId, name: a.name }, "sm")}<div><b>${esc(a.name)}</b><div class="small muted">${esc(a.label.split(" · ")[1] || "")}</div></div></div></td><td>${roleOf[a.role]}</td>
@@ -1258,6 +1262,12 @@ document.addEventListener("click", async (ev) => {
   if (b.dataset.pick) { signIn(b.dataset.pick); return; }
   if (b.dataset.space) { const [k, id] = b.dataset.space.split("|"); openSpace(k, id); return; }
   if (b.hasAttribute("data-home")) { goHome(); return; }
+  if (b.hasAttribute("data-sandbox")) {
+    b.disabled = true; UI.login.error = ""; UI.home.error = "";
+    try { await api("sandbox", {}); ACCOUNTS = null; ME = null; UI.tab = null; renderLogin(); }
+    catch (e) { if (e.message === "signed out") return; UI.login.error = e.message; UI.home.error = e.message; ACCOUNTS = null; renderLogin(); }
+    return;
+  }
   if (b.hasAttribute("data-signout")) { signOutGoogle(); return; }
   if (b.hasAttribute("data-create")) { createWorkspace(); return; }
   if (b.dataset.accept) {

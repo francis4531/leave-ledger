@@ -135,6 +135,7 @@ function render() {
       <div class="stat"><b>${S.payYes}</b><span>Would pay $2 per employee per month (${pct(S.payYes)}); ${S.payMaybe} maybe at a lower price</span></div>
     </div>
     <p class="small muted">Kill criteria check on Nov 23: at least 3 of 10 feel the pain, and at least 2 of 10 would pay $2 per employee per month.${S.testExcluded ? ` ${S.testExcluded} test ${S.testExcluded === 1 ? "survey is" : "surveys are"} left out of these numbers.` : ""}</p>
+    ${ST.sandboxes ? `<p class="small muted">Public sandbox: ${ST.sandboxes.active} active ${ST.sandboxes.active === 1 ? "copy" : "copies"}, ${ST.sandboxes.today} started today. ${ST.sandboxes.surveys} sandbox ${ST.sandboxes.surveys === 1 ? "survey is" : "surveys are"} kept out of the kill criteria numbers, since visitors are anonymous.</p>` : ""}
   </section>
 
   ${clerkPanel()}
