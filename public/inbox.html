@@ -185,13 +185,13 @@ function render() {
     <div class="head"><h2>Feedback${FILTER ? ` from ${esc((inv.find((i) => i.code === FILTER) || {}).name)}` : ""}</h2>
       <div class="btns"><button class="btn sm" data-showtest>${SHOWTEST ? "Hide test feedback" : "Show test feedback"}</button>${FILTER ? `<button class="btn sm" data-filter="">Show all</button>` : ""}<button class="btn sm" data-csv="feedback">Download CSV</button></div></div>
     <div class="list">${fb.length ? fb.map((f) => `<div class="fb">
-      <div class="meta"><b>${esc(f.who)}</b>${f.test ? `<span class="pill warn">Test</span>` : ""}<span>${esc(f.screen)}</span><span>as ${esc(f.persona.split("@")[0])}</span>${f.user ? `<span>${esc(f.user)}</span>` : ""}<span>${when(f.at)}</span>${f.rating ? `<span class="pill">${f.rating} of 5</span>` : ""}${f.kind ? `<span class="pill">${esc({ like: "Likes it", confusing: "Confusing", bug: "Something broke", idea: "Idea" }[f.kind])}</span>` : ""}</div>
+      <div class="meta"><b>${esc(f.who)}</b>${f.test ? `<span class="pill warn">Test</span>` : ""}${f.sandbox ? `<span class="pill">Sandbox</span>` : ""}${f.contact ? `<a href="mailto:${esc(f.contact)}">${esc(f.contact)}</a>` : ""}<span>${esc(f.screen)}</span><span>as ${esc(f.persona.split("@")[0])}</span>${f.user ? `<span>${esc(f.user)}</span>` : ""}<span>${when(f.at)}</span>${f.rating ? `<span class="pill">${f.rating} of 5</span>` : ""}${f.kind ? `<span class="pill">${esc({ like: "Likes it", confusing: "Confusing", bug: "Something broke", idea: "Idea" }[f.kind])}</span>` : ""}</div>
       ${f.note ? `<p>${esc(f.note)}</p>` : ""}</div>`).join("") : `<p class="muted">Nothing yet.</p>`}</div>
   </section>
 
   <section class="panel">
     <div class="head"><h2>Survey answers</h2><button class="btn sm" data-csv="survey">Download CSV</button></div>
-    <div class="list">${ST.surveys.length ? ST.surveys.map((s) => `<details class="fb"><summary>${esc(s.who)}${s.test ? ` <span class="pill warn">Test</span>` : ""} <span class="muted small">${when(s.at)} · pain ${s.answers.pain ?? "-"} · pay: ${esc(s.answers.pay || "-")}</span></summary>
+    <div class="list">${ST.surveys.length ? ST.surveys.map((s) => `<details class="fb"><summary>${esc(s.who)}${s.test ? ` <span class="pill warn">Test</span>` : ""}${s.sandbox ? ` <span class="pill">Sandbox</span>` : ""} <span class="muted small">${when(s.at)} · pain ${s.answers.pain ?? "-"} · pay: ${esc(s.answers.pay || "-")}</span></summary>
       <dl class="ans">${Object.entries(s.answers).map(([k, v]) => `<dt>${esc(qName[k] || k)}</dt><dd>${esc(Array.isArray(v) ? v.join("; ") : v)}</dd>`).join("")}</dl></details>`).join("") : `<p class="muted">No surveys yet.</p>`}</div>
   </section>`;
   document.getElementById("nf").onsubmit = async (e) => {
@@ -269,7 +269,7 @@ document.addEventListener("click", async (e) => {
     else if (b.hasAttribute("data-showtest")) { SHOWTEST = !SHOWTEST; render(); }
     else if (b.dataset.org) { await api("admin/org/update", { id: b.dataset.org, disabled: b.dataset.off === "1" }); await refresh(); toast(b.dataset.off === "1" ? "Workspace turned off" : "Workspace turned on"); }
     else if ("filter" in b.dataset) { FILTER = b.dataset.filter; render(); }
-    else if (b.dataset.csv === "feedback") download("leave-ledger-feedback.csv", csv([["When", "From", "Test", "Screen", "Signed in as", "Google account", "Rating", "Type", "Note"], ...ST.feedback.map((f) => [f.at, f.who, f.test ? "yes" : "", f.screen, f.persona, f.user || "", f.rating, f.kind, f.note])]));
+    else if (b.dataset.csv === "feedback") download("leave-ledger-feedback.csv", csv([["When", "From", "Test", "Sandbox", "Email to follow up", "Screen", "Signed in as", "Google account", "Rating", "Type", "Note"], ...ST.feedback.map((f) => [f.at, f.who, f.test ? "yes" : "", f.sandbox ? "yes" : "", f.contact || "", f.screen, f.persona, f.user || "", f.rating, f.kind, f.note])]));
     else if (b.dataset.csv === "survey") { const qs = ST.questions; download("leave-ledger-survey.csv", csv([["When", "Invite", "Test", ...qs.map((q) => q.q)], ...ST.surveys.map((s) => [s.at, s.who, s.test ? "yes" : "", ...qs.map((q) => { const v = s.answers[q.id]; return Array.isArray(v) ? v.join("; ") : v; })])])); }
   } catch (er) { if (er.message !== "signed out") toast(er.message); }
 });

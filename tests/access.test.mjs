@@ -795,3 +795,17 @@ describe("public sandbox: anyone, no sign-up, one copy per visitor", () => {
     assert.equal(s.summary.responses, 0); assert.equal(s.summary.sandboxExcluded, 1);
   });
 });
+
+describe("feedback with a follow-up email", () => {
+  test("optional email is checked; sandbox feedback shows in the inbox, labeled, not hidden as a test", async () => {
+    const p = preview(), c = p.as({ ip: "4.3.2.1" });
+    await c.post("/api/sandbox", {}); await c.post("/api/login", { email: "grace@mesaverde.example" });
+    assert.equal((await c.post("/api/feedback", { rating: 4, note: "Nice", contact: "not-an-email" })).status, 400);
+    assert.equal((await c.post("/api/feedback", { rating: 4, note: "Nice", contact: " Pat@Example.com " })).status, 200);
+    assert.equal((await c.post("/api/feedback", { rating: 3 })).status, 200, "email stays optional");
+    const fb = (await (await adminClient(p)).get("/api/admin/state")).body.feedback;
+    assert.equal(fb.length, 2);
+    const withEmail = fb.find((f) => f.contact);
+    assert.equal(withEmail.contact, "pat@example.com"); assert.equal(withEmail.sandbox, true); assert.equal(withEmail.test, false);
+  });
+});

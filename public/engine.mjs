@@ -1,5 +1,5 @@
 /* Leave Ledger engine: California leave rules, plan builder, compliance clock.
-   Shared by the browser app and the Netlify function. Rules checked October 2026; not legal advice. */
+   Shared by the browser app and the Netlify function. Based on California law as of November 2026; not yet reviewed by a lawyer; not legal advice. */
 /* ---------- Dates (all ISO yyyy-mm-dd, computed in UTC) ---------- */
 export const DAY = 86400000;
 export const parse = s => { const [y,m,d] = s.split('-').map(Number); return Date.UTC(y, m-1, d); };

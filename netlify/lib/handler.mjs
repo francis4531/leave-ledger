@@ -938,7 +938,8 @@ async function handleAdmin(req, route, store, env, today) {
     // Test copies (the admin's own trials) are left out of the survey numbers.
     // Sandbox visitors are anonymous, so their surveys are counted apart from the kill criteria too.
     const isSandbox = (k) => !k.startsWith("org:") && !invites.items[k];
-    const isTest = (k) => k.startsWith("org:") ? !!orgs.find((o) => o.id === k.slice(4) && o.test) : !!(invites.items[k] && invites.items[k].test) || isSandbox(k);
+    const isTestOnly = (k) => k.startsWith("org:") ? !!orgs.find((o) => o.id === k.slice(4) && o.test) : !!(invites.items[k] && invites.items[k].test);
+    const isTest = (k) => isTestOnly(k) || isSandbox(k); // left out of the kill criteria numbers
     let active = 0, cur;
     do { const r = await store.list({ prefix: "sb/", ...(cur ? { cursor: cur } : {}) }); active += (r.blobs || []).length; cur = r.cursor; } while (cur);
     const sday = (await store.get("sandbox-day", { type: "json" })) || {};
@@ -948,8 +949,9 @@ async function handleAdmin(req, route, store, env, today) {
     const sname = (k) => k.startsWith("org:") ? ((ix.items[k.slice(4)] || {}).name || "Workspace") + " (workspace)" : (invites.items[k] && invites.items[k].name) || "Sandbox visitor";
     return json({
       invites: list, orgs, backups, deleted, sandboxes,
-      feedback: fb.items.map((f) => ({ ...f, who: name(f), test: isTest(f.org ? "org:" + f.org : f.invite || "") })),
-      surveys: Object.entries(sv.byInvite).map(([k, s]) => ({ invite: k, who: sname(k), test: isTest(k), ...s })).sort((a, b) => b.at.localeCompare(a.at)),
+      // Sandbox feedback is shown (it is real feedback), labeled; only the admin's own tests are hidden by default.
+      feedback: fb.items.map((f) => { const k = f.org ? "org:" + f.org : f.invite || ""; return { ...f, who: name(f), test: isTestOnly(k), sandbox: !f.org && isSandbox(k) }; }),
+      surveys: Object.entries(sv.byInvite).map(([k, s]) => ({ invite: k, who: sname(k), test: isTestOnly(k), sandbox: isSandbox(k), ...s })).sort((a, b) => b.at.localeCompare(a.at)),
       summary: { ...summarize(real), testExcluded: Object.keys(sv.byInvite).filter((k) => !isSandbox(k)).length - Object.keys(real).length, sandboxExcluded: Object.keys(sv.byInvite).filter(isSandbox).length },
       questions: SURVEY,
       google: googleOn(env),

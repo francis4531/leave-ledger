@@ -998,8 +998,8 @@ function renderNow() {
   const v = viewOf();
   const html = FB() && UI.survey.open ? surveyView() : UI.tab === "guide" ? guideView() : v === "emp" ? empView() : v === "mgr" ? mgrView() : { overview: hrOverview, cases: hrCases, plan: hrPlan, employees: hrEmployees, access: hrUsers, settings: hrSettings }[UI.tab]();
   const foot = FB()
-    ? `<span>${ORG() ? (REAL() ? "Design partner workspace." : "Early preview workspace. Use made-up employee details only.") : S.space.sandbox ? "Sandbox with a made-up company, just for you. Deleted after 7 days." : "Early preview with a made-up company."} Rules checked October 2026 for California employers. Not legal advice. <a href="/privacy">Privacy</a></span>${UI.survey.open ? "" : `<button class="btn sm" data-survey>${UI.survey.done ? "Edit your survey answers" : "Take the 2-minute survey"}</button>`}`
-    : `<span>Test site with a made-up company. Rules checked October 2026 for California employers. Not legal advice.</span><a href="/strategy">Product strategy progress</a>`;
+    ? `<span>${ORG() ? (REAL() ? "Design partner workspace." : "Early preview workspace. Use made-up employee details only.") : S.space.sandbox ? "Sandbox with a made-up company, just for you. Deleted after 7 days." : "Early preview with a made-up company."} Based on California law as of November 2026. Not yet reviewed by a lawyer. Not legal advice. <a href="/privacy">Privacy</a></span>${UI.survey.open ? "" : `<button class="btn sm" data-survey>${UI.survey.done ? "Edit your survey answers" : "Take the 2-minute survey"}</button>`}`
+    : `<span>Test site with a made-up company. Based on California law as of November 2026. Not yet reviewed by a lawyer. Not legal advice.</span><a href="/strategy">Product strategy progress</a>`;
   document.getElementById("root").innerHTML = `<main>${surveyBanner()}${html}<div class="foot">${foot}</div></main>`;
   if (focusId) { const el = document.getElementById(focusId); if (el) el.focus(); }
   if (v === "emp" && UI.reqAI.draft) {
@@ -1191,6 +1191,7 @@ function renderFeedback() {
       <div class="scale-ends"><span>1 Not useful</span><span>5 Very useful</span></div></div>
     <div class="chips" role="group" aria-label="Type">${KINDS.map(([k, n]) => `<button type="button" class="chip" data-fb-kind="${k}" aria-pressed="${F.kind === k}">${n}</button>`).join("")}</div>
     <div class="field"><label for="fb-note">What would you change? (optional)</label><textarea id="fb-note" placeholder="I expected to see...">${esc(F.note)}</textarea></div>
+    ${S && S.space && S.space.kind === "org" ? "" : `<div class="field"><label for="fb-contact">Your email, if we can follow up (optional)</label><input type="email" id="fb-contact" value="${esc(F.contact || "")}" maxlength="120" autocomplete="email"></div>`}
     ${F.error ? `<p class="err" role="alert">${esc(F.error)}</p>` : ""}
     <div class="btns"><button class="btn primary" data-fb-send ${F.busy ? "disabled" : ""}>${F.busy ? "Sending..." : "Send"}</button></div>`;
 }
@@ -1206,12 +1207,12 @@ function closeFeedback() {
   if (pop) pop.hidden = true; if (btn) { btn.setAttribute("aria-expanded", "false"); btn.textContent = "Feedback"; }
 }
 async function sendFeedback() {
-  const F = UI.fb; F.note = document.getElementById("fb-note")?.value || F.note;
+  const F = UI.fb; F.note = document.getElementById("fb-note")?.value || F.note; F.contact = document.getElementById("fb-contact")?.value ?? F.contact ?? "";
   if (!F.rating && !F.note.trim()) { F.error = "Pick a number or write a note."; renderFeedback(); return; }
   F.busy = true; F.error = ""; renderFeedback();
   try {
-    await api("feedback", { screen: screenName(), rating: F.rating, kind: F.kind, note: F.note });
-    UI.fb = { open: false, rating: 0, kind: "", note: "", busy: false, error: "" }; closeFeedback(); toast("Thank you. Feedback sent.");
+    await api("feedback", { screen: screenName(), rating: F.rating, kind: F.kind, note: F.note, contact: F.contact });
+    UI.fb = { open: false, rating: 0, kind: "", note: "", contact: F.contact, busy: false, error: "" }; closeFeedback(); toast("Thank you. Feedback sent."); // the email is kept for the next note
   } catch (e) { if (e.message === "signed out") return; F.busy = false; F.error = e.message; renderFeedback(); }
 }
 async function openSurvey() {
@@ -1399,9 +1400,9 @@ document.addEventListener("click", async (ev) => {
     await act({ type: "clearCases" }, "All leaves cleared"); return;
   }
   if (b.id === "fbBtn") { UI.fb.open ? closeFeedback() : openFeedback(); return; }
-  if (b.hasAttribute("data-fb-close")) { UI.fb.note = document.getElementById("fb-note")?.value || ""; closeFeedback(); document.getElementById("fbBtn").focus(); return; }
-  if (b.dataset.fbRate) { UI.fb.note = document.getElementById("fb-note")?.value || ""; UI.fb.rating = UI.fb.rating === +b.dataset.fbRate ? 0 : +b.dataset.fbRate; renderFeedback(); return; }
-  if (b.dataset.fbKind) { UI.fb.note = document.getElementById("fb-note")?.value || ""; UI.fb.kind = UI.fb.kind === b.dataset.fbKind ? "" : b.dataset.fbKind; renderFeedback(); return; }
+  if (b.hasAttribute("data-fb-close")) { UI.fb.note = document.getElementById("fb-note")?.value || ""; UI.fb.contact = document.getElementById("fb-contact")?.value ?? UI.fb.contact; closeFeedback(); document.getElementById("fbBtn").focus(); return; }
+  if (b.dataset.fbRate) { UI.fb.note = document.getElementById("fb-note")?.value || ""; UI.fb.contact = document.getElementById("fb-contact")?.value ?? UI.fb.contact; UI.fb.rating = UI.fb.rating === +b.dataset.fbRate ? 0 : +b.dataset.fbRate; renderFeedback(); return; }
+  if (b.dataset.fbKind) { UI.fb.note = document.getElementById("fb-note")?.value || ""; UI.fb.contact = document.getElementById("fb-contact")?.value ?? UI.fb.contact; UI.fb.kind = UI.fb.kind === b.dataset.fbKind ? "" : b.dataset.fbKind; renderFeedback(); return; }
   if (b.hasAttribute("data-fb-send")) { sendFeedback(); return; }
   if (b.hasAttribute("data-survey")) { UI.survey.sent = false; openSurvey(); return; }
   if (b.hasAttribute("data-survey-later")) { UI.survey.later = true; render(); return; }
@@ -1470,7 +1471,7 @@ document.addEventListener("click", async (ev) => {
   }
 });
 document.addEventListener("keydown", (ev) => {
-  if (ev.key === "Escape" && UI.fb.open) { UI.fb.note = document.getElementById("fb-note")?.value || ""; closeFeedback(); document.getElementById("fbBtn").focus(); return; }
+  if (ev.key === "Escape" && UI.fb.open) { UI.fb.note = document.getElementById("fb-note")?.value || ""; UI.fb.contact = document.getElementById("fb-contact")?.value ?? UI.fb.contact; closeFeedback(); document.getElementById("fbBtn").focus(); return; }
   if (ev.key === "Enter" && ev.target.matches("tr[data-open]")) ev.target.click();
   if (ev.key === "Enter" && ev.target.id === "lg-pw") { ev.preventDefault(); store.set("ll-pw", ev.target.value, sessionStorage); toast("Now tap a user to sign in"); }
 });

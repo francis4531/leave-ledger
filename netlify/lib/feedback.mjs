@@ -33,7 +33,9 @@ export function cleanFeedback(b) {
   const rating = Math.round(+b.rating);
   const note = trim(b.note, 2000);
   if (!(rating >= 1 && rating <= 5) && !note) return { error: "Pick a rating or write a note." };
-  return { screen: trim(b.screen, 60), rating: rating >= 1 && rating <= 5 ? rating : null, note, kind: ["idea", "bug", "confusing", "like"].includes(b.kind) ? b.kind : "" };
+  const contact = String(trim(b.contact, 120)).trim().toLowerCase();
+  if (contact && !/^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/.test(contact)) return { error: "That email does not look right. Leave it empty if you prefer." };
+  return { screen: trim(b.screen, 60), rating: rating >= 1 && rating <= 5 ? rating : null, note, kind: ["idea", "bug", "confusing", "like"].includes(b.kind) ? b.kind : "", contact: contact || null };
 }
 
 // Survey questions. Tied to the kill criteria: pain, leaves handled, willingness to pay $2 per employee per month (our price).
@@ -45,7 +47,7 @@ export const SURVEY = [
   { id: "tool", q: "What do you use today?", type: "multi", options: ["My payroll tool (Gusto, ADP, Rippling, other)", "Spreadsheet or calendar", "An employment lawyer or HR consultant", "A leave vendor (Tilt or similar)", "Nothing in particular"] },
   { id: "useful", q: "How useful would this app be for you?", type: "scale", low: "Not useful", high: "Very useful" },
   { id: "pay", q: "Would your company pay $2 per employee per month for this?", type: "choice", options: ["Yes", "Maybe, at a lower price", "No"] },
-  { id: "price", q: "If not $4, what price would feel right?", type: "text", optional: true },
+  { id: "price", q: "If not $2, what price would feel right?", type: "text", optional: true },
   { id: "missing", q: "What is missing, or what would stop you from using it?", type: "text", optional: true },
   { id: "contact", q: "Email, if you are open to a 20-minute follow-up call", type: "text", optional: true },
 ];
