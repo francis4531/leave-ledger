@@ -2,6 +2,16 @@
 
 > Answered on the /strategy page of the test site and copied here automatically. Newest week first. Edit them on the page, not in this file; the page overwrites it.
 
+## Week 4 · The Contract
+
+### 1. Live accuracy bar
+
+**Question:** Clerk passed the golden set (100% of 50), but real use is the true test. Proposed: if users change Clerk's leave type in 3 of a design partner's last 20 intakes, review them that week; at 5 of 20, that workspace goes to "suggest only" (Clerk shows its reading but does not fill the form). Accept these lines, set different ones, or wait for the first 50 real intakes?
+
+**Status:** Decided · Nov 11, 2026 · Site admin
+
+**Answer:** wait for the first 50 real intakes.
+
 ## Week 3 · The Margin
 
 ### 1. Tilt's $2.50 price
