@@ -12,6 +12,14 @@
 
 **Answer:** wait for the first 50 real intakes.
 
+### 2. Jury duty, voting and other legal time off
+
+**Question:** California protects time off for jury duty and gives up to 2 paid hours to vote, but Clerk and the rules engine have no category for them, so users see "I could not tell what kind of time off this is." Add them as simple categories HR handles (no eligibility math), build them into the rules engine, or keep them out of scope for the 5 to 49 pilot?
+
+**Status:** Decided · Nov 11, 2026 · Site admin
+
+**Answer:** Add them as simple categories HR handles (no eligibility math), build them into the rules engine,
+
 ## Week 3 · The Margin
 
 ### 1. Tilt's $2.50 price
