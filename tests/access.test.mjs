@@ -218,6 +218,42 @@ describe("preview site: admin inbox", () => {
     const e = p.as(); await e.google(ACCTS.eve);
     assert.equal((await e.get("/api/strategy")).status, 404);
   });
+  test("the tests page is for the admin only, on the preview site and the test site", async () => {
+    const p = preview();
+    assert.equal((await p.as().get("/api/tests")).status, 404);
+    const e = p.as(); await e.google(ACCTS.eve);
+    assert.equal((await e.get("/api/tests")).status, 404);
+    const a = await adminClient(p), r = await a.get("/api/tests");
+    assert.equal(r.status, 200);
+    const d = r.body;
+    assert.equal(d.clerkBar, 90);
+    assert.ok(Array.isArray(d.history) && Array.isArray(d.clerk));
+    const g = p.as(); await g.google(ACCTS.owner);
+    assert.equal((await g.get("/api/tests")).status, 200);
+    // A signed-in test site user, even HR, does not see it.
+    const t = client(memoryStore(), TEST_ENV);
+    await t.post("/api/login", { email: "grace@mesaverde.example", password: "test-pass-123" });
+    assert.equal((await t.get("/api/tests")).status, 404);
+  });
+  test("each deploy is recorded once, newest first, last 30; Clerk runs are kept as summaries", async () => {
+    const { recordDeploy, rememberClerkRun } = await import("../netlify/lib/handler.mjs");
+    const store = memoryStore();
+    const run = (i, failed = 0) => ({ build: i, sha: "abc" + i, at: new Date(Date.UTC(2026, 10, 1, 0, i)).toISOString(), ms: 900, passed: 10 - failed, failed,
+      tests: [{ area: "Leave rules (answer key)", name: "a", ok: !failed }, { area: "Letters and notices", name: "b", ok: true }] });
+    assert.deepEqual(await recordDeploy(store, null), []);
+    await recordDeploy(store, run(1)); const h = await recordDeploy(store, run(1));
+    assert.equal(h.length, 1);
+    const h2 = await recordDeploy(store, run(2, 1));
+    assert.equal(h2[0].build, 2); assert.deepEqual(h2[0].areas["Leave rules (answer key)"], { passed: 0, failed: 1 });
+    assert.equal(h2[0].tests, undefined, "the full test list is not stored per deploy");
+    for (let i = 3; i < 40; i++) await recordDeploy(store, run(i));
+    const h3 = await recordDeploy(store, run(39));
+    assert.equal(h3.length, 30); assert.equal(h3[0].build, 39);
+    const cr = { id: "r1", at: "2026-11-02T00:00:00.000Z", summary: { model: "m", cases: 50, rowsPct: 96, reasonPct: 100, misses: [{ id: "x" }, { id: "y" }] } };
+    await rememberClerkRun(store, cr); await rememberClerkRun(store, cr); await rememberClerkRun(store, { id: "r2", summary: null });
+    const ch = await store.get("clerk-eval-history-v1", { type: "json" });
+    assert.equal(ch.runs.length, 1); assert.equal(ch.runs[0].misses, 2); assert.equal(ch.runs[0].rowsPct, 96);
+  });
 });
 
 describe("preview site: Google sign-in checks", () => {

@@ -1,3 +1,5 @@
 node_modules/
 .netlify/
 public/build.json
+
+netlify/lib/test-results.mjs

@@ -1,7 +1,8 @@
 [build]
   publish = "public"
   # Tests run on every deploy. If any fail, the build stops and the last good version stays live.
-  command = "node scripts/build-strategy.mjs && node --test 'tests/*.test.mjs'"
+  # scripts/run-tests.mjs also saves the results for the admin /tests page.
+  command = "node scripts/build-strategy.mjs && node scripts/run-tests.mjs"
 
 [functions]
   directory = "netlify/functions"
@@ -17,6 +18,11 @@
 [[redirects]]
   from = "/strategy"
   to = "/strategy.html"
+  status = 200
+
+[[redirects]]
+  from = "/tests"
+  to = "/tests.html"
   status = 200
 
 [[redirects]]

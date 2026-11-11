@@ -674,6 +674,19 @@ async function route_(req, store, env) {
     return json({ ok: true });
   }
 
+  /* ----- Tests page: the site admin only. Unit test results from this deploy, deploy history, Clerk accuracy over time. ----- */
+  if (route === "tests" && req.method === "GET") {
+    const adm = adminSession(req, env);
+    const gAdmin = R.user && isAdminEmail(env, R.user.email) ? R.user.email : null;
+    if (!adm && !gAdmin) return err("Not found", 404);
+    const cur = await loadTestResults();
+    const history = await recordDeploy(store, cur);
+    const runs = ((await store.get(EVKEY, { type: "json" })) || { runs: [] }).runs.filter((r) => r.summary);
+    for (const r of runs) await rememberClerkRun(store, r);
+    const clerk = ((await store.get(CLERK_HIST, { type: "json" })) || { runs: [] }).runs;
+    return json({ viewer: gAdmin || (adm && adm.em) || "Admin", current: cur, history, clerk, clerkBar: 90, golden: GOLDEN.cases.length });
+  }
+
   /* ----- Strategy page: test-site users, or the site admin on the preview site ----- */
   if (route === "strategy" || route === "strategy/decision") {
     let who = null, canEdit = false;
@@ -896,6 +909,32 @@ async function surveyOf(store, id) {
 
 /* ---------- Admin inbox (preview site only) ---------- */
 const EVKEY = "clerk-eval-v1";
+// Every finished Clerk run, summary only, so accuracy over time outlives the 10 full runs kept above.
+const CLERK_HIST = "clerk-eval-history-v1";
+export async function rememberClerkRun(store, run) {
+  if (!run || !run.summary) return;
+  const h = (await store.get(CLERK_HIST, { type: "json" })) || { runs: [] };
+  if (h.runs.some((r) => r.id === run.id)) return;
+  const { misses, ...s } = run.summary;
+  h.runs = [{ id: run.id, at: run.at, ...s, misses: (misses || []).length }, ...h.runs].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 100);
+  await store.setJSON(CLERK_HIST, h);
+}
+// The unit test results saved by scripts/run-tests.mjs during this deploy's build. Missing when tests ran without it.
+export async function loadTestResults() {
+  try { return (await import("./test-results.mjs")).default; } catch (e) { return null; }
+}
+// Each deploy's result, newest first, last 30. Added the first time the page is opened on that deploy.
+const TEST_HIST = "test-history-v1";
+export async function recordDeploy(store, cur) {
+  const h = (await store.get(TEST_HIST, { type: "json" })) || { deploys: [] };
+  if (cur && !h.deploys.some((d) => d.at === cur.at)) {
+    const areas = {};
+    for (const t of cur.tests) { const a = (areas[t.area] ||= { passed: 0, failed: 0 }); t.ok ? a.passed++ : a.failed++; }
+    h.deploys = [{ build: cur.build, sha: cur.sha, context: cur.context, at: cur.at, ms: cur.ms, passed: cur.passed, failed: cur.failed, areas }, ...h.deploys].slice(0, 30);
+    await store.setJSON(TEST_HIST, h);
+  }
+  return h.deploys;
+}
 // A valid admin cookie: Google sign-in by an email in LL_ADMIN_EMAILS, or the admin password.
 function adminSession(req, env) {
   const o = readObj(cookieOf(req, "ll_admin"), env);
@@ -982,6 +1021,7 @@ async function handleAdmin(req, route, store, env, today) {
     r2.results = [...r2.results, ...res];
     if (r2.results.length >= r2.total) r2.summary = summarizeRun(r2.results, r2.model);
     await store.setJSON(EVKEY, fresh);
+    if (r2.summary) await rememberClerkRun(store, r2);
     return json({ done: !!r2.summary, count: r2.results.length, total: r2.total, summary: r2.summary });
   }
   if (route === "admin/invite" && req.method === "POST") {

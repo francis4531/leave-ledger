@@ -50,7 +50,8 @@ describe("test site", { skip }, () => {
     await p.click('tr[data-open]:has-text("Ben Whitaker")');
     const box = p.locator("input[data-task]").first();
     await box.check();
-    await p.waitForSelector("#toast:not([hidden])");
+    // The "Sent" toast from before may still be showing, so wait for the new one.
+    await p.waitForFunction(() => { const t = document.getElementById("toast"); return t && !t.hidden && /done/i.test(t.textContent); }, null, { timeout: 5000 });
     assert.match(await p.textContent("#toast"), /done/i);
     assert.deepEqual(errors, []);
   });
@@ -118,7 +119,7 @@ describe("test site", { skip }, () => {
     await p.waitForSelector('[data-form="req"]');
     assert.equal(await p.inputValue("#rq-reason"), "family_care");
     await p.click("[data-submitreq]");
-    await p.waitForSelector("#toast:not([hidden])");
+    await p.waitForSelector(".status-banner.sent, .status-banner.wait", { timeout: 5000 }).catch(() => null);
     assert.ok(await p.$(".status-banner.sent, .status-banner.wait"), "a new request says it is not confirmed yet");
     const box = p.locator('[data-edd$="|pfl-account"]').first();
     await box.check();
