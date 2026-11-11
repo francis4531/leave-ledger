@@ -3,7 +3,7 @@
 > A living strategy built across 6 weekly sessions, using the Product School AI product strategy template. Each week adds one module. By week 6, this folder is the strategy: version-controlled and ready for a board.
 
 **The bet:** California leave of absence management for employers with 5 to 200 employees.
-**Last updated:** Nov 3, 2026 (Week 3)
+**Last updated:** Nov 10, 2026 (Week 4)
 **Customer interviews:** 0 of 10 (kill criteria check on Nov 23, 2026)
 **Partner challenges done:** 0 of 6
 
@@ -16,7 +16,7 @@
 | **The Bet** | M1 | Oct 21 | [x] Draft, needs partner challenge | `01-the-bet/` |
 | **The Moat** | M2 | Oct 28 | [x] Draft, needs partner challenge | `02-the-moat/` |
 | **The Margin** | M3 | Nov 4 | [x] Draft, needs partner challenge | `03-the-margin/` |
-| **The Contract** | M4 | Nov 11 | [ ] | `04-the-contract/` |
+| **The Contract** | M4 | Nov 11 | [x] Draft, needs partner challenge | `04-the-contract/` |
 | **The Guardrails** | M5 | Nov 18 | [ ] | `05-the-guardrails/` |
 | **The Pitch** | M6 | Nov 25 | [ ] | `06-the-pitch/` |
 
@@ -32,6 +32,7 @@
 - **Top Risk:** Distribution. Small businesses buy HR through their payroll provider. If Gusto or Rippling ships California leave first, a standalone tool has no way in.
 - **Confidence:** L (until 10 customer interviews)
 - **Prototype:** Netlify test site, 10 test accounts (link in `01-the-bet/prototype.md`)
+- **Kill criterion 4 (Clerk 90% on leave type):** Passed on Nov 3, 100% of 50 cases, on a test set we wrote ourselves. Real phrasings still owed (see M4).
 - **Kill Criteria:** Under 3 of 10 interviewees feel the pain, or under 2 of 10 would pay $2 per employee per month (our price), by Nov 23; or a payroll platform ships California leave stacking before we have 5 paying employers.
 - **Changed by Nov 2 product decisions:** first segment narrowed to 5 to 49 employees (state leaves only, no FMLA), owner is the buyer, price set at $3 per employee per month (free for 1 to 4), lowered to $2 on Nov 4. Kill criterion 2 follows the price we will charge: $4, then $3 (Nov 3), now $2 (Nov 4).
 
@@ -62,6 +63,7 @@
 - **Gross Margin (AI-adjusted):** The same. One Clerk intake costs about $0.0003 (Haiku 5.5 at $0.10 / $0.50 per million tokens, about 1,650 in and 250 out), so a month of Clerk for 20 employees is under one cent. AI moves margin by 0.01 points. Upside if Clerk cuts support by 5 minutes a company a month: about 81%.
 - **Pricing Model:** Seat-based, $2 per employee per month (lowered from $3 on Nov 4), free for 1 to 4. Clerk included, not metered. Below Tilt ($2.50, or $3.10 with integrations). Small companies only work with self-serve support and annual prepay; consider a monthly minimum.
 - **Cascading Strategy:** Rules engine and template letters first (free, no model); Haiku 5.5 only for free text; when unsure, ask HR rather than a bigger model. Sonnet 5.5 is the fallback only if Haiku fails the 90% leave type bar, and would still cost $0.12 a month per company.
+- **Decided Nov 3 and 4:** price $2 per employee per month (below Tilt's $2.50) and kill criterion 2 moved to $2; annual prepay by bank transfer is the default for small companies, automated card prepay later once customers trust us.
 - **Break-even at:** Running costs about $40 a month (Netlify Pro, Resend Pro). 1 paying 20-employee company, or 10 paying 5-employee companies, covers them. One-time lawyer review (no quote yet) and trademark clearance come on top: each $1,000 is about 21 company-months at 20 employees. Draft, for partner challenge.
 
 → Details: [`03-the-margin/`](03-the-margin/)
@@ -72,11 +74,11 @@
 
 **Why users will trust a probabilistic system.**
 
-- **Reliability Target:**
-- **Golden Dataset:** __ rows, __ adversarial
-- **Confidence UX:** [approach]
-- **HITL Architecture:**
-- **Failure Mode Coverage:**
+- **Reliability Target:** Golden set 90% or more on leave type before any model or prompt change ships (today 100% of 50, Nov 3). Live, proposed: the user changes Clerk's leave type in fewer than 1 in 10 sent intakes. p95 reply 5 seconds or less (average 2.3 seconds; p95 not measured yet), cut-off at 8 seconds then the manual form. 0 summaries that repeat a diagnosis.
+- **Golden Dataset:** 50 rows, 10 adversarial. All exact-rule checks, no AI judge. Gaps: 0 real phrasings, 4 sick-time rows for the most common request, 4 Spanish rows, 0 manager notes, one fixed "today". Target 80 rows, 15 or more from real people, before design partners.
+- **Confidence UX:** Per-field human-in-loop trigger. High: filled in. Medium or low: filled in and marked orange with "please check". Leave type unclear: nothing filled, user picks. The labels are Clerk's own and unproven; check them against what users fix (high-confidence fields changed under 5%) once there are about 50 real intakes.
+- **HITL Architecture:** Four checkpoints, Clerk only in the first: the user checks the draft and presses send; the rules engine decides eligibility (no AI); HR approves every leave and signs every notice; the employee confirms receipt. Unclear or suspicious messages still become a case for HR, because the notice clock does not wait.
+- **Failure Mode Coverage:** 10 adversarial rows (hijack attempts, prying for other employees' reasons, diagnoses, nonsense) all handled. Not covered: legal time off with no category (jury duty, voting show as "not sure"), unproven confidence labels, a privacy check limited to a word list, p95 latency. Self red-team only; partner challenge not done.
 
 → Details: [`04-the-contract/`](04-the-contract/)
 
@@ -110,12 +112,12 @@
 
 ---
 
-## Open decisions (Week 3)
+## Open decisions (Week 4)
 
-1. **Tilt's $2.50 price.** Tilt now lists Essentials at $2.50 per employee per month (plus $0.60 for Gusto and Rippling sync), below our $3. Keep $3 and sell the notice clock and setup in minutes, or change the price? Either way, ask each interviewee what they would pay with Tilt's list price in front of them.
-2. **Kill criterion 2 price.** Criterion 2 still asks whether 2 of 10 would pay at least $4 per employee per month, set when Tilt's lowest tier looked like $4. Our price is now $3 and Tilt's is $2.50. Change the bar to $3 (our price), keep $4, or something else?
-3. **Small companies: billing and support.** At 5 employees and 15 minutes of support a month, gross margin is about 14% (18 minutes and the company costs money). Make annual prepay by bank transfer the default and support email-only below 10 employees, set a monthly minimum, or leave it until design partners show real support time?
-4. **Clerk's first numbers.** Week 2's "turn on Clerk" is done, but no score is recorded yet. Add the golden set result (inbox, Clerk test run: % right on leave type, out of 50 cases) and HR Settings' requests and AI cost this month to `02-the-moat/kill-switch.md`, or paste them in this answer. They replace this week's token estimate and set the Week 4 baseline.
+1. **Live accuracy bar.** Clerk passed the golden set (100% of 50), but real use is the true test. Proposed: if users change Clerk's leave type in 3 of a design partner's last 20 intakes, review them that week; at 5 of 20, that workspace goes to "suggest only" (Clerk shows its reading but does not fill the form). Accept these lines, set different ones, or wait for the first 50 real intakes?
+2. **Jury duty, voting and other legal time off.** California protects time off for jury duty and gives up to 2 paid hours to vote, but Clerk and the rules engine have no category for them, so users see "I could not tell what kind of time off this is." Add them as simple categories HR handles (no eligibility math), build them into the rules engine, or keep them out of scope for the 5 to 49 pilot?
+3. **Languages Clerk promises.** The form says "English or Spanish is fine" and the golden set has 4 Spanish rows and 1 Tagalog. Grow Spanish to 10 rows before design partners and keep the promise at English and Spanish, add other common California languages (Chinese, Vietnamese, Tagalog, Korean), or drop the Spanish line until it is tested?
+4. **Four-year records.** California's rules on automated-decision systems in employment (in force since Oct 1, 2025) ask employers to keep related records for four years. Leave Ledger keeps the last 300 intakes per workspace. Keep intake records for four years now (a code change), or wait for the lawyer review to say whether Clerk and the rules engine count?
 
 ## Changelog
 
@@ -126,3 +128,4 @@
 | 1 | Oct 27, 2026 | Clerk intake built (Claude Haiku 5.5): own-words requests fill the form, corrections logged, 20-case golden set added |
 | 2 | Oct 28, 2026 | M2 drafted: flywheel 6/20, competitive map, encroachment threats (Gusto, Tilt, CalChamber), 90-day attack and defense, kill switch audit (portability Partial). Schedule moved to Wednesday sessions |
 | 3 | Nov 3, 2026 | M3 drafted: cost model (Clerk about $0.0003 an intake, gross margin about 76% at 20 employees, 14% at 5), no-model-first cascade, pricing on the Nov 2 decisions, stress tests incl. Tilt at $2.50, break-even. M1 and M2 summaries note the Nov 2 decisions and Tilt's new price |
+| 4 | Nov 10, 2026 | M4 drafted: golden set audit (50 rows, 10 adversarial, gaps), per-field confidence UX and calibration check, reliability contract with alert lines, four-checkpoint HITL design, self red-team. M1 notes kill criterion 4 passed on our own set; M3 notes the Nov 3 and 4 price and prepay decisions |
