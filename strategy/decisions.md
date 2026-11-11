@@ -20,6 +20,14 @@
 
 **Answer:** Add them as simple categories HR handles (no eligibility math), build them into the rules engine,
 
+### 3. Languages Clerk promises
+
+**Question:** The form says "English or Spanish is fine" and the golden set has 4 Spanish rows and 1 Tagalog. Grow Spanish to 10 rows before design partners and keep the promise at English and Spanish, add other common California languages (Chinese, Vietnamese, Tagalog, Korean), or drop the Spanish line until it is tested?
+
+**Status:** Decided · Nov 11, 2026 · Site admin
+
+**Answer:** Grow Spanish to 10 rows before design partners and keep the promise at English and Spanish,
+
 ## Week 3 · The Margin
 
 ### 1. Tilt's $2.50 price
