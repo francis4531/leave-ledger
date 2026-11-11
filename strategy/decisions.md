@@ -28,6 +28,14 @@
 
 **Answer:** Grow Spanish to 10 rows before design partners and keep the promise at English and Spanish,
 
+### 4. Four-year records
+
+**Question:** California's rules on automated-decision systems in employment (in force since Oct 1, 2025) ask employers to keep related records for four years. Leave Ledger keeps the last 300 intakes per workspace. Keep intake records for four years now (a code change), or wait for the lawyer review to say whether Clerk and the rules engine count?
+
+**Status:** Decided · Nov 11, 2026 · Site admin
+
+**Answer:** Keep intake records for four years now (a code change).
+
 ## Week 3 · The Margin
 
 ### 1. Tilt's $2.50 price
