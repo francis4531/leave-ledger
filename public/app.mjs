@@ -125,6 +125,39 @@ function checksHTML(list) { return `<div class="checks">${list.map((c) => `<div 
 const COLORS = { pdl: "var(--pdl)", cfra: "var(--cfra)", fmla: "var(--fmla)", short: "var(--short)", sdi: "var(--sdi)", pfl: "var(--pfl)", sick: "var(--sdi)", unpaid: "var(--unpaid)", wait: "var(--unpaid)", none: "var(--bad)" };
 const fmlaCovered = () => D().company.headcount >= 50;
 
+/* ---------- Leave types: one color and icon each, so a leave is easy to spot. Never shown to managers, since the type
+   would give away the reason. ---------- */
+const KIND = { bonding: "baby", pregnancy_bonding: "preg", family_care: "care", own_health: "health", sick: "sick", bereavement: "loss", repro: "loss", unknown: "none" };
+const SVG = (d, w = 14) => `<svg width="${w}" height="${w}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const ICONS = {
+  baby: '<circle cx="12" cy="8" r="4"/><path d="M6 21c0-3.3 2.7-6 6-6s6 2.7 6 6"/>',
+  preg: '<path d="M12 21V11"/><path d="M12 11C12 7 9 4 5 4c0 4 3 7 7 7z"/><path d="M12 13c0-3 2.5-5.5 6-5.5 0 3-2.5 5.5-6 5.5z"/>',
+  care: '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"/>',
+  health: '<path d="M12 5v14M5 12h14"/>',
+  sick: '<path d="M14 14.8V4a2 2 0 0 0-4 0v10.8a4 4 0 1 0 4 0z"/>',
+  loss: '<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.5 19 2c1 2 2 4.2 1 8-1.4 5.3-5.6 10-9 10z"/><path d="M2 21c0-3 1.9-5.4 5.1-6"/>',
+  none: '<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.5"/>',
+  pay: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  home: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+};
+const kindOf = (reason) => KIND[reason] || "none";
+const leaveTag = (reason, text) => `<span class="ltag k-${kindOf(reason)}">${SVG(ICONS[kindOf(reason)], 13)}<span>${esc(text ?? REASONS[reason].hr)}</span></span>`;
+const leaveIcon = (kind) => `<span class="lic k-${kind}">${SVG(ICONS[kind], 15)}</span>`;
+// A progress ring: done of total, drawn with a conic gradient.
+const ring = (done, total, cls = "") => `<span class="ring ${cls}" style="--p:${total ? Math.round((done / total) * 100) : 0}%" role="img" aria-label="${done} of ${total} done"><span>${done}/${total}</span></span>`;
+// Legal deadlines kept: met means done on or before the due date; missed means done late, or open past due.
+function deadlineRecord() {
+  let met = 0, late = 0, overdue = 0;
+  D().cases.forEach((c) => c.tasks.forEach((t) => {
+    if (!t.legal || !t.due || t.optional) return;
+    if (t.done) (t.doneOn && t.doneOn > t.due ? late++ : met++);
+    else if (t.due < TODAY) overdue++;
+  }));
+  return { met, late, overdue, missed: late + overdue, total: met + late + overdue };
+}
+
 /* ---------- Shared building blocks ---------- */
 function timelineHTML(p) {
   if (!p.segs.length) return "";
@@ -254,10 +287,10 @@ function letterBtn(c, t) {
 }
 function taskRow(c, t, showWho, compact) {
   const s = dueState(t), tx = taskText(c, t), e = emp(c.empId);
-  return `<div class="qrow ${t.done ? "done" : ""}">
+  return `<div class="qrow ${t.done ? "done" : ""} ${UI.justDone === c.id + "|" + t.key ? "just" : ""}">
     <input type="checkbox" id="t-${c.id}-${t.key}" data-task="${c.id}|${t.key}" ${t.done ? "checked" : ""} ${!t.due && !t.done ? "disabled" : ""} aria-label="Mark done: ${esc(tx.label)}">
     <div><div class="t">${esc(tx.label)}${t.legal ? '<span class="bylaw" title="A deadline set by law">BY LAW</span>' : ""}</div>
-    ${compact ? "" : `<div class="s">${showWho ? `<button class="linkish" data-open="${c.id}">${esc(e.name)}</button> · ${esc(REASONS[c.reason].hr)}` : esc(tx.hint || "")}</div>`}${letterBtn(c, t)}</div>
+    ${compact ? "" : `<div class="s">${showWho ? `<button class="linkish" data-open="${c.id}">${esc(e.name)}</button> ${leaveTag(c.reason)}` : esc(tx.hint || "")}</div>`}${letterBtn(c, t)}</div>
     ${compact ? (s.cls === "bad" && compact !== "first" ? pill(s.t, s.cls) : "<span></span>") : pill(s.t, s.cls)}</div>`;
 }
 function hrOverview() {
@@ -273,23 +306,43 @@ function hrOverview() {
   // One block per leave, so an employee with four steps due shows up once.
   const byCase = (items) => { const m = new Map(); items.forEach((x) => { if (!m.has(x.c.id)) m.set(x.c.id, { c: x.c, ts: [] }); m.get(x.c.id).ts.push(x.t); }); return [...m.values()]; };
   const caseBlock = ({ c, ts }) => { const e = emp(c.empId), s = dueState(ts[0]);
-    return `<div class="cgroup"><div class="cg-h"><div class="person">${avatar(e, "sm")}<div><button class="linkish" data-open="${c.id}">${esc(e.name)}</button><div class="s">${esc(REASONS[c.reason].hr)}</div></div></div>${pill(s.t, s.cls)}</div>
+    return `<div class="cgroup"><div class="cg-h"><div class="person">${avatar(e, "sm")}<div><button class="linkish" data-open="${c.id}">${esc(e.name)}</button><div class="s">${leaveTag(c.reason)}</div></div></div>${pill(s.t, s.cls)}</div>
       <div class="queue">${ts.map((t, i) => taskRow(c, t, false, i === 0 ? "first" : true)).join("")}</div></div>`; };
   const group = (title, color, items) => items.length ? `<div class="qgroup"><div class="qhead"><span class="dot" style="background:${color}"></span>${title} · ${items.length} ${items.length === 1 ? "step" : "steps"}</div>${byCase(items).map(caseBlock).join("")}</div>` : "";
   return `<div class="head"><div><h2 class="greet">${greeting()}, ${esc(first(S.me.name))}</h2><p class="sumline" style="margin-top:6px">${sum}</p></div></div>
+  ${hrCards(now)}
   <div class="grid2">
     <section class="panel"><div class="panel-h"><h3>Your to-do list</h3><span class="small muted">Weekends and company holidays are skipped</span></div>
-      ${!open.length ? `<div class="allclear">✓ Nothing to do. New leave requests will add their steps here.</div>` : ""}
+      ${!open.length ? `<div class="allclear"><span class="ac-ic">${SVG(ICONS.check, 30)}</span><b>All caught up</b><span class="muted">Nothing to do. New leave requests will add their steps here.</span></div>` : ""}
       ${group("Do now", "var(--bad)", now)}${group("Next 7 days", "var(--warn)", week)}
       ${later.length ? `<details class="more"><summary>Show ${later.length} later ${later.length === 1 ? "item" : "items"}</summary>${group("Later", "var(--line)", later)}</details>` : ""}
     </section>
     <div class="stack">
       <section class="panel"><div class="panel-h"><h3>Who is out</h3><span class="small muted">${out.length} out today · ${back30.length} back within 30 days</span></div>
-        <div class="queue">${active.map((c) => { const d = caseDates(c), s = caseStatus(c), e = emp(c.empId); return `<div class="qrow" style="grid-template-columns:minmax(0,1fr) auto"><div class="person">${avatar(e, "sm")}<div><button class="linkish" data-open="${c.id}">${esc(e.name)}</button><div class="s">${esc(REASONS[c.reason].hr)}${d.end ? ` · <span class="mono">${range(d.start, d.end)}</span>` : ""}</div></div></div>${pill(s.t, s.cls)}</div>`; }).join("") || '<p class="muted">Nobody is out or scheduled.</p>'}</div>
+        <div class="queue">${active.map((c) => { const d = caseDates(c), s = caseStatus(c), e = emp(c.empId); return `<div class="qrow" style="grid-template-columns:minmax(0,1fr) auto"><div class="person">${avatar(e, "sm")}<div><button class="linkish" data-open="${c.id}">${esc(e.name)}</button><div class="s">${leaveTag(c.reason)}${d.end ? ` <span class="mono">${range(d.start, d.end)}</span>` : ""}</div></div></div>${pill(s.t, s.cls)}</div>`; }).join("") || '<p class="muted">Nobody is out or scheduled.</p>'}</div>
       </section>
       ${log.length ? `<section class="panel"><h3>Recent activity</h3><div class="queue">${log.map((l) => `<div class="qrow" style="grid-template-columns:minmax(0,1fr) auto"><div><div class="t" style="font-weight:500">${esc(l.text)}</div><div class="s">${esc(l.by)}</div></div><span class="small muted mono">${new Date(l.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" })}</span></div>`).join("")}</div></section>` : ""}
     </div>
   </div>`;
+}
+
+// The cards at the top of Today: the deadline record, today's steps, and first-week setup in a new workspace.
+function hrCards(now) {
+  const r = deadlineRecord(), cards = [];
+  if (r.total) cards.push(`<div class="kcard rec"><span class="label">Legal deadlines met on time</span><span class="big">${r.met} of ${r.total}</span><span class="small">${r.overdue ? `${r.overdue} overdue now. Clear the red items below.` : r.late ? `${r.late} done late. Everything else on time.` : "None missed. Every one was on time."}</span></div>`);
+  let doneToday = 0; D().cases.forEach((c) => c.tasks.forEach((t) => { if (t.done && !t.optional && t.doneOn === TODAY) doneToday++; }));
+  const total = doneToday + now.length;
+  cards.push(`<div class="kcard row">${total ? ring(doneToday, total, now.length ? "" : "ok") : `<span class="ring ok" style="--p:100%" aria-hidden="true"><span>${SVG(ICONS.check, 20)}</span></span>`}<div><b>Today's steps</b><span class="small muted">${!total ? "Nothing due today." : now.length ? `${now.length} left to do now.` : "All done for today. Nice work."}</span></div></div>`);
+  if (ORG() && CAP("settings")) {
+    const steps = [
+      ["Check your company settings", (D().log || []).some((l) => /company setting/i.test(l.text)), "settings"],
+      ["Bring in your employees", D().employees.length >= 2, "employees"],
+      ["Set each employee's manager", D().employees.some((e) => e.mgr), "employees"],
+    ];
+    const n = steps.filter((x) => x[1]).length, next = steps.find((x) => !x[1]);
+    if (next) cards.push(`<div class="kcard row">${ring(n, steps.length, "acc")}<div><b>Your company is ${n ? "almost" : "not yet"} set up</b><span class="small muted">Next: <button class="linkish" data-tab="${next[2]}">${esc(next[0])}</button></span></div></div>`);
+  }
+  return `<div class="kcards">${cards.join("")}</div>`;
 }
 
 /* ---------- HR: Leaves ---------- */
@@ -304,7 +357,7 @@ function hrCases() {
     ${D().cases.length > 8 ? `<input type="search" id="lv-q" placeholder="Find an employee" value="${esc(UI.leavesQ || "")}" aria-label="Find an employee">` : ""}</div>
   <section class="panel"><div class="tw"><table class="cards"><thead><tr><th>Employee</th><th>Type</th><th>Dates</th><th>Status</th><th>To do</th></tr></thead><tbody>
   ${shown.map((c) => { const d = caseDates(c), s = caseStatus(c), e = emp(c.empId); const late = c.tasks.filter((t) => !t.done && t.due && t.due <= TODAY).length; const left = c.tasks.filter((t) => !t.done && !t.optional).length;
-    return `<tr class="click" data-open="${c.id}" tabindex="0"><td class="full"><div class="person">${avatar(e, "sm")}<div><b>${esc(e.name)}</b><div class="small muted">${esc(e.role)} · from ${{ hr: "HR", employee: "employee", manager: "manager" }[c.source]}</div></div></div></td><td data-l="Type">${esc(REASONS[c.reason].hr)}</td><td data-l="Dates" class="small">${d.end ? `<span class="mono">${range(d.start, d.end)}</span>` : '<span class="muted">Not set yet</span>'}</td><td data-l="Status"><div class="btns" style="gap:4px">${pill(s.t, s.cls)}${c.reason === "unknown" || s.t === "Returned" ? "" : c.approvedOn ? pill("✓ Approved", "ok") : pill("Needs approval", "warn")}</div></td><td data-l="To do">${late ? pill(late + " late", "bad") : left ? pill(left + " open", "") : pill("All done", "ok")}</td></tr>`; }).join("") || `<tr><td colspan="5" class="muted">${D().cases.length ? "Nothing here." : "No leaves yet."}</td></tr>`}
+    return `<tr class="click" data-open="${c.id}" tabindex="0"><td class="full"><div class="person">${avatar(e, "sm")}<div><b>${esc(e.name)}</b><div class="small muted">${esc(e.role)} · from ${{ hr: "HR", employee: "employee", manager: "manager" }[c.source]}</div></div></div></td><td data-l="Type">${leaveTag(c.reason)}</td><td data-l="Dates" class="small">${d.end ? `<span class="mono">${range(d.start, d.end)}</span>` : '<span class="muted">Not set yet</span>'}</td><td data-l="Status"><div class="btns" style="gap:4px">${pill(s.t, s.cls)}${c.reason === "unknown" || s.t === "Returned" ? "" : c.approvedOn ? pill("✓ Approved", "ok") : pill("Needs approval", "warn")}</div></td><td data-l="To do">${late ? pill(late + " late", "bad") : left ? pill(left + " open", "") : pill("All done", "ok")}</td></tr>`; }).join("") || `<tr><td colspan="5" class="muted">${D().cases.length ? "Nothing here." : "No leaves yet."}</td></tr>`}
   </tbody></table></div></section>`;
 }
 /* ---------- EDD filing help ---------- */
@@ -312,7 +365,7 @@ const ext = (href, text) => `<a href="${esc(href)}" target="_blank" rel="noopene
 function eddPanel(c, p, mine) {
   const E2 = eddSteps(c, p); if (!E2) return "";
   const done = c.edd || {};
-  return `<div class="edd"><div class="label" style="margin-bottom:8px">${mine ? "Getting paid by the state" : `State pay claims · ${esc(first(emp(c.empId).name))}'s checklist`}</div>
+  return `<div class="edd" ${mine ? `id="edd-${c.id}"` : ""}><div class="label" style="margin-bottom:8px">${mine ? "Getting paid by the state" : `State pay claims · ${esc(first(emp(c.empId).name))}'s checklist`}</div>
     ${!mine ? `<p class="small muted" style="margin:0 0 8px">The employee files these with EDD and ticks them off on their leave page. You can see where they are.</p>` : ""}
     ${E2.claims.map((cl) => { const n = cl.steps.filter((x) => done[x.id]).length;
       return `<div class="claim"><div class="claim-h"><b>${esc(cl.title)}</b><span class="small muted">${n} of ${cl.steps.length} done · file ${fmtS(cl.window.from)} to ${fmtS(cl.window.to)}</span></div>
@@ -503,7 +556,7 @@ function hrCase(c) {
       <div class="btns"><button class="btn primary" data-convert="${c.id}">Set leave type</button></div></section>`;
   } else {
     const p = planFor(c);
-    body = `${intakePanel(c, e)}<section class="panel"><div class="panel-h"><h3>The plan</h3><span class="small muted">${esc(REASONS[c.reason].hr)}${c.opts.relation && REASONS[c.reason].rel ? " · " + esc(relName(c.opts.relation)) : ""}</span></div>${timelineHTML(p)}${payHTML(p)}</section>
+    body = `${intakePanel(c, e)}<section class="panel"><div class="panel-h"><h3>The plan</h3><span class="small muted">${leaveTag(c.reason)}${c.opts.relation && REASONS[c.reason].rel ? " " + esc(relName(c.opts.relation)) : ""}</span></div>${timelineHTML(p)}${payHTML(p)}</section>
     ${eddSteps(c, p) ? `<section class="panel">${eddPanel(c, p, false)}</section>` : ""}
     <section class="panel"><h3>Does ${esc(first(e.name))} qualify?</h3>${eligHTML(p, c.reason)}${factsHTML(p)}</section>`;
   }
@@ -784,12 +837,13 @@ function empView() {
   const wba = weeklyBenefit(e, co);
   const p = buildPlan(e, co, f.reason, optsFrom(f));
   return `<div class="head"><div class="person">${avatar(e, "lg")}<div><h2 class="greet">Hi ${esc(first(e.name))}</h2><p class="muted">Your time off, your requests, and what to do next.</p></div></div></div>
+  ${welcomeBack(e, mine, el)}
   <section class="panel"><h3>What you have</h3><div class="balance">
-    <div><span class="label">Sick leave</span><span class="v">${e.sick} hours</span><div class="meter"><span style="width:${Math.min(100, (e.sick / sickBalanceCap(e, co)) * 100)}%"></span></div><span class="small muted">${avail} you can use this year</span></div>
-    <div><span class="label">Family and medical leave</span><span class="v">${el.cfra.ok ? plural(el.cfra.remaining, "week") : "Not yet"}</span><div class="meter"><span style="width:${el.cfra.ok ? (el.cfra.remaining / 12) * 100 : 0}%"></span></div><span class="small muted">${el.cfra.ok ? "Your job is held for you" : "After 12 months and 1,250 hours"}</span></div>
-    ${mine.some((c) => c.reason === "pregnancy_bonding") ? `<div><span class="label">Pregnancy leave</span><span class="v">Up to 4 months</span><span class="small muted">From your first day</span></div>` : ""}
-    <div><span class="label">Bereavement</span><span class="v">${el.short.ok ? "5 days" : "After 30 days"}</span><span class="small muted">For each family loss</span></div>
-    <div><span class="label">State pay while out</span><span class="v">${wba ? "~" + money(wba.amount) + "/wk" : "Ask HR"}</span><span class="small muted">Paid by the state, not your employer</span></div>
+    <div><span class="label lab-ic">${leaveIcon("sick")}Sick leave</span><span class="v">${e.sick} hours</span><div class="meter k-sick"><span style="width:${Math.min(100, (e.sick / sickBalanceCap(e, co)) * 100)}%"></span></div><span class="small muted">${avail} you can use this year</span></div>
+    <div><span class="label lab-ic">${leaveIcon("care")}Family and medical leave</span><span class="v">${el.cfra.ok ? plural(el.cfra.remaining, "week") : "Not yet"}</span><div class="meter k-care"><span style="width:${el.cfra.ok ? (el.cfra.remaining / 12) * 100 : 0}%"></span></div><span class="small muted">${el.cfra.ok ? "Your job is held for you" : "After 12 months and 1,250 hours"}</span></div>
+    ${mine.some((c) => c.reason === "pregnancy_bonding") ? `<div><span class="label lab-ic">${leaveIcon("preg")}Pregnancy leave</span><span class="v">Up to 4 months</span><span class="small muted">From your first day</span></div>` : ""}
+    <div><span class="label lab-ic">${leaveIcon("loss")}Bereavement</span><span class="v">${el.short.ok ? "5 days" : "After 30 days"}</span><span class="small muted">For each family loss</span></div>
+    <div><span class="label lab-ic">${leaveIcon("pay")}State pay while out</span><span class="v">${wba ? "~" + money(wba.amount) + "/wk" : "Ask HR"}</span><span class="small muted">Paid by the state, not your employer</span></div>
   </div></section>
   ${(() => {
     // Someone with a current leave sees it first; the request form waits behind a button.
@@ -800,6 +854,13 @@ function empView() {
       ${UI.reqOpen ? form : `<section class="panel"><div class="panel-h"><h3>Need more time off?</h3><button class="btn" data-req-open>Ask for time off</button></div></section>`}
       ${past.length ? `<details class="more"><summary>Past leaves (${past.length})</summary><div class="stack" style="margin-top:10px">${past.map((c) => empCase(c)).join("")}</div></details>` : ""}</div>`;
   })()}`;
+}
+// Shown for a week after an employee comes back, until they close it.
+function welcomeBack(e, mine, el) {
+  const c = mine.find((x) => { if (caseStatus(x).t !== "Returned") return false; const d = caseDates(x); if (!d.end) return false; const back = nextWorkday(d.end, D().company.holidays || []); return TODAY >= back && diffDays(back, TODAY) <= 6 && !store.get("ll-wb-" + x.id); });
+  if (!c) return "";
+  return `<section class="wback" role="status"><span class="wb-ic" aria-hidden="true">${SVG(ICONS.sun, 26)}</span><div><b>Welcome back, ${esc(first(e.name))}.</b>
+    <span>${el.cfra.ok ? `Family leave left this year: ${plural(el.cfra.remaining, "week")}. ` : ""}Sick leave: ${e.sick} hours.</span></div><button class="btn sm" data-wb-close="${c.id}">Close</button></section>`;
 }
 function reqForm(f, R, p) {
   return `<section class="panel" data-form="req"><div class="panel-h"><h3>Ask for time off</h3>${UI.reqOpen ? `<button class="btn sm" data-req-close>Close</button>` : ""}</div>
@@ -834,19 +895,48 @@ function empCase(c) {
   const wd = (x) => new Date(x + "T00:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
   const confOn = c.approvedOn || (confirmed && c.tasks.find((t) => t.key === confirmKey).doneOn);
   const letter = (c.notices || []).length ? ` <button class="linkish" data-open-letters="${c.id}">Read HR's letter</button>` : "";
+  // The same confirmation in the right tone: a small celebration for a new child, calm and kind after a loss.
+  const tone = c.reason === "bonding" ? "joy" : ["bereavement", "repro"].includes(c.reason) ? "calm" : "";
+  const burst = tone === "joy" && !store.get("ll-cele-" + c.id);
+  if (burst && stage === 3) store.set("ll-cele-" + c.id, "1");
   const banner = s.t === "Returned" ? "" : stage === 3
-    ? `<div class="status-banner ok" role="status"><span class="sb-ic" aria-hidden="true">✓</span><div><div class="sb-t">Confirmed by HR${confOn ? ` on ${fmtS(confOn)}` : ""}</div>
-        <div>You are off <b>${wd(d.start)}</b>${lastDay !== d.start ? ` to <b>${wd(lastDay)}</b>` : ""}, and back at work <b>${wd(back)}</b>.</div>
+    ? `<div class="status-banner ok ${tone} ${burst ? "burst" : ""}" role="status">${tone === "joy" ? `<span class="confetti" aria-hidden="true">${"<i></i>".repeat(8)}</span>` : ""}<span class="sb-ic" aria-hidden="true">✓</span><div><div class="sb-t">${tone === "joy" ? `Congratulations, ${esc(first(emp(c.empId).name))}. ` : ""}Confirmed by HR${confOn ? ` on ${fmtS(confOn)}` : ""}</div>
+        <div>You are off <b>${wd(d.start)}</b>${lastDay !== d.start ? ` to <b>${wd(lastDay)}</b>` : ""}, and back at work <b>${wd(back)}</b>.${tone === "calm" ? " There is nothing else you need to do now. Take the time you need." : ""}</div>
         <div class="small">${c.approvedOn ? "Your manager was told the dates only, never the reason." : "Your manager sees the dates only, never the reason."}${letter}</div></div></div>`
     : `<div class="status-banner ${stage === 2 ? "wait" : "sent"}" role="status"><span class="sb-ic" aria-hidden="true">${stage === 2 ? "…" : "→"}</span><div><div class="sb-t">${stage === 2 ? "HR is reviewing your request" : "Sent to HR"}</div>
         <div>${stage === 2 ? "Not confirmed yet. HR has sent what you qualify for and will confirm your dates." : `Not confirmed yet.${reviewed && reviewed.due ? ` HR replies by <b>${fmtS(reviewed.due)}</b>.` : ""}`}</div></div></div>`;
-  const track = s.t === "Returned" ? "" : `${banner}<ol class="track ${stage === 3 ? "is-done" : ""}" aria-label="Request status">${["Sent to HR", "HR reviewing", "Confirmed"].map((x, i) => `<li class="${i + 1 < stage || stage === 3 ? "done" : i + 1 === stage ? "now" : ""}" ${i + 1 === stage ? 'aria-current="step"' : ""}><span>${x}</span></li>`).join("")}</ol><p class="small muted" style="margin:-4px 0 0">Asked ${fmt(c.requested)}</p>`;
-  return `<section class="panel"><div class="panel-h"><h3>${esc(REASONS[c.reason].emp)}</h3><div class="btns" style="gap:6px">${stage === 3 && s.t !== "Returned" ? pill("✓ Confirmed", "ok") : ""}${pill(s.t, s.cls)}</div></div>${track}${timelineHTML(p)}
+  const track = s.t === "Returned" ? "" : `${banner}${journeyHTML(c, p, { stage, confOn, reviewed, d, back, wd, tone })}`;
+  return `<section class="panel"><div class="panel-h"><h3 class="h-ic">${leaveIcon(kindOf(c.reason))}${esc(REASONS[c.reason].emp)}</h3><div class="btns" style="gap:6px">${stage === 3 && s.t !== "Returned" ? pill("✓ Confirmed", "ok") : ""}${pill(s.t, s.cls)}</div></div>${track}${timelineHTML(p)}
   <div><div class="label" style="margin-bottom:8px">What happens next</div><ol class="steps">${steps.map((x) => `<li><span>${x}</span></li>`).join("")}</ol></div>
   ${p.warnings.length ? `<div class="infobox">HR will go over a few details of this request with you before confirming dates.</div>` : ""}
   ${eddPanel(c, p, true)}
   ${(c.notices || []).length ? `<div><div class="label" style="margin-bottom:8px">Letters from HR</div><div class="stack" style="gap:8px">${c.notices.map((n, i) => [n, i]).reverse().map(([n, i]) => `<details class="more letter-item" data-letter-seen="${c.id}|${i}" ${n.seenAt ? "data-seen" : ""} ${OPEN_LETTERS.has(c.id + "|" + i) ? "open" : ""}><summary>${esc(n.subject)} <span class="muted small">· ${fmt(n.sentOn)}</span> ${n.ackAt ? pill("✓ Received", "ok") : pill("Please read and confirm", "warn")}</summary><div class="letter-text">${esc(n.body)}</div>
       <div class="btns" style="margin-top:8px">${n.ackAt ? `<span class="small muted">You confirmed receiving this on ${esc(tstamp(n.ackAt))}.</span>` : `<button class="btn primary sm" data-ack-letter="${c.id}|${i}">I received this letter</button><span class="small muted">This tells HR you have it. It does not mean you agree with it.</span>`}</div></details>`).join("")}</div></div>` : ""}</section>`;
+}
+
+// The leave as a path: sent, confirmed, filed with the state (when it pays), out, back. Plus a countdown and the next step.
+function journeyHTML(c, p, { stage, confOn, reviewed, d, back, wd, tone }) {
+  const E2 = (p.pays.sdi || p.pays.pfl) ? eddSteps(c, p) : null, done = c.edd || {};
+  const claimOpen = E2 && E2.claims.find((cl) => cl.steps.some((x) => !done[x.id]));
+  const stops = [
+    { t: "Sent to HR", sub: fmtS(c.requested), ok: true },
+    { t: "Confirmed", sub: stage === 3 ? (confOn ? fmtS(confOn) : "") : stage === 2 ? "HR is reviewing" : reviewed && reviewed.due ? `HR replies by ${fmtS(reviewed.due)}` : "HR replies soon", ok: stage === 3 },
+  ];
+  if (E2) stops.push({ t: "File with the state", sub: claimOpen ? `By ${fmtS(claimOpen.window.to)}` : "Done", ok: !claimOpen, key: "edd" });
+  stops.push({ t: TODAY >= d.start ? "On leave" : "Leave starts", sub: wd(d.start), ok: TODAY >= d.start });
+  stops.push({ t: "Back at work", sub: wd(back), ok: false, home: true });
+  const cur = stops.findIndex((x) => !x.ok);
+  const doneN = stops.filter((x) => x.ok).length;
+  const daysTo = (x) => diffDays(TODAY, x);
+  const count = TODAY < d.start ? [daysTo(d.start), daysTo(d.start) === 1 ? "day until your leave starts" : "days until your leave starts"]
+    : TODAY < back ? [daysTo(back), daysTo(back) === 1 ? "day until you are back" : "days until you are back"] : null;
+  const rest = { calm: "Take the time you need.", joy: "Enjoy the time with your new child.", "": "Your job is protected while you are out." }[tone];
+  const next = cur === 1 ? `HR confirms your dates next. You will see a green Confirmed here.`
+    : stops[cur] && stops[cur].key === "edd" ? `Next, file with the state so you are paid while you are out. The steps and dates are below.`
+    : TODAY < d.start ? `Nothing else to do before your leave. ${rest}` : rest;
+  return `<div class="journey-h"><span class="small muted">${doneN} of ${stops.length} steps done · asked ${fmt(c.requested)}</span>${count && count[0] > 0 ? `<span class="countdown"><b>${count[0]}</b> ${count[1]}</span>` : ""}</div>
+  <ol class="journey" aria-label="Your leave, step by step" style="--n:${stops.length};--fill:${((cur === -1 ? stops.length - 1 : cur) / (stops.length - 1)) * 100}%">${stops.map((x, i) => `<li class="${x.ok ? "done" : i === cur ? "now" : ""}" ${i === cur ? 'aria-current="step"' : ""}><span class="jdot" aria-hidden="true">${x.ok ? SVG(ICONS.check, 18) : x.home ? SVG(ICONS.home, 16) : ""}</span><b>${esc(x.t)}</b><span class="small muted">${esc(x.sub)}</span></li>`).join("")}</ol>
+  <div class="nextline"><span class="nl-ic" aria-hidden="true">→</span><span>${next}</span>${stops[cur] && stops[cur].key === "edd" ? `<a class="btn primary sm" href="#edd-${c.id}">Start filing</a>` : ""}</div>`;
 }
 
 /* ---------- Manager ---------- */
@@ -858,11 +948,11 @@ function mgrView() {
   const marks = [1, 5, 9, 13];
   const f = UI.flag, leaves = cases.filter((c) => !c.flagged), flags = cases.filter((c) => c.flagged);
   const outNow = leaves.filter((c) => c.start <= TODAY && c.end > TODAY).length;
-  return `<div class="head"><div><h2 class="greet">${greeting()}, ${esc(first(m.name))}</h2><p class="sumline" style="margin-top:6px">${outNow ? `<b>${outNow}</b> of your ${team.length} team members ${outNow === 1 ? "is" : "are"} out today.` : `Everyone on your team of ${team.length} is in today.`} ${leaves.length - outNow > 0 ? `${leaves.length - outNow} upcoming.` : ""}</p><p class="small muted">You see dates only. Reasons and medical details stay with HR.</p></div></div>
-  <section class="panel"><div class="panel-h"><h3>Next 12 weeks</h3><span class="small muted">The dark line is today</span></div><div class="calw"><div class="cal">
+  return `<div class="head"><div><h2 class="greet">${greeting()}, ${esc(first(m.name))}</h2><p class="sumline" style="margin-top:6px">${outNow ? `<b>${outNow}</b> of your ${team.length} team members ${outNow === 1 ? "is" : "are"} out today.` : `Everyone on your team of ${team.length} is in today.`} ${leaves.length - outNow > 0 ? `${leaves.length - outNow} upcoming.` : ""} ${(() => { const n = leaves.filter((c) => c.end > TODAY && !(c.coverage || "").trim()).length; return n ? `<b>${n}</b> still ${n === 1 ? "needs" : "need"} a coverage plan.` : leaves.length ? "Every leave has a coverage plan." : ""; })()}</p><p class="small muted">You see dates only. Reasons and medical details stay with HR.</p></div></div>
+  <section class="panel"><div class="panel-h"><h3>Next 12 weeks</h3><span class="legend small"><span><i class="lgd cov"></i>Covered</span><span><i class="lgd nocov"></i>Needs a coverage plan</span><span class="muted">The dark line is today</span></span></div><div class="calw"><div class="cal">
     <div class="tl-axis">${marks.map((i, k) => `<span class="${k === 1 || k === 2 ? "mid" : ""}" style="${i === 13 ? "left:auto;right:0;transform:none" : "left:" + pos(weeks[i]) + "%"}">${fmtS(weeks[i])}</span>`).join("")}</div>
     ${team.map((t) => { const cs = leaves.filter((c) => c.empId === t.id); return `<div class="lane"><div class="ln"><div class="person">${avatar(t, "sm")}<div>${esc(t.name)}<div class="small muted">${esc(t.role)}</div></div></div></div><div class="track">${weeks.map((d) => `<span class="wk" style="left:${pos(d)}%"></span>`).join("")}
-      ${cs.map((c) => { if (!c.end || c.end <= s0 || c.start >= e0) return ""; const w = Math.max(1.2, pos(c.end) - pos(c.start)); return `<div class="sg cfra ${w < 8 ? "narrow" : ""}" style="left:${pos(c.start)}%;width:${w}%" title="Out ${range(c.start, c.end)}">Out</div>`; }).join("")}
+      ${cs.map((c) => { if (!c.end || c.end <= s0 || c.start >= e0) return ""; const w = Math.max(1.2, pos(c.end) - pos(c.start)); const cov = !!(c.coverage || "").trim(); return `<div class="sg ${cov ? "cov" : "nocov"} ${w < 8 ? "narrow" : ""}" style="left:${pos(c.start)}%;width:${w}%" title="Out ${range(c.start, c.end)}${cov ? ", covered" : ", needs a coverage plan"}">${w < 14 ? "Out" : cov ? `${SVG(ICONS.check, 13)} Out, covered` : "Out · who covers?"}</div>`; }).join("")}
       <div class="today-line" style="left:${pos(TODAY)}%"></div></div></div>`; }).join("")}
   </div></div></section>
   <div class="grid2">
@@ -870,7 +960,7 @@ function mgrView() {
       <div class="panel-h"><div class="person">${avatar(e, "sm")}<b>${esc(e.name)}</b></div>${pill(c.status.t, c.status.cls)}</div>
       <div class="small">Out <span class="mono">${fmtS(c.start)}</span>, back <span class="mono">${fmtS(c.end)}</span>. ${c.approved ? "Approved by HR." : "HR confirms the return date."}</div>
       ${(c.notices || []).length ? `<details class="more"><summary class="small">Message from HR · ${fmtS(c.notices[c.notices.length - 1].sentOn)}</summary><div class="letter-text">${esc(c.notices[c.notices.length - 1].body)}</div></details>` : ""}
-      <label for="cov-${c.id}" class="small" style="font-weight:600">Who covers what</label><textarea id="cov-${c.id}" data-cov="${c.id}" placeholder="For example: Ben takes the Tuesday roasts. Saves when you click away.">${esc(c.coverage)}</textarea></div>`; }).join("") : '<p class="muted">Nobody on your team has time off coming up.</p>'}
+      <label for="cov-${c.id}" class="small" style="font-weight:600">Who covers what${(c.coverage || "").trim() ? ` <span class="pill ok">${SVG(ICONS.check, 12)} Covered</span>` : ` <span class="small muted" style="font-weight:400">Once you write a plan, the bar turns green.</span>`}</label><textarea id="cov-${c.id}" data-cov="${c.id}" placeholder="For example: Ben takes the Tuesday roasts. Saves when you click away.">${esc(c.coverage)}</textarea></div>`; }).join("") : '<p class="muted">Nobody on your team has time off coming up.</p>'}
       ${flags.length ? `<div class="small muted">Sent to HR, waiting on them: ${flags.map((c) => esc(emp(c.empId).name)).join(", ")}</div>` : ""}
       <div class="infobox">Please do not ask why someone is out, and do not contact them about work while they are on leave. Questions go to ${esc(D().company.hrContact)} in HR.</div></section>
     <section class="panel" data-form="flag"><h3>Did someone mention needing time off?</h3><p class="small muted">If a team member mentions time off for their health, a family member, a new child or a death, let HR know today. The legal clock starts when you hear about it, even if they never say the word leave.</p>
@@ -1293,6 +1383,7 @@ document.addEventListener("click", async (ev) => {
   }
   if (b.hasAttribute("data-req-open")) { UI.reqOpen = true; render(); document.getElementById("rq-text")?.focus(); return; }
   if (b.hasAttribute("data-req-close")) { UI.reqOpen = false; render(); return; }
+  if (b.dataset.wbClose) { store.set("ll-wb-" + b.dataset.wbClose, "1"); render(); return; }
   if (b.dataset.walkFlow) { if (S.me.role !== "hr") return; UI.walk = { flow: b.dataset.walkFlow, i: 0 }; render(); return; }
   if (b.dataset.walk || b.dataset.walkTo) { const key = (S.me.role === "hr" && UI.walk && UI.walk.flow) || S.me.role, cur = UI.walk && UI.walk.flow === key ? UI.walk.i : 0; UI.walk = { flow: key, i: b.dataset.walkTo ? +b.dataset.walkTo : Math.max(0, cur + +b.dataset.walk) }; render(); return; }
   if (b.hasAttribute("data-wiz-start")) { UI.wiz = { step: 1, need: null, relation: "parent", start: (() => { let d = addDays(TODAY, 14); while (new Date(d + "T00:00:00Z").getUTCDay() !== 1) d = addDays(d, 1); return d; })(), due: addDays(TODAY, 90), bond: true, weeks: 4, days: 3, hours: 8 }; render(); window.scrollTo(0, 0); return; }
@@ -1501,7 +1592,11 @@ document.addEventListener("change", (ev) => {
   }
   if (el.dataset.map) { const v = el.value; if (v === "") delete UI.imp.map[el.dataset.map]; else { const i = +v; for (const k of Object.keys(UI.imp.map)) if (UI.imp.map[k] === i) delete UI.imp.map[k]; UI.imp.map[el.dataset.map] = i; } UI.imp.source = UI.imp.source === "clerk" ? "clerk" : "you"; render(); return; }  if (el.id === "ap-notify") { UI.appr.notify = el.checked; render(); return; }
   if (el.dataset.edd) { const [caseId, step] = el.dataset.edd.split("|"); act({ type: "eddCheck", caseId, step, done: el.checked }, el.checked ? "Nice. Ticked off." : "Unticked"); return; }
-  if (el.dataset.task) { const [caseId, key] = el.dataset.task.split("|"); act({ type: "toggleTask", caseId, key, done: el.checked }, el.checked ? "Marked done" : "Reopened"); return; }
+  if (el.dataset.task) {
+    const [caseId, key] = el.dataset.task.split("|");
+    UI.justDone = el.checked ? el.dataset.task : null; clearTimeout(UI._jd); UI._jd = setTimeout(() => (UI.justDone = null), 1500);
+    act({ type: "toggleTask", caseId, key, done: el.checked }, el.checked ? "Marked done" : "Reopened"); return;
+  }
   if (el.dataset.emp) { const [id, field] = el.dataset.emp.split("|"); act({ type: "updateEmployee", id, field, value: el.value }, "Saved"); return; }
   if (el.dataset.co) {
     const field = el.dataset.co; let value = el.type === "checkbox" ? el.checked : el.value;

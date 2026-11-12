@@ -28,6 +28,30 @@ describe("test site", { skip }, () => {
   before(async () => { S = await startServer("test"); });
   after(async () => { await S.close(); });
 
+  test("warmer screens: HR record, a celebration for a new child, managers see coverage and never the type of leave", async () => {
+    const pick = async (who) => { const x = await page(); await x.p.goto(S.base); await x.p.fill("#lg-pw", "test-pass-123"); await x.p.click(`[data-pick="${who}@mesaverde.example"]`); await x.p.waitForSelector("#tabs button"); return x; };
+    const hr = await pick("grace");
+    await hr.p.waitForSelector(".kcards");
+    assert.match(await hr.p.textContent(".kcard.rec"), /Legal deadlines met on time/);
+    assert.ok(await hr.p.$(".ltag.k-preg"), "HR sees each leave's type, color coded");
+    await hr.p.click('[data-tab="cases"]'); await hr.p.click('tr[data-open]:has-text("Sofia Delgado")');
+    if (await hr.p.$("[data-appr-open]")) { await hr.p.click("[data-appr-open]"); await hr.p.click("[data-appr-go]"); await hr.p.waitForSelector(".status-banner.ok"); }
+    const emp = await pick("sofia");
+    await emp.p.waitForSelector(".status-banner.ok.joy");
+    assert.match(await emp.p.textContent(".status-banner.ok"), /Congratulations, Sofia\. Confirmed by HR/);
+    assert.ok(await emp.p.$(".journey li.done"), "the leave shows as a path with steps done");
+    const loss = await pick("tomas");
+    if (await loss.p.$(".status-banner.ok")) { assert.ok(await loss.p.$(".status-banner.ok.calm")); assert.equal(await loss.p.$(".confetti"), null, "no celebration after a death"); }
+    const m = await pick("mei");
+    await m.p.waitForSelector(".calw");
+    assert.equal(await m.p.$(".ltag, .lic"), null, "managers never see the type of leave");
+    const nocov = (await m.p.$$(".sg.nocov")).length;
+    await m.p.fill("[data-cov]", "Ben takes the Saturday opening."); await m.p.click("h2");
+    await m.p.waitForFunction((n) => document.querySelectorAll(".sg.nocov").length === n - 1, nocov, { timeout: 5000 });
+    assert.ok(await m.p.$(".sg.cov"), "a written coverage plan turns the bar green");
+    for (const x of [hr, emp, loss, m]) assert.deepEqual(x.errors, []);
+  });
+
   test("employee asks for leave in their own words, HR sees it and works the to-do list", async () => {
     const { p, errors } = await page();
     await p.goto(S.base);
