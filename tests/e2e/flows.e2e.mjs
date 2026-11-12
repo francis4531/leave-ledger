@@ -147,7 +147,7 @@ describe("test site", { skip }, () => {
     assert.ok(await p.$(".status-banner.sent, .status-banner.wait"), "a new request says it is not confirmed yet");
     const box = p.locator('[data-edd$="|pfl-account"]').first();
     await box.check();
-    await p.waitForSelector("text=Ticked off");
+    await p.waitForSelector("text=One step closer to getting paid");
     assert.ok(await p.locator('[data-edd$="|pfl-account"]').first().isChecked(), "stays ticked after saving");
     assert.deepEqual(errors, []);
   });
@@ -371,7 +371,7 @@ describe("preview site", { skip }, () => {
   test("a visitor without an invite sees the landing page with the sandbox, and /strategy is not found", async () => {
     const { p } = await page();
     await p.goto(S.base);
-    await p.waitForSelector("text=Invited to the early preview?"); await p.waitForSelector("[data-sandbox]");
+    await p.waitForSelector("text=Time off, handled with care."); await p.waitForSelector("text=Invited to the preview?"); await p.waitForSelector("[data-sandbox]");
     await p.goto(S.base + "/strategy");
     await p.waitForSelector("text=Page not found");
   });

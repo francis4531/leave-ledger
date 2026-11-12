@@ -110,7 +110,7 @@ const trim = (s, n = 1000) => String(s ?? "").slice(0, n);
 
 function validOpts(reason, o) {
   if (!E.REASONS[reason] || reason === "unknown") return "Unknown leave type";
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(o.start || "")) return "Pick a start date";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(o.start || "")) return "Pick the first day off.";
   const n = (v, lo, hi) => Number.isFinite(+v) && +v >= lo && +v <= hi;
   if (!n(o.weeks ?? 1, 1, 52) || !n(o.disWeeks ?? 1, 1, 30) || !n(o.bondWeeks ?? 0, 0, 12) || !n(o.days ?? 1, 1, 20) || !n(o.hours ?? 1, 1, 80)) return "Length is out of range";
   return null;
@@ -146,7 +146,7 @@ function apply(D, acct, a, today, kind = "test") {
       if (!hr && D.cases.filter((c) => c.empId === me).length >= 20) return "You have 20 requests on record. Ask HR to clear old ones first.";
       const target = emp(a.empId);
       if (!target) return "Unknown employee";
-      if (!hr && a.empId !== me) return "You can only request leave for yourself";
+      if (!hr && a.empId !== me) return "Here you can ask for time off for yourself. For someone else, let HR know.";
       const bad = validOpts(a.reason, a.opts || {}); if (bad) return bad;
       const opts = cleanOpts(a.opts);
       const plan = E.buildPlan(target, D.company, a.reason, opts);
@@ -214,11 +214,11 @@ function apply(D, acct, a, today, kind = "test") {
       if (!hr) return "HR only";
       const c = kase(a.caseId); if (!c || c.reason === "unknown") return "Case not found";
       if (a.type === "approveCase" && c.approvedOn) return "This leave is already approved";
-      if (a.type === "notifyManager" && !c.approvedOn) return "Approve the leave first";
+      if (a.type === "notifyManager" && !c.approvedOn) return "Approve the leave first, then you can send this.";
       const note = trim(a.note, 400).trim(), bad = sensitiveNote(note);
       if (bad) return `Leave "${bad}" out of the note. The manager may know the dates, not the reason.`;
       const e = emp(c.empId), m = e && e.mgr ? emp(e.mgr) : null;
-      if (a.type === "notifyManager" && !m) return "No manager on file. Pick one on the Employees tab.";
+      if (a.type === "notifyManager" && !m) return "There is no manager on file yet. Add one on the Employees tab, then try again.";
       if (a.type === "approveCase") { c.approvedOn = today; c.approvedBy = who; log(`Approved ${e.name}'s leave`); }
       if (m && (a.type === "notifyManager" || a.notify !== false)) {
         const d = E.caseDates(c, D), P = E.planFor(c, D);
@@ -233,7 +233,7 @@ function apply(D, acct, a, today, kind = "test") {
       // After HR approves, HR can send legal a copy of the decision. Recorded on the leave either way.
       if (!hr) return "HR only";
       const c = kase(a.caseId); if (!c || c.reason === "unknown") return "Case not found";
-      if (!c.approvedOn) return "Approve the leave first";
+      if (!c.approvedOn) return "Approve the leave first, then you can send this.";
       const to = String(D.company.legalEmail || "").trim();
       if (!to) return "Add your legal contact's email in Settings first";
       const d = E.caseDates(c, D), msg = legalSummary(c, emp(c.empId), D.company, E.planFor(c, D), { ...d, today }, who);
@@ -293,7 +293,7 @@ function apply(D, acct, a, today, kind = "test") {
       const c = kase(a.caseId); if (!c || c.reason === "unknown") return "Case not found";
       if (a.on === null) { delete c.returnedOn; log(`Undid the return for ${emp(c.empId).name}`); return null; }
       if (!/^\d{4}-\d{2}-\d{2}$/.test(a.on || "") || a.on > today) return "Pick the day they came back, today or earlier";
-      if (a.on < c.opts.start) return "The return date is before the leave started";
+      if (a.on < c.opts.start) return "That return date is before the leave began. Check the dates.";
       c.returnedOn = a.on;
       E.markTask(c, "return", true, a.on, D.company.holidays);
       log(`${emp(c.empId).name} returned to work on ${a.on}`); return null;
@@ -326,10 +326,10 @@ function apply(D, acct, a, today, kind = "test") {
       if (["hours12", "sick", "sickUsedYr", "cfraUsed", "hiQuarter"].includes(a.field)) e[a.field] = Math.max(0, Math.min(1e6, +a.value || 0));
       else if (a.field === "shiftHours") e.shiftHours = Math.max(1, Math.min(24, +a.value || 8));
       else if (a.field === "weeklyHours") e.weeklyHours = Math.max(1, Math.min(80, +a.value || 40));
-      else if (a.field === "email") { const v = trim(a.value, 120).trim().toLowerCase(); if (v && !EMAIL_RE.test(v)) return "Enter a valid email"; if (v && D.employees.some((x) => x.id !== e.id && x.email === v)) return "Another employee has that email"; e.email = v; }
+      else if (a.field === "email") { const v = trim(a.value, 120).trim().toLowerCase(); if (v && !EMAIL_RE.test(v)) return "That email does not look right. Check for a typo."; if (v && D.employees.some((x) => x.id !== e.id && x.email === v)) return "Another employee has that email"; e.email = v; }
       else if (a.field === "name" || a.field === "role") { const v = trim(a.value, 80).trim(); if (!v) return "Enter a value"; e[a.field] = v; }
       else if (a.field === "hire") { if (!/^\d{4}-\d{2}-\d{2}$/.test(a.value || "") || a.value > today) return "Pick a hire date on or before today"; e.hire = a.value; }
-      else if (a.field === "mgr") { if (a.value && (!emp(a.value) || a.value === e.id)) return "Pick a manager"; e.mgr = a.value || null; if (a.value) emp(a.value).isMgr = true; }
+      else if (a.field === "mgr") { if (a.value && (!emp(a.value) || a.value === e.id)) return "Pick a manager from the list."; e.mgr = a.value || null; if (a.value) emp(a.value).isMgr = true; }
       else return "Field not editable";
       log(`Updated ${e.name}: ${a.field}`); return null;
     }
@@ -341,7 +341,7 @@ function apply(D, acct, a, today, kind = "test") {
       else if (f === "within75") co.within75 = !!a.value;
       else if (f === "wbaMax" || f === "band90") co[f] = Math.max(0, +a.value || 0);
       else if (f === "hris") co.hris = trim(a.value, 60);
-      else if (f === "legalEmail") { const v = trim(a.value, 120).trim().toLowerCase(); if (v && !EMAIL_RE.test(v)) return "Enter a valid email"; co.legalEmail = v; }
+      else if (f === "legalEmail") { const v = trim(a.value, 120).trim().toLowerCase(); if (v && !EMAIL_RE.test(v)) return "That email does not look right. Check for a typo."; co.legalEmail = v; }
       else if (f === "sickCity") { if (a.value && !E.LOCAL_SICK[a.value]) return "Pick a city from the list"; co.sickCity = a.value || ""; }
       else if (f === "holidays") co.holidays = (Array.isArray(a.value) ? a.value : []).filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s)).slice(0, 40);
       else return "Field not editable";
@@ -351,13 +351,13 @@ function apply(D, acct, a, today, kind = "test") {
       if (!hr) return "HR only";
       if (D.employees.length >= 250) return "This workspace has reached its employee limit";
       const e = a.employee || {};
-      const name = trim(e.name, 80).trim(); if (!name) return "Enter the employee's name";
+      const name = trim(e.name, 80).trim(); if (!name) return "Add the employee's name.";
       if (!/^\d{4}-\d{2}-\d{2}$/.test(e.hire || "") || e.hire > today) return "Pick a hire date on or before today";
-      if (e.mgr && !emp(e.mgr)) return "Pick a manager";
+      if (e.mgr && !emp(e.mgr)) return "Pick a manager from the list.";
       const n = (v, hi) => Math.max(0, Math.min(hi, Math.round(+v || 0)));
       const id = "e" + crypto.randomBytes(4).toString("hex");
       const email = trim(e.email, 120).trim().toLowerCase();
-      if (email && !EMAIL_RE.test(email)) return "Enter a valid email";
+      if (email && !EMAIL_RE.test(email)) return "That email does not look right. Check for a typo.";
       if (email && D.employees.some((x) => x.email === email)) return "Another employee has that email";
       D.employees.push({ id, name, email, role: trim(e.role, 80).trim() || "Employee", hire: e.hire, hours12: n(e.hours12, 4000), cfraUsed: 0, fmlaUsed: 0, sick: n(e.sick, 400), sickUsedYr: 0, reproUsed: 0, hiQuarter: n(e.hiQuarter, 1e6), shiftHours: Math.max(1, Math.min(24, +e.shiftHours || 8)), weeklyHours: Math.max(1, Math.min(80, +e.weeklyHours || 40)), mgr: e.mgr || null });
       if (e.mgr) emp(e.mgr).isMgr = true;
@@ -946,8 +946,8 @@ async function handleAdmin(req, route, store, env, today) {
   if (route === "admin/login" && req.method === "POST") {
     if (!env.LL_ADMIN_PASSWORD) return err("Password sign-in is off. Use Google, or set LL_ADMIN_PASSWORD in Netlify.", 503);
     const body = await req.json().catch(() => ({}));
-    if (await throttled(store, req, "admin", 8)) return err("Too many tries. Wait 15 minutes.", 429);
-    if (!safeEqual(String(body.password || ""), env.LL_ADMIN_PASSWORD)) { await failed(store, req, "admin"); return err("Wrong password.", 401); }
+    if (await throttled(store, req, "admin", 8)) return err("That is a lot of tries. Wait 15 minutes, then try again.", 429);
+    if (!safeEqual(String(body.password || ""), env.LL_ADMIN_PASSWORD)) { await failed(store, req, "admin"); return err("That password did not match. Please try again.", 401); }
     return json({ ok: true }, 200, { "set-cookie": setCookie(signObj({ k: "admin" }, ADMIN_TTL, env), ADMIN_TTL, "ll_admin") });
   }
   if (route === "admin/logout" && req.method === "POST") return json({ ok: true }, 200, { "set-cookie": setCookie("", 0, "ll_admin") });

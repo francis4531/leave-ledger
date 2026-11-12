@@ -66,7 +66,7 @@ async function api(path, body) {
   });
   const j = await r.json().catch(() => ({ error: "The server did not answer. Try again in a moment." }));
   if (r.status === 401 && path !== "login") { S = null; if (FB()) ACCOUNTS = null; renderLogin(); throw new Error("signed out"); }
-  if (!r.ok) throw new Error(j.error || "Something went wrong. Try again.");
+  if (!r.ok) throw new Error(j.error || "Something went wrong on our side. Please try again in a moment.");
   return j;
 }
 function accept(j) {
@@ -309,8 +309,9 @@ function hrOverview() {
     return `<div class="cgroup"><div class="cg-h"><div class="person">${avatar(e, "sm")}<div><button class="linkish" data-open="${c.id}">${esc(e.name)}</button><div class="s">${leaveTag(c.reason)}</div></div></div>${pill(s.t, s.cls)}</div>
       <div class="queue">${ts.map((t, i) => taskRow(c, t, false, i === 0 ? "first" : true)).join("")}</div></div>`; };
   const group = (title, color, items) => items.length ? `<div class="qgroup"><div class="qhead"><span class="dot" style="background:${color}"></span>${title} · ${items.length} ${items.length === 1 ? "step" : "steps"}</div>${byCase(items).map(caseBlock).join("")}</div>` : "";
-  return `<div class="head"><div><h2 class="greet">${greeting()}, ${esc(first(S.me.name))}</h2><p class="sumline" style="margin-top:6px">${sum}</p></div></div>
-  ${hrCards(now)}
+  const fd = firstDay();
+  return `${fd || `<div class="head"><div><h2 class="greet">${greeting()}, ${esc(first(S.me.name))}</h2><p class="sumline" style="margin-top:6px">${sum}</p></div></div>`}
+  ${fd && !D().cases.length ? "" : hrCards(now)}
   <div class="grid2">
     <section class="panel"><div class="panel-h"><h3>Your to-do list</h3><span class="small muted">Weekends and company holidays are skipped</span></div>
       ${!open.length ? `<div class="allclear"><span class="ac-ic">${SVG(ICONS.check, 30)}</span><b>All caught up</b><span class="muted">Nothing to do. New leave requests will add their steps here.</span></div>` : ""}
@@ -326,6 +327,35 @@ function hrOverview() {
   </div>`;
 }
 
+// A new real workspace opens on a welcome and three setup steps, until they are done.
+function setupSteps() {
+  if (!ORG() || !CAP("settings")) return null;
+  const co = D().company, hc = co.headcount;
+  if (CAP("users") && UI.users.list === null && UI._usersFor !== S.space.id) { UI._usersFor = S.space.id; loadUsers(); }
+  const mgrs = (UI.users.list || []).filter((m) => m.role === "mgr").length;
+  return [
+    { t: "Tell us about your company", ok: (D().log || []).some((l) => /company setting/i.test(l.text)), s: "Your headcount and city decide which California leave laws apply. About 2 minutes.",
+      done: `Done. ${hc} employees, so ${hc >= 5 ? "CFRA applies" : "CFRA does not apply yet"}${hc >= 50 ? " and so does federal FMLA" : " and federal FMLA does not"}.`, btn: `<button class="btn primary" data-tab="settings">Open settings</button>` },
+    { t: "Bring in your employees", ok: D().employees.length >= 2, s: "Upload the list your payroll system exports, Excel or CSV. You check every row before anything is saved. About 5 minutes.",
+      done: `Done. ${plural(D().employees.length, "employee")} on file.`, btn: `<button class="btn primary" data-setup-import>Upload a file</button>` },
+    { t: "Invite your managers", ok: mgrs > 0, s: "They sign in with Google and see dates only, never reasons. About 2 minutes.",
+      done: `Done. ${plural(mgrs, "manager")} invited.`, btn: CAP("users") ? `<button class="btn primary" data-tab="access">Invite managers</button>` : "" },
+  ];
+}
+function firstDay() {
+  const steps = setupSteps(); if (!steps) return "";
+  const n = steps.filter((x) => x.ok).length; if (n === steps.length) return "";
+  const next = steps.findIndex((x) => !x.ok);
+  return `<section class="firstday" aria-label="Getting set up">
+    <div class="fd-hero"><div><h2>${n ? `Nice progress, ${esc(first(S.me.name))}.` : `Welcome, ${esc(first(S.me.name))}.`} Let's get ${esc(D().company.name)} ready.</h2>
+      <p>Three short steps, about 10 minutes in all. After that, Leave Ledger tells you what is due and drafts what you send. You can stop and come back any time.</p></div>
+      <span class="ring" style="--p:${Math.round((n / steps.length) * 100)}%" role="img" aria-label="${n} of ${steps.length} steps done"><span>${n} of ${steps.length}</span></span></div>
+    ${steps.map((x, i) => `<div class="fd-step ${x.ok ? "done" : i === next ? "next" : ""}"><span class="n" aria-hidden="true">${x.ok ? SVG(ICONS.check, 20) : i + 1}</span><div><b>${esc(x.t)}</b><span class="s">${esc(x.ok ? x.done : x.s)}</span></div>${!x.ok && i === next ? x.btn : ""}</div>`).join("")}
+    <div class="fd-more"><div><b>Want to see how it works first?</b><span class="small muted">Short walkthroughs for HR, managers and employees, made with a made-up company.</span><button class="linkish" data-tab="guide">Open the Guide</button></div>
+      <div><b>Someone already needs leave?</b><span class="small muted">Skip ahead and plan it now. Leave Ledger works out the dates, the pay and every notice you owe.</span><button class="linkish" data-tab="plan">Plan a leave</button></div></div>
+  </section>`;
+}
+
 // The cards at the top of Today: the deadline record, today's steps, and first-week setup in a new workspace.
 function hrCards(now) {
   const r = deadlineRecord(), cards = [];
@@ -333,15 +363,6 @@ function hrCards(now) {
   let doneToday = 0; D().cases.forEach((c) => c.tasks.forEach((t) => { if (t.done && !t.optional && t.doneOn === TODAY) doneToday++; }));
   const total = doneToday + now.length;
   cards.push(`<div class="kcard row">${total ? ring(doneToday, total, now.length ? "" : "ok") : `<span class="ring ok" style="--p:100%" aria-hidden="true"><span>${SVG(ICONS.check, 20)}</span></span>`}<div><b>Today's steps</b><span class="small muted">${!total ? "Nothing due today." : now.length ? `${now.length} left to do now.` : "All done for today. Nice work."}</span></div></div>`);
-  if (ORG() && CAP("settings")) {
-    const steps = [
-      ["Check your company settings", (D().log || []).some((l) => /company setting/i.test(l.text)), "settings"],
-      ["Bring in your employees", D().employees.length >= 2, "employees"],
-      ["Set each employee's manager", D().employees.some((e) => e.mgr), "employees"],
-    ];
-    const n = steps.filter((x) => x[1]).length, next = steps.find((x) => !x[1]);
-    if (next) cards.push(`<div class="kcard row">${ring(n, steps.length, "acc")}<div><b>Your company is ${n ? "almost" : "not yet"} set up</b><span class="small muted">Next: <button class="linkish" data-tab="${next[2]}">${esc(next[0])}</button></span></div></div>`);
-  }
   return `<div class="kcards">${cards.join("")}</div>`;
 }
 
@@ -849,7 +870,7 @@ function empView() {
     // Someone with a current leave sees it first; the request form waits behind a button.
     const current = mine.filter((c) => caseStatus(c).t !== "Returned"), past = mine.filter((c) => caseStatus(c).t === "Returned");
     const form = reqForm(f, R, p);
-    if (!current.length) return `<div class="grid2"><div class="stack">${past.length ? past.map((c) => empCase(c)).join("") : `<section class="panel"><h3>No time off requested</h3><p class="muted">When you need time off, fill in the form. You will see what you qualify for before you send it, and HR replies within 5 business days.</p></section>`}</div>${form}</div>`;
+    if (!current.length) return `<div class="grid2"><div class="stack">${past.length ? past.map((c) => empCase(c)).join("") : `<section class="panel"><h3>Nothing requested yet</h3><p class="muted">Whenever you need time off, for you or your family, start with the form. You will see what you qualify for before anything is sent, and HR replies within 5 business days.</p></section>`}</div>${form}</div>`;
     return `<div class="stack">${current.map((c) => empCase(c)).join("")}
       ${UI.reqOpen ? form : `<section class="panel"><div class="panel-h"><h3>Need more time off?</h3><button class="btn" data-req-open>Ask for time off</button></div></section>`}
       ${past.length ? `<details class="more"><summary>Past leaves (${past.length})</summary><div class="stack" style="margin-top:10px">${past.map((c) => empCase(c)).join("")}</div></details>` : ""}</div>`;
@@ -1114,14 +1135,22 @@ function renderHome(root) {
   const L = UI.login, H = UI.home, f = H.form, u = ME && ME.user;
   const err = L.error || H.error;
   if (!u) {
-    root.innerHTML = `<section class="login" style="grid-template-columns:minmax(0,520px);justify-content:center">
-      <div class="panel welcome" style="gap:14px"><h1>Leave Ledger</h1>
-        <p class="lede">California leave of absence, worked out for you: which leaves apply, what the state pays, and the notices and deadlines you owe.</p>
+    // The sign-in page. The cards on the right show the product at work, with made-up names.
+    root.innerHTML = `<section class="hero">
+      <div class="hero-copy">
+        <span class="hero-badge">Early preview for California companies</span>
+        <h1>Time off, handled with care.</h1>
+        <p class="lede">When someone on your team needs leave, Leave Ledger works out what California requires, what the state pays them, and every notice you owe, then helps you send it.</p>
         ${ACCOUNTS && ACCOUNTS.sandboxOn ? `<div class="sandbox-cta"><button class="btn primary" data-sandbox>Try it with a made-up company</button><span class="small muted">No sign-up. Your own copy, deleted after 7 days.</span></div>` : ""}
-        <p>Invited to the early preview? Open the link you were sent, or sign in with the Google account your invite went to.</p>
-        ${ME && ME.google ? gButton() : ""}
+        ${ME && ME.google ? `<div class="hero-or">${gButton()}<span class="small muted">Invited to the preview? Open the link you were sent, or use the Google account your invite went to.</span></div>` : `<p class="small muted">Invited to the preview? Open the link you were sent.</p>`}
         ${err ? `<p class="err" role="alert">${esc(err)}</p>` : ""}
         <p class="small muted"><a href="/privacy">Privacy</a></p>
+      </div>
+      <div class="hero-art" aria-hidden="true">
+        <div class="float f1"><div class="fr"><span class="av c1">SD</span><div style="flex:1"><b>Sofia's bonding leave</b><div class="small muted">Dec 3 to Jan 27</div></div><span class="pill ok">Confirmed</span></div>
+          <div class="bars"><i class="d"></i><i class="d"></i><i class="n"></i><i></i></div><span class="small">Job protected for 8 weeks. The state pays about $547 a week.</span></div>
+        <div class="float f2"><span class="ok-ic">${SVG(ICONS.check, 22)}</span><div><b>Eligibility notice sent</b><div class="small muted">2 days before the legal deadline</div></div></div>
+        <div class="float f3"><span class="label">What the manager sees</span><span>Out Dec 3, back Jan 28. <span class="muted">Never the reason.</span></span></div>
       </div></section>`;
     return;
   }
@@ -1302,7 +1331,7 @@ async function sendFeedback() {
   F.busy = true; F.error = ""; renderFeedback();
   try {
     await api("feedback", { screen: screenName(), rating: F.rating, kind: F.kind, note: F.note, contact: F.contact });
-    UI.fb = { open: false, rating: 0, kind: "", note: "", contact: F.contact, busy: false, error: "" }; closeFeedback(); toast("Thank you. Feedback sent."); // the email is kept for the next note
+    UI.fb = { open: false, rating: 0, kind: "", note: "", contact: F.contact, busy: false, error: "" }; closeFeedback(); toast("Thank you. We read every note."); // the email is kept for the next note
   } catch (e) { if (e.message === "signed out") return; F.busy = false; F.error = e.message; renderFeedback(); }
 }
 async function openSurvey() {
@@ -1362,7 +1391,7 @@ document.addEventListener("click", async (ev) => {
   if (b.hasAttribute("data-signout")) { signOutGoogle(); return; }
   if (b.hasAttribute("data-create")) { createWorkspace(); return; }
   if (b.dataset.accept) {
-    try { await api("org/accept", { id: b.dataset.accept }); UI.tab = null; UI.caseId = null; await loadMe(); accept(await api("state")); render(); window.scrollTo(0, 0); toast("Welcome in"); }
+    try { await api("org/accept", { id: b.dataset.accept }); UI.tab = null; UI.caseId = null; await loadMe(); accept(await api("state")); render(); window.scrollTo(0, 0); toast("Welcome in. Glad you are here."); }
     catch (e) { if (e.message !== "signed out") { UI.home.error = e.message; await loadMe(); renderHome(document.getElementById("root")); } }
     return;
   }
@@ -1371,7 +1400,7 @@ document.addEventListener("click", async (ev) => {
   if (b.dataset.letter) { const [cid, key] = b.dataset.letter.split("|"); openLetter(cid, key); render(); window.scrollTo(0, 0); setTimeout(() => document.getElementById("lt-body")?.focus(), 0); return; }
   if (b.dataset.letterView) { const [cid, i] = b.dataset.letterView.split("|"); UI.tab = "cases"; UI.caseId = cid; UI.letter = { caseId: cid, view: +i }; render(); window.scrollTo(0, 0); return; }
   if (b.hasAttribute("data-letter-close")) { readLetterFields(); UI.letter = null; render(); return; }
-  if (b.hasAttribute("data-letter-copy")) { readLetterFields(); const { subject, body } = letterText(); try { await navigator.clipboard.writeText(`${subject}\n\n${body}`); toast("Copied. Paste it into your email."); } catch (e) { toast("Could not copy. Select the text and copy it."); } return; }
+  if (b.hasAttribute("data-letter-copy")) { readLetterFields(); const { subject, body } = letterText(); try { await navigator.clipboard.writeText(`${subject}\n\n${body}`); toast("Copied. Paste it into your email."); } catch (e) { toast("Copying did not work here. Select the text and copy it yourself."); } return; }
   if (b.hasAttribute("data-letter-print")) { readLetterFields(); printLetter(); return; }
   if (b.hasAttribute("data-letter-reset")) { const L = UI.letter, c = D().cases.find((x) => x.id === L.caseId); const d = draftLetter(L.key, c, emp(c.empId), D().company, c.reason === "unknown" ? { el: null } : planFor(c), TODAY, S.me.name); Object.assign(L, { subject: d.subject, body: d.body }); render(); toast("Back to the first draft"); return; }
   if (b.hasAttribute("data-letter-save")) { readLetterFields(); const L = UI.letter; const j = await act({ type: "saveLetter", caseId: L.caseId, key: L.key, subject: L.subject, body: L.body }, "Draft saved"); if (j) L.saved = true; return; }
@@ -1383,6 +1412,7 @@ document.addEventListener("click", async (ev) => {
   }
   if (b.hasAttribute("data-req-open")) { UI.reqOpen = true; render(); document.getElementById("rq-text")?.focus(); return; }
   if (b.hasAttribute("data-req-close")) { UI.reqOpen = false; render(); return; }
+  if (b.hasAttribute("data-setup-import")) { UI.tab = "employees"; UI.imp = { open: true, rows: null, raw: null, grid: null, map: {}, error: "", file: "", busy: false }; UI.addEmp.open = false; saveUI(); render(); return; }
   if (b.dataset.wbClose) { store.set("ll-wb-" + b.dataset.wbClose, "1"); render(); return; }
   if (b.dataset.walkFlow) { if (S.me.role !== "hr") return; UI.walk = { flow: b.dataset.walkFlow, i: 0 }; render(); return; }
   if (b.dataset.walk || b.dataset.walkTo) { const key = (S.me.role === "hr" && UI.walk && UI.walk.flow) || S.me.role, cur = UI.walk && UI.walk.flow === key ? UI.walk.i : 0; UI.walk = { flow: key, i: b.dataset.walkTo ? +b.dataset.walkTo : Math.max(0, cur + +b.dataset.walk) }; render(); return; }
@@ -1527,7 +1557,7 @@ document.addEventListener("click", async (ev) => {
     return;
   }
   if (b.hasAttribute("data-flag")) {
-    const f = UI.flag; if (!f.empId) { toast("Choose a team member first"); return; }
+    const f = UI.flag; if (!f.empId) { toast("First, pick who mentioned it."); return; }
     const j = await act({ type: "flag", empId: f.empId, heard: f.heard, note: f.note }, "Thanks. HR has it and will follow up.");
     if (j) { UI.flag = { empId: "", heard: TODAY, note: "" }; render(); } return;
   }
@@ -1586,16 +1616,16 @@ document.addEventListener("change", (ev) => {
       try {
         if (/\.xlsx$/i.test(f.name)) { const { readXlsx } = await import("./xlsx.mjs"); readRoster(gridFromRows(await readXlsx(await f.arrayBuffer())), f.name); }
         else readRoster(parseGrid(await f.text()), f.name);
-      } catch (e) { UI.imp.error = "That file could not be read. Try saving it as CSV."; UI.imp.grid = null; UI.imp.rows = null; }
+      } catch (e) { UI.imp.error = "That file did not open. Saving it as CSV usually fixes it."; UI.imp.grid = null; UI.imp.rows = null; }
       render();
     })(); return;
   }
   if (el.dataset.map) { const v = el.value; if (v === "") delete UI.imp.map[el.dataset.map]; else { const i = +v; for (const k of Object.keys(UI.imp.map)) if (UI.imp.map[k] === i) delete UI.imp.map[k]; UI.imp.map[el.dataset.map] = i; } UI.imp.source = UI.imp.source === "clerk" ? "clerk" : "you"; render(); return; }  if (el.id === "ap-notify") { UI.appr.notify = el.checked; render(); return; }
-  if (el.dataset.edd) { const [caseId, step] = el.dataset.edd.split("|"); act({ type: "eddCheck", caseId, step, done: el.checked }, el.checked ? "Nice. Ticked off." : "Unticked"); return; }
+  if (el.dataset.edd) { const [caseId, step] = el.dataset.edd.split("|"); act({ type: "eddCheck", caseId, step, done: el.checked }, el.checked ? "Nice. One step closer to getting paid." : "Unticked"); return; }
   if (el.dataset.task) {
     const [caseId, key] = el.dataset.task.split("|");
     UI.justDone = el.checked ? el.dataset.task : null; clearTimeout(UI._jd); UI._jd = setTimeout(() => (UI.justDone = null), 1500);
-    act({ type: "toggleTask", caseId, key, done: el.checked }, el.checked ? "Marked done" : "Reopened"); return;
+    act({ type: "toggleTask", caseId, key, done: el.checked }, el.checked ? "Done. Nice work." : "Reopened. It is back on your list."); return;
   }
   if (el.dataset.emp) { const [id, field] = el.dataset.emp.split("|"); act({ type: "updateEmployee", id, field, value: el.value }, "Saved"); return; }
   if (el.dataset.co) {
@@ -1603,7 +1633,7 @@ document.addEventListener("change", (ev) => {
     if (field === "holidays") value = String(value).split(",").map((s) => s.trim()).filter(Boolean);
     act({ type: "updateCompany", field, value }, "Saved"); return;
   }
-  if (el.dataset.cov) { act({ type: "setCoverage", caseId: el.dataset.cov, text: el.value }, "Coverage plan saved"); return; }
+  if (el.dataset.cov) { act({ type: "setCoverage", caseId: el.dataset.cov, text: el.value }, "Saved. HR can see your coverage plan."); return; }
   if (el.dataset.casenote) { act({ type: "setHrNote", caseId: el.dataset.casenote, text: el.value }, "Note saved"); return; }
   bind(el);
 });
