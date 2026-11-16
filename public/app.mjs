@@ -877,6 +877,14 @@ function empView() {
       ${past.length ? `<details class="more"><summary>Past leaves (${past.length})</summary><div class="stack" style="margin-top:10px">${past.map((c) => empCase(c)).join("")}</div></details>` : ""}</div>`;
   })()}`;
 }
+// The sandbox button. A visitor who left their sandbox gets back to the same copy, or can start a fresh one.
+function sandboxCta() {
+  if (!ACCOUNTS || !ACCOUNTS.sandboxOn) return "";
+  return ACCOUNTS.sandboxBack
+    ? `<div class="sandbox-cta"><button class="btn primary" data-sandbox>Back to your made-up company</button><span class="small muted">Your copy is kept for 7 days. <button class="linkish" data-sandbox-fresh>Start a fresh copy</button></span></div>`
+    : `<div class="sandbox-cta"><button class="btn primary" data-sandbox>Try it with a made-up company</button><span class="small muted">No sign-up. Your own copy, deleted after 7 days.</span></div>`;
+}
+
 // Asking to use Leave Ledger for a real company. Approved by the admin, who then emails an invite link.
 function accessView() {
   const A = UI.access, f = A.form;
@@ -1060,7 +1068,7 @@ function renderPreviewLogin(root) {
     root.innerHTML = `<section class="login" style="grid-template-columns:minmax(0,520px);justify-content:center">
       <div class="panel welcome" style="gap:14px"><h1>Leave Ledger</h1>
         <p class="lede">California leave of absence, worked out for you: which leaves apply, what the state pays, and the notices and deadlines you owe.</p>
-        ${ACCOUNTS && ACCOUNTS.sandboxOn ? `<div class="sandbox-cta"><button class="btn primary" data-sandbox>Try it with a made-up company</button><span class="small muted">No sign-up. Your own copy, deleted after 7 days.</span></div>` : ""}
+        ${sandboxCta()}
         <p>Invited to the early preview? Open the link you were sent. If it has stopped working, ask the sender for a new one.</p>
         ${L.error ? `<p class="err" role="alert">${esc(L.error)}</p>` : ""}
       </div></section>`;
@@ -1077,6 +1085,7 @@ function renderPreviewLogin(root) {
       <p class="small">Tap <b>Feedback</b> on any screen to tell us what works and what does not. When you are done, there is a 2-minute survey.</p>
       <div class="note-box">Please use made-up details only, no real names or health information. Text you type for Clerk, the built-in assistant, is processed by our AI provider to fill in the form. <a href="/privacy">Privacy</a></div>
       ${googleBar()}
+      ${ACCOUNTS.sandbox ? `<p class="small"><button class="linkish" data-leave-sandbox>Back to the home page</button> · your copy is kept for 7 days.</p>` : ""}
       ${L.error ? `<p class="err" role="alert">${esc(L.error)}</p>` : ""}
     </div>
     ${personaCards()}
@@ -1119,7 +1128,8 @@ function renderNow() {
   const me = emp(S.me.empId) || { id: S.me.empId, name: S.me.name };
   const roleName = { hr: "HR admin", mgr: S.me.label, emp: "Employee" }[S.me.role];
   const whoBtns = ORG() ? `<button class="btn sm" data-home>Spaces</button><button class="btn sm" data-signout>Sign out</button>`
-    : FB() && ME && ME.user ? `<button class="btn sm" data-logout>Switch user</button><button class="btn sm" data-home>Spaces</button>` : `<button class="btn sm" data-logout>Switch user</button>`;
+    : FB() && ME && ME.user ? `<button class="btn sm" data-logout>Switch user</button><button class="btn sm" data-home>Spaces</button>`
+    : FB() && S.space && S.space.sandbox ? `<button class="btn sm" data-logout>Switch user</button><button class="btn sm" data-leave-sandbox aria-label="Leave sandbox"><span class="wide">Leave sandbox</span><span class="narrow">Exit</span></button>` : `<button class="btn sm" data-logout>Switch user</button>`;
   document.getElementById("who").innerHTML = `${avatar(me)}<span class="meta"><span class="nm">${esc(S.me.name)}</span><span class="r">${esc(ORG() ? `${roleName} · ${S.space.name}` : roleName)}</span></span>${whoBtns}`;
   const tabs = document.getElementById("tabs"), list = tabsFor(S.me.role);
   tabs.hidden = list.length < 2;
@@ -1173,7 +1183,7 @@ function renderHome(root) {
         <span class="hero-badge">Early preview for California companies</span>
         <h1>Time off, handled with care.</h1>
         <p class="lede">When someone on your team needs leave, Leave Ledger works out what California requires, what the state pays them, and every notice you owe, then helps you send it.</p>
-        ${ACCOUNTS && ACCOUNTS.sandboxOn ? `<div class="sandbox-cta"><button class="btn primary" data-sandbox>Try it with a made-up company</button><span class="small muted">No sign-up. Your own copy, deleted after 7 days.</span></div>` : ""}
+        ${sandboxCta()}
         <p class="small">Ready to use it for your company? <button class="linkish" data-access-open>Ask for access</button></p>
         ${ME && ME.google ? `<div class="hero-or">${gButton()}<span class="small muted">Invited to the preview? Open the link you were sent, or use the Google account your invite went to.</span></div>` : `<p class="small muted">Invited to the preview? Open the link you were sent.</p>`}
         ${err ? `<p class="err" role="alert">${esc(err)}</p>` : ""}
@@ -1415,9 +1425,13 @@ document.addEventListener("click", async (ev) => {
   if (b.dataset.pick) { signIn(b.dataset.pick); return; }
   if (b.dataset.space) { const [k, id] = b.dataset.space.split("|"); openSpace(k, id); return; }
   if (b.hasAttribute("data-home")) { goHome(); return; }
-  if (b.hasAttribute("data-sandbox")) {
+  if (b.hasAttribute("data-leave-sandbox")) {
+    await api("sandbox/leave", {}).catch(() => {});
+    S = null; ACCOUNTS = null; ME = null; UI.tab = null; UI.caseId = null; UI.access.open = false; closeFeedback(); renderLogin(); window.scrollTo(0, 0); return;
+  }
+  if (b.hasAttribute("data-sandbox") || b.hasAttribute("data-sandbox-fresh")) {
     b.disabled = true; UI.login.error = ""; UI.home.error = "";
-    try { await api("sandbox", {}); ACCOUNTS = null; ME = null; UI.tab = null; renderLogin(); }
+    try { await api("sandbox", b.hasAttribute("data-sandbox-fresh") ? { fresh: true } : {}); ACCOUNTS = null; ME = null; UI.tab = null; renderLogin(); }
     catch (e) { if (e.message === "signed out") return; UI.login.error = e.message; UI.home.error = e.message; ACCOUNTS = null; renderLogin(); }
     return;
   }

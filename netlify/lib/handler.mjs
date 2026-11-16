@@ -48,6 +48,15 @@ export const todayPT = () =>
 const readSession = (req, env) => { const o = readObj(cookieOf(req), env); return o && (!o.k || o.k === "s") ? o : null; };
 const sessCookie = (o, env) => setCookie(signObj({ k: "s", ...o }, o.t || o.o ? FB_TTL : WEEK, env), o.t || o.o ? FB_TTL : WEEK);
 const clearSess = () => setCookie("", 0);
+// Remembers this browser's sandbox for its 7 days, so a visitor who leaves it can come back to the same copy.
+const SB_TTL = 7 * 24 * 3600;
+const sbCookie = (code, env) => setCookie(signObj({ k: "sb", c: code }, SB_TTL, env), SB_TTL, "ll_sb");
+async function mySandbox(req, env, store) {
+  const o = readObj(cookieOf(req, "ll_sb"), env);
+  if (!o || o.k !== "sb" || !o.c) return null;
+  const rec = await store.get(sandboxKey(o.c), { type: "json" });
+  return rec && rec.sandbox && !rec.disabled ? o.c : null;
+}
 
 export async function load(store, today, key = KEY, seed = true) {
   let D = await store.get(key, { type: "json" });
@@ -611,7 +620,7 @@ async function route_(req, store, env) {
     const list = ACCOUNTS.map(({ email, label, empId, name, role }) => ({ email, label, empId, name, role }));
     if (!FB) return json({ mode: "test", accounts: list, configured: !!env.LL_TEST_PASSWORD });
     const pv = R.kind === "preview";
-    return json({ mode: "feedback", invited: pv, sandbox: !!(pv && R.invite.sandbox), sandboxOn: String(env.LL_SANDBOX || "on").toLowerCase() !== "off", accounts: pv ? list : [], configured: !!(env.LL_SECRET || env.LL_ADMIN_PASSWORD), surveyDone: !!(pv && (await surveyOf(store, R.id))) });
+    return json({ mode: "feedback", invited: pv, sandbox: !!(pv && R.invite.sandbox), sandboxBack: !pv && !!(await mySandbox(req, env, store)), sandboxOn: String(env.LL_SANDBOX || "on").toLowerCase() !== "off", accounts: pv ? list : [], configured: !!(env.LL_SECRET || env.LL_ADMIN_PASSWORD), surveyDone: !!(pv && (await surveyOf(store, R.id))) });
   }
 
   /* ----- Asking to use Leave Ledger for a real company. Anyone can ask; the admin approves. ----- */
@@ -630,6 +639,10 @@ async function route_(req, store, env) {
 
   if (FB && route === "sandbox" && req.method === "POST") {
     if (String(env.LL_SANDBOX || "on").toLowerCase() === "off") return err("The sandbox is closed right now.", 403);
+    // Back to this browser's own copy, unless the visitor asked for a fresh one.
+    const body = await req.json().catch(() => ({}));
+    const mine = body.fresh ? null : await mySandbox(req, env, store);
+    if (mine) return json({ ok: true, back: true }, 200, { "set-cookie": sessCookie({ t: mine }, env) });
     if (await throttled(store, req, "sandbox", 5)) return err("Too many sandboxes from here. Wait 15 minutes, or keep using the one you have.", 429);
     const max = Number(env.LL_SANDBOX_DAILY) || 200, day = (await store.get("sandbox-day", { type: "json" })) || { day: today, n: 0 };
     if (day.day !== today) { day.day = today; day.n = 0; }
@@ -640,7 +653,7 @@ async function route_(req, store, env) {
     const now = new Date().toISOString();
     await store.setJSON(sandboxKey(code), { name: "Sandbox visitor", sandbox: true, created: now, joined: now, disabled: false, users: [], colleagues: [] });
     await load(store, today, tenantKey(code));
-    return json({ ok: true }, 200, { "set-cookie": sessCookie({ t: code }, env) });
+    return withCookies(json({ ok: true }), [sessCookie({ t: code }, env), sbCookie(code, env)]);
   }
 
   if (FB && route === "join" && req.method === "POST") {
@@ -673,6 +686,8 @@ async function route_(req, store, env) {
     const D = await load(store, today);
     return json(viewFor(D, acct, today, env), 200, { "set-cookie": sessCookie({ e: acct.email }, env) });
   }
+  // Leaving the sandbox: back to the sign-in page. The copy stays for its 7 days and the sign-in page offers the way back.
+  if (FB && route === "sandbox/leave" && req.method === "POST") return json({ ok: true }, 200, { "set-cookie": clearSess() });
   if (route === "logout" && req.method === "POST") {
     // Preview: keep the invite so "Switch user" goes back to the picker. Workspace: back to the spaces list.
     const keep = R.kind === "preview" ? sessCookie({ t: R.id, ...(R.u ? { u: R.u } : {}) }, env) : clearSess();

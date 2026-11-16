@@ -797,6 +797,26 @@ describe("public sandbox: anyone, no sign-up, one copy per visitor", () => {
     const admin = await adminClient(p), st = (await admin.get("/api/admin/state")).body;
     assert.equal(st.invites.length, 0, "sandboxes are not invites"); assert.equal(st.sandboxes.active, 2); assert.equal(st.sandboxes.today, 2);
   });
+  test("a visitor can leave the sandbox for the home page, come back to the same copy, or start fresh", async () => {
+    const p = preview();
+    const { c } = await open(p, "5.5.6.1");
+    await c.post("/api/login", { email: "grace@mesaverde.example" });
+    await c.post("/api/action", { type: "updateCompany", field: "name", value: "My Test Co" });
+    assert.equal((await c.post("/api/sandbox/leave", {})).status, 200);
+    let acc = (await c.get("/api/accounts")).body;
+    assert.equal(acc.invited, false, "out of the sandbox, on the home page"); assert.equal(acc.sandboxBack, true);
+    const back = (await c.post("/api/sandbox", {})).body;
+    assert.equal(back.back, true);
+    let v = (await c.post("/api/login", { email: "grace@mesaverde.example" })).body;
+    assert.equal(v.data.company.name, "My Test Co", "the same copy, with the visitor's changes");
+    await c.post("/api/sandbox/leave", {});
+    assert.equal((await c.post("/api/sandbox", { fresh: true })).body.back, undefined);
+    v = (await c.post("/api/login", { email: "grace@mesaverde.example" })).body;
+    assert.notEqual(v.data.company.name, "My Test Co", "a fresh copy");
+    // Someone else's browser never gets the way back into this copy.
+    const other = p.as({ ip: "5.5.6.2" });
+    assert.equal((await other.get("/api/accounts")).body.sandboxBack, false);
+  });
   test("limits: 5 per address in 15 minutes, a daily cap, and a switch to close it", async () => {
     const p = preview();
     for (let i = 0; i < 5; i++) assert.equal((await open(p, "6.6.6.6")).r.status, 200);

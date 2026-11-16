@@ -371,6 +371,10 @@ describe("preview site", { skip }, () => {
     await p.click("[data-access-send]");
     await p.waitForSelector("text=Your request is in");
     await p.click("[data-access-close]"); await p.waitForSelector(".askbar");
+    // Leaving goes back to the home page, and stays there after a reload; the button there returns to the same copy.
+    await p.click("[data-leave-sandbox]"); await p.waitForSelector(".hero");
+    await p.reload(); await p.waitForSelector("text=Back to your made-up company");
+    await p.click("[data-sandbox]"); await p.waitForSelector('[data-pick="grace@mesaverde.example"]');
     assert.deepEqual(errors, []);
   });
 
