@@ -365,6 +365,12 @@ describe("preview site", { skip }, () => {
     await p.click('[data-tab="cases"]');
     await p.click("tr[data-open]");
     assert.ok(await p.$("[data-letter], [data-letter-view]"), "letters work");
+    // A visitor who likes it can ask to use it for their own company.
+    await p.click(".askbar [data-access-open]");
+    await p.fill("#ax-name", "Sam Lee"); await p.fill("#ax-email", "sam@bayside.com"); await p.fill("#ax-company", "Bayside Dental"); await p.fill("#ax-hc", "22");
+    await p.click("[data-access-send]");
+    await p.waitForSelector("text=Your request is in");
+    await p.click("[data-access-close]"); await p.waitForSelector(".askbar");
     assert.deepEqual(errors, []);
   });
 

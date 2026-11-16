@@ -82,6 +82,7 @@ export function installFakes() {
       const draft = { reason: "family_care", relation: "parent", start: "2026-11-12", weeks: 3, confidence: { reason: "high" }, summary: "Care for a parent.", ask: [], language: "en" };
       return new Response(JSON.stringify({ model: "claude-haiku-5-5", content: [{ type: "text", text: JSON.stringify(draft) }], usage: { input_tokens: 1000, output_tokens: 100 } }), { status: 200 });
     }
+    if (u.startsWith("https://api.resend.com/")) { (globalThis.__mails ||= []).push(JSON.parse(init.body)); return new Response(JSON.stringify({ id: "m" + globalThis.__mails.length }), { status: 200 }); }
     if (u.includes("api.github.com")) return new Response("{}", { status: init.method === "PUT" ? 201 : 404 });
     return real(url, init);
   };

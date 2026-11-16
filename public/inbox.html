@@ -58,6 +58,8 @@ input,textarea,select{border:1px solid var(--line);background:var(--surface);bor
 .tbl th{text-align:left;font-size:.74rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line)}
 .tbl td{padding:8px;border-bottom:1px solid var(--line);vertical-align:top}
 .scroll{overflow-x:auto}
+.req{display:flex;gap:12px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;padding:12px 0;border-top:1px solid var(--line)}
+.req > div:first-child{flex:1;min-width:240px}
 .pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:.76rem;font-weight:600;background:var(--sunk);color:var(--muted)}
 .pill.ok{background:var(--ok-soft);color:var(--ok)}.pill.bad{background:var(--bad-soft);color:var(--bad)}.pill.warn{background:var(--warn-soft);color:var(--warn)}
 .fb{border:1px solid var(--line);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:4px}
@@ -116,6 +118,19 @@ const AUTH_MSG = { notadmin: "That Google account is not an admin for this site.
 const _u = new URL(location.href), AUTH_ERR = AUTH_MSG[_u.searchParams.get("auth_error")] || (_u.searchParams.get("auth_error") ? "Sign-in did not work. Try again." : "");
 if (AUTH_ERR) { _u.searchParams.delete("auth_error"); history.replaceState(null, "", _u.pathname); }
 
+// Visitors asking to use Leave Ledger for their company. Approve makes an invite tied to their email and emails them the link.
+function requestsPanel() {
+  const all = ST.requests || [], open = all.filter((r) => r.status === "new"), done = all.filter((r) => r.status !== "new").slice(0, 10);
+  const row = (r) => `<div class="req"><div><b>${esc(r.company)}</b> <span class="muted">· ${r.headcount} employees${r.city ? " · " + esc(r.city) : ""}</span>
+      <div class="small">${esc(r.name)} · <a href="mailto:${esc(r.email)}">${esc(r.email)}</a> · ${when(r.at)} · from the ${esc(r.from || "app")}${r.headcount <= 4 ? ' · <span class="pill ok">Free tier</span>' : ""}</div>
+      ${r.note ? `<div class="small muted" style="margin-top:4px">"${esc(r.note)}"</div>` : ""}</div>
+    <div class="btns">${r.status === "new" ? `<button class="btn sm primary" data-req-approve="${r.id}">Approve and email invite</button><button class="btn sm" data-req-decline="${r.id}">Decline</button>`
+      : `<span class="pill ${r.status === "approved" ? "ok" : ""}">${r.status === "approved" ? (r.emailed ? "Approved, email sent" : "Approved, email not sent") : "Declined"}</span>${r.invite ? `<button class="btn sm" data-copy="${r.invite}">Copy link</button>` : ""}${r.status === "declined" ? `<button class="btn sm" data-req-reopen="${r.id}">Reopen</button>` : ""}`}</div></div>`;
+  return `<section class="panel"><div class="head"><h2>Access requests${open.length ? ` <span class="pill warn">${open.length} waiting</span>` : ""}</h2></div>
+    ${open.length ? open.map(row).join("") : `<p class="muted">No requests waiting. Visitors ask from the sandbox, the sign-in page, or after signing in without an invite.</p>`}
+    ${done.length ? `<details><summary class="small">Recent decisions (${done.length})</summary>${done.map(row).join("")}</details>` : ""}</section>`;
+}
+
 function render() {
   const S = ST.summary, inv = ST.invites, fbCount = (c) => ST.feedback.filter((f) => f.invite === c).length;
   const pct = (n) => S.responses ? Math.round((n / S.responses) * 100) + "%" : "-";
@@ -124,6 +139,8 @@ function render() {
   root.innerHTML = `
   <div class="head"><div><h1>Feedback inbox</h1><p class="muted">Leave Ledger early preview. Each invite gets its own copy of the sample company.</p></div>
     <div class="btns"><a class="btn" style="text-decoration:none;color:inherit" href="/strategy">Strategy</a><a class="btn" style="text-decoration:none;color:inherit" href="/tests">Tests</a><button class="btn" data-refresh>Refresh</button><button class="btn" data-out>Sign out</button></div></div>
+
+  ${requestsPanel()}
 
   <section class="panel">
     <h2>Survey so far</h2>
@@ -239,6 +256,14 @@ document.addEventListener("click", async (e) => {
   const b = e.target.closest("button"); if (!b || !ST) return;
   try {
     if (b.hasAttribute("data-eval")) { runEval(); return; }
+    if (b.dataset.reqApprove) {
+      b.disabled = true; const r = await api("admin/request", { id: b.dataset.reqApprove, action: "approve" }); await refresh();
+      if (r.emailed) toast("Approved. The invite email is on its way.");
+      else { toast("Approved. Email is off, so send the link yourself."); try { await navigator.clipboard.writeText(r.link); } catch (er) { prompt("Send this link", r.link); } }
+      return;
+    }
+    if (b.dataset.reqDecline) { await api("admin/request", { id: b.dataset.reqDecline, action: "decline" }); await refresh(); toast("Declined"); return; }
+    if (b.dataset.reqReopen) { await api("admin/request", { id: b.dataset.reqReopen, action: "reopen" }); await refresh(); return; }
     if (b.hasAttribute("data-refresh")) { await refresh(); toast("Up to date"); }
     else if (b.hasAttribute("data-out")) { await api("admin/logout", {}); ST = null; renderLogin(); }
     else if (b.dataset.copy) { const t = link(b.dataset.copy); try { await navigator.clipboard.writeText(t); toast("Link copied"); } catch (er) { prompt("Copy this link", t); } }

@@ -7,6 +7,7 @@ import { eddIds } from "../../public/guide.mjs";
 import { checkRows } from "../../public/roster.mjs";
 import { managerNotice, sensitiveNote, legalSummary } from "../../public/notices.mjs";
 import { mailOn, canEmail, sendMail } from "./mail.mjs";
+import { loadRequests, cleanRequest, addRequest, inviteEmail, adminAlert, AKEY } from "./access.mjs";
 import { runColumnMap } from "./rostermap.mjs";
 import { listBackups, lastBackupRun, restoreBackup, exportBundle, deleteWorkspace, runBackups, KEEP_DAYS } from "./backup.mjs";
 import STRATEGY from "./strategy-data.mjs";
@@ -556,7 +557,9 @@ async function route_(req, store, env) {
     const linkCode = R.kind === "preview" && R.s && R.s.t ? R.id : null;
     const spaces = await spacesFor(store, R.user, linkCode);
     const pending = R.user ? await listPending(store, R.user) : [];
-    return json({ mode: "feedback", google: googleOn(env), admin: !!(R.user && isAdminEmail(env, R.user.email)), user: R.user ? { email: R.user.email, name: R.user.name, hd: R.user.hd } : null, current: R.kind ? { ...spaceInfo(R), persona: !!R.acct } : null, spaces, pending, create: canCreate(env, R.user, spaces) });
+    let prefill = null;
+    if (R.user) { const iv = await loadInvites(store); for (const c of R.user.invites || []) { const p = iv.items[c] && iv.items[c].prefill; if (p) { prefill = p; break; } } }
+    return json({ prefill, mode: "feedback", google: googleOn(env), admin: !!(R.user && isAdminEmail(env, R.user.email)), user: R.user ? { email: R.user.email, name: R.user.name, hd: R.user.hd } : null, current: R.kind ? { ...spaceInfo(R), persona: !!R.acct } : null, spaces, pending, create: canCreate(env, R.user, spaces) });
   }
   if ((route === "org/accept" || route === "org/decline") && req.method === "POST") {
     if (!R.user) return err("Sign in with Google first.", 401);
@@ -609,6 +612,20 @@ async function route_(req, store, env) {
     if (!FB) return json({ mode: "test", accounts: list, configured: !!env.LL_TEST_PASSWORD });
     const pv = R.kind === "preview";
     return json({ mode: "feedback", invited: pv, sandbox: !!(pv && R.invite.sandbox), sandboxOn: String(env.LL_SANDBOX || "on").toLowerCase() !== "off", accounts: pv ? list : [], configured: !!(env.LL_SECRET || env.LL_ADMIN_PASSWORD), surveyDone: !!(pv && (await surveyOf(store, R.id))) });
+  }
+
+  /* ----- Asking to use Leave Ledger for a real company. Anyone can ask; the admin approves. ----- */
+  if (FB && route === "access/request" && req.method === "POST") {
+    if (await throttled(store, req, "access", 5)) return err("That is a lot of requests from here. Wait 15 minutes, then try again.", 429);
+    const r = cleanRequest(await req.json().catch(() => ({})));
+    if (r.error) return err(r.error);
+    await failed(store, req, "access");
+    const how = await addRequest(store, r, R.kind === "preview" ? (R.invite && R.invite.sandbox ? "sandbox" : "sample") : R.user ? "signed in" : "sign-in page");
+    if (how === "added" && mailOn(env)) {
+      const to = String(env.LL_ADMIN_EMAILS || "").split(/[\s,]+/).filter(Boolean)[0];
+      if (to) { const m = adminAlert(r); await sendMail(env, { to, subject: m.subject, text: m.text, replyTo: r.email }); }
+    }
+    return json({ ok: true });
   }
 
   if (FB && route === "sandbox" && req.method === "POST") {
@@ -987,6 +1004,7 @@ async function handleAdmin(req, route, store, env, today) {
     const name = (f) => f.org ? ((ix.items[f.org] || {}).name || "Workspace") + " (workspace)" : (invites.items[f.invite] && invites.items[f.invite].name) || "Sandbox visitor";
     const sname = (k) => k.startsWith("org:") ? ((ix.items[k.slice(4)] || {}).name || "Workspace") + " (workspace)" : (invites.items[k] && invites.items[k].name) || "Sandbox visitor";
     return json({
+      requests: (await loadRequests(store)).items.slice(0, 200),
       invites: list, orgs, backups, deleted, sandboxes,
       // Sandbox feedback is shown (it is real feedback), labeled; only the admin's own tests are hidden by default.
       feedback: fb.items.map((f) => { const k = f.org ? "org:" + f.org : f.invite || ""; return { ...f, who: name(f), test: isTestOnly(k), sandbox: !f.org && isSandbox(k) }; }),
@@ -1034,6 +1052,27 @@ async function handleAdmin(req, route, store, env, today) {
     invites.items[code] = { name: nm, note: String(body.note || "").slice(0, 300).trim(), email: email || null, created: new Date().toISOString(), disabled: false, joined: null, users: [] };
     await store.setJSON(IKEY, invites);
     return json({ ok: true, code });
+  }
+  // Approve: make an invite tied to the requester's email, remember their company details, and email them the link.
+  if (route === "admin/request" && req.method === "POST") {
+    const body = await req.json().catch(() => ({}));
+    const o = await loadRequests(store), r = o.items.find((x) => x.id === body.id);
+    if (!r) return err("Request not found", 404);
+    if (body.action === "decline") { r.status = "declined"; r.decided = new Date().toISOString(); await store.setJSON(AKEY, o); return json({ ok: true }); }
+    if (body.action === "reopen") { r.status = "new"; delete r.decided; await store.setJSON(AKEY, o); return json({ ok: true }); }
+    if (body.action !== "approve") return err("Unknown action");
+    let code = r.invite && invites.items[r.invite] ? r.invite : null;
+    if (!code) {
+      code = newCode(); while (invites.items[code]) code = newCode();
+      invites.items[code] = { name: `${r.name}, ${r.company}`.slice(0, 80), note: "From an access request", email: r.email, created: new Date().toISOString(), disabled: false, joined: null, users: [],
+        prefill: { name: r.company, city: r.city, headcount: r.headcount } };
+      await store.setJSON(IKEY, invites);
+    }
+    const link = `${baseUrl(req, env)}/?invite=${code}`, m = inviteEmail(r, link);
+    const sent = mailOn(env) ? await sendMail(env, { to: r.email, subject: m.subject, text: m.text, replyTo: String(env.LL_ADMIN_EMAILS || "").split(/[\s,]+/).filter(Boolean)[0] || undefined }) : { status: "off" };
+    Object.assign(r, { status: "approved", decided: new Date().toISOString(), invite: code, emailed: sent.status === "sent" });
+    await store.setJSON(AKEY, o);
+    return json({ ok: true, code, link, emailed: sent.status === "sent", mail: sent.status, email: m });
   }
   if (route === "admin/invite/update" && req.method === "POST") {
     const body = await req.json().catch(() => ({}));

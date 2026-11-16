@@ -24,6 +24,7 @@ const UI = {
   conv: { caseId: null, draft: null, busy: false, error: "" },
   fb: { open: false, rating: 0, kind: "", note: "", busy: false, error: "" },
   survey: { open: false, q: null, a: {}, busy: false, error: "", done: null, later: false },
+  access: { open: false, sent: false, busy: false, error: "", form: { name: "", email: "", company: "", headcount: "", city: "", note: "" } },
   home: { busy: false, error: "", form: { name: "", city: "", headcount: 20, jobTitle: "", start: "sample", lockDomain: false, agree: false } },
   users: { list: null, domain: null, canLock: false, myDomain: null, email: "", role: "emp", empId: "", busy: false, error: "" },
   letter: null,          // {caseId, key, subject, body, sentOn, method, view: index of a sent letter}
@@ -876,6 +877,33 @@ function empView() {
       ${past.length ? `<details class="more"><summary>Past leaves (${past.length})</summary><div class="stack" style="margin-top:10px">${past.map((c) => empCase(c)).join("")}</div></details>` : ""}</div>`;
   })()}`;
 }
+// Asking to use Leave Ledger for a real company. Approved by the admin, who then emails an invite link.
+function accessView() {
+  const A = UI.access, f = A.form;
+  if (A.sent) return `<section class="panel access"><span class="ac-ic ok" aria-hidden="true">${SVG(ICONS.check, 30)}</span><h2>Thanks, ${esc(first(f.name))}. Your request is in.</h2>
+    <p>Francis will reply to <b>${esc(f.email)}</b> within 1 business day. When it is approved, you get an email with a link to set up ${esc(f.company)}. It takes about 10 minutes.</p>
+    <p class="small muted">Sign in with that same Google account when you open the link.</p>
+    <div class="btns"><button class="btn" data-access-close>${S && S.space ? "Back to the sandbox" : "Back"}</button></div></section>`;
+  return `<section class="panel access" data-form="access"><h2>Use Leave Ledger for your company</h2>
+    <p class="muted">Tell us a little about your company. We set up your own workspace and email you a link, usually within 1 business day.</p>
+    <div class="row"><div class="field"><label for="ax-name">Your name</label><input type="text" id="ax-name" data-ax="name" value="${esc(f.name)}" maxlength="80" autocomplete="name"></div>
+      <div class="field"><label for="ax-email">Work email</label><input type="email" id="ax-email" data-ax="email" value="${esc(f.email)}" maxlength="120" autocomplete="email"><span class="hint">Use the Google account you will sign in with.</span></div></div>
+    <div class="row"><div class="field"><label for="ax-company">Company name</label><input type="text" id="ax-company" data-ax="company" value="${esc(f.company)}" maxlength="80" autocomplete="organization"></div>
+      <div class="field"><label for="ax-hc">Number of employees</label><input type="number" id="ax-hc" data-ax="headcount" value="${esc(f.headcount)}" min="1"><span class="hint">Companies with 1 to 4 employees are free.</span></div></div>
+    <div class="field"><label for="ax-city">City (optional)</label><input type="text" id="ax-city" data-ax="city" value="${esc(f.city)}" maxlength="60" placeholder="San Jose, CA"></div>
+    <div class="field"><label for="ax-note">Anything we should know? (optional)</label><textarea id="ax-note" data-ax="note" maxlength="500" placeholder="For example: we have someone going on leave next month.">${esc(f.note)}</textarea></div>
+    <p class="small muted">For now the preview uses made-up employee details only. We will tell you when real employee data is supported.</p>
+    ${A.error ? `<p class="err" role="alert">${esc(A.error)}</p>` : ""}
+    <div class="btns"><button class="btn primary" data-access-send ${A.busy ? "disabled" : ""}>${A.busy ? "Sending..." : "Send request"}</button><button class="btn" data-access-close>Cancel</button></div></section>`;
+}
+function reAccess() { if (S && S.space && !document.querySelector(".access-wrap")) render(); else renderLogin(); }
+async function sendAccess() {
+  const A = UI.access;
+  A.busy = true; A.error = ""; reAccess();
+  try { await api("access/request", A.form); A.sent = true; A.busy = false; reAccess(); }
+  catch (e) { A.busy = false; A.error = e.message; reAccess(); }
+}
+
 // Shown for a week after an employee comes back, until they close it.
 function welcomeBack(e, mine, el) {
   const c = mine.find((x) => { if (caseStatus(x).t !== "Returned") return false; const d = caseDates(x); if (!d.end) return false; const back = nextWorkday(d.end, D().company.holidays || []); return TODAY >= back && diffDays(back, TODAY) <= 6 && !store.get("ll-wb-" + x.id); });
@@ -1107,11 +1135,12 @@ function renderNow() {
   document.body.classList.toggle("has-bottom-tabs", phone && list.length > 1);
   const focusId = document.activeElement && document.activeElement.id;
   const v = viewOf();
-  const html = FB() && UI.survey.open ? surveyView() : UI.tab === "guide" ? guideView() : v === "emp" ? empView() : v === "mgr" ? mgrView() : { overview: hrOverview, cases: hrCases, plan: hrPlan, employees: hrEmployees, access: hrUsers, settings: hrSettings }[UI.tab]();
+  const html = UI.access.open ? accessView() : FB() && UI.survey.open ? surveyView() : UI.tab === "guide" ? guideView() : v === "emp" ? empView() : v === "mgr" ? mgrView() : { overview: hrOverview, cases: hrCases, plan: hrPlan, employees: hrEmployees, access: hrUsers, settings: hrSettings }[UI.tab]();
   const foot = FB()
     ? `<span>${ORG() ? (REAL() ? "Design partner workspace." : "Early preview workspace. Use made-up employee details only.") : S.space.sandbox ? "Sandbox with a made-up company, just for you. Deleted after 7 days." : "Early preview with a made-up company."} Based on California law as of November 2026. Not yet reviewed by a lawyer. Not legal advice. <a href="/privacy">Privacy</a></span>${UI.survey.open ? "" : `<button class="btn sm" data-survey>${UI.survey.done ? "Edit your survey answers" : "Take the 2-minute survey"}</button>`}`
     : `<span>Test site with a made-up company. Based on California law as of November 2026. Not yet reviewed by a lawyer. Not legal advice.</span><a href="/strategy">Product strategy progress</a>`;
-  document.getElementById("root").innerHTML = `<main>${surveyBanner()}${html}<div class="foot">${foot}</div></main>`;
+  const ask = FB() && S.space.sandbox && !UI.access.open ? `<div class="askbar"><span><b>Like what you see?</b> Set up Leave Ledger for your own company.</span><button class="btn primary sm" data-access-open>Use it for my company</button></div>` : "";
+  document.getElementById("root").innerHTML = `<main>${ask}${surveyBanner()}${html}<div class="foot">${foot}</div></main>`;
   if (focusId) { const el = document.getElementById(focusId); if (el) el.focus(); }
   if (v === "emp" && UI.reqAI.draft) {
     const map = { reason: ["rq-reason"], relation: ["rq-rel"], start: ["rq-start"], length: ["rq-wk", "rq-dy", "rq-hr", "rq-dis", "rq-bond"] };
@@ -1134,6 +1163,9 @@ function renderHome(root) {
   setChrome(false);
   const L = UI.login, H = UI.home, f = H.form, u = ME && ME.user;
   const err = L.error || H.error;
+  if (UI.access.open) { setChrome(false); root.innerHTML = `<section class="access-wrap">${accessView()}</section>`; return; }
+  // An approved request carries the company's details, so the setup form starts filled in.
+  if (u && ME.prefill && !H.prefilled) { H.prefilled = true; Object.assign(f, { name: f.name || ME.prefill.name || "", city: f.city || ME.prefill.city || "", headcount: ME.prefill.headcount || f.headcount }); }
   if (!u) {
     // The sign-in page. The cards on the right show the product at work, with made-up names.
     root.innerHTML = `<section class="hero">
@@ -1142,6 +1174,7 @@ function renderHome(root) {
         <h1>Time off, handled with care.</h1>
         <p class="lede">When someone on your team needs leave, Leave Ledger works out what California requires, what the state pays them, and every notice you owe, then helps you send it.</p>
         ${ACCOUNTS && ACCOUNTS.sandboxOn ? `<div class="sandbox-cta"><button class="btn primary" data-sandbox>Try it with a made-up company</button><span class="small muted">No sign-up. Your own copy, deleted after 7 days.</span></div>` : ""}
+        <p class="small">Ready to use it for your company? <button class="linkish" data-access-open>Ask for access</button></p>
         ${ME && ME.google ? `<div class="hero-or">${gButton()}<span class="small muted">Invited to the preview? Open the link you were sent, or use the Google account your invite went to.</span></div>` : `<p class="small muted">Invited to the preview? Open the link you were sent.</p>`}
         ${err ? `<p class="err" role="alert">${esc(err)}</p>` : ""}
         <p class="small muted"><a href="/privacy">Privacy</a></p>
@@ -1182,7 +1215,7 @@ function renderHome(root) {
           <label class="check"><input type="radio" name="ws-start" data-bind="start" value="empty" ${f.start === "empty" ? "checked" : ""}>Just me. I will add made-up employees myself</label></div>
         <label class="check"><input type="checkbox" id="ws-agree" data-bind="agree" ${f.agree ? "checked" : ""}>I will use made-up employee details only</label>
         <div class="btns"><button class="btn primary" data-create ${H.busy ? "disabled" : ""}>${H.busy ? "Setting up..." : "Create workspace"}</button></div>
-      </section>` : C.why && !sp.length ? "" : C.why ? `<p class="small muted">${esc(C.why)}</p>` : ""}
+      </section>` : /invite/i.test(C.why || "") ? `<div class="infobox"><b>Want Leave Ledger for your company?</b> Ask for access and we will set up your workspace, usually within 1 business day.<div class="btns" style="margin-top:8px"><button class="btn primary sm" data-access-open>Ask for access</button></div></div>` : C.why && !sp.length ? "" : C.why ? `<p class="small muted">${esc(C.why)}</p>` : ""}
     </div>
   </section>`;
 }
@@ -1389,6 +1422,13 @@ document.addEventListener("click", async (ev) => {
     return;
   }
   if (b.hasAttribute("data-signout")) { signOutGoogle(); return; }
+  if (b.hasAttribute("data-access-open")) {
+    const A = UI.access; A.open = true; A.sent = false; A.error = "";
+    if (ME && ME.user) { A.form.email ||= ME.user.email; A.form.name ||= ME.user.name || ""; }
+    window.scrollTo(0, 0); reAccess(); document.getElementById("ax-name")?.focus(); return;
+  }
+  if (b.hasAttribute("data-access-close")) { const inApp = !!(S && S.space && !document.querySelector(".access-wrap")); UI.access.open = false; if (UI.access.sent) UI.access = { ...UI.access, sent: false, form: { ...UI.access.form, note: "" } }; inApp ? render() : renderLogin(); return; }
+  if (b.hasAttribute("data-access-send")) { sendAccess(); return; }
   if (b.hasAttribute("data-create")) { createWorkspace(); return; }
   if (b.dataset.accept) {
     try { await api("org/accept", { id: b.dataset.accept }); UI.tab = null; UI.caseId = null; await loadMe(); accept(await api("state")); render(); window.scrollTo(0, 0); toast("Welcome in. Glad you are here."); }
@@ -1638,6 +1678,7 @@ document.addEventListener("change", (ev) => {
   bind(el);
 });
 document.addEventListener("input", (ev) => {
+  if (ev.target.dataset && ev.target.dataset.ax) { UI.access.form[ev.target.dataset.ax] = ev.target.value; return; }
   const el = ev.target;
   if (el.id === "lv-q") { UI.leavesQ = el.value; render(); const i = document.getElementById("lv-q"); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } return; }
   if (UI.letter && ["lt-subject", "lt-body"].includes(el.id)) { UI.letter[el.id === "lt-body" ? "body" : "subject"] = el.value; return; }

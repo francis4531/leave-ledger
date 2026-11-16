@@ -123,6 +123,7 @@ const WHAT = {
   "Letters and notices": "The letters Leave Ledger drafts: the right dates, the right law, and nothing medical where it does not belong.",
   "Employee import and manager notice": "Bringing employees in from a file: matching columns, catching bad rows, and the approval email to the manager carrying dates only.",
   "Guide and state pay steps": "The Guide tab and the EDD steps an employee follows to get paid by the state.",
+  "Access requests": "Visitors asking to use Leave Ledger for their company: the form checks, the admin-only approval, the invite email, and the setup form filled in for the right user only.",
 };
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const when = (iso) => iso ? new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" }) : "";
