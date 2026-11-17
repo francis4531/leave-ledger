@@ -40,6 +40,24 @@ const store = {
 };
 try { const r = JSON.parse(store.get("ll-ui") || "{}"); if (r.tab) UI.tab = r.tab; } catch (e) {}
 const saveUI = () => store.set("ll-ui", JSON.stringify({ tab: UI.tab }));
+// The address keeps the tab and the open leave (#cases/c3), so Back, Forward and reload work as on any site.
+const NAV = { pop: false, init: location.hash.slice(1) };
+const navHash = () => "#" + (UI.tab || "") + (UI.tab === "cases" && UI.caseId ? "/" + UI.caseId : "");
+function navFrom(h) {
+  const [t, c] = String(h || "").split("/");
+  if (!S || !t || !tabsFor(S.me.role).some(([k]) => k === t)) return false;
+  UI.tab = t; UI.caseId = t === "cases" && c && D().cases.some((x) => x.id === c) ? c : null; return true;
+}
+function syncNav() {
+  if (!S || UI.access.open) return;
+  const h = navHash(); if (location.hash === h) return;
+  const url = location.pathname + location.search + h;
+  if (NAV.pop || !location.hash) history.replaceState(null, "", url); else history.pushState(null, "", url);
+}
+window.addEventListener("popstate", () => {
+  if (!S) return;
+  if (navFrom(location.hash.slice(1))) { NAV.pop = true; UI.moreOpen = false; try { render(); } finally { NAV.pop = false; } window.scrollTo(0, 0); }
+});
 
 const D = () => S.data;
 const emp = (id) => D().employees.find((e) => e.id === id) || (D().team || []).find((e) => e.id === id);
@@ -77,6 +95,7 @@ function accept(j) {
   if (UI.who !== who) { UI.who = who; UI.walk = null; UI.wiz = null; UI.caseId = null; UI.letter = null; UI.appr = { caseId: null, notify: true, note: "" }; }
   if (UI.backups.space !== S.space.id) UI.backups = { loaded: false, busy: false, days: null, keep: 14, space: S.space.id };
   if (!UI.tab || !tabsFor(S.me.role).some(([k]) => k === UI.tab)) UI.tab = tabsFor(S.me.role)[0][0];
+  if (NAV.init) { navFrom(NAV.init); NAV.init = null; }
   if (!UI.planner.start) UI.planner.start = addDays(TODAY, 14);
   if (!UI.req.start) UI.req.start = addDays(TODAY, 14);
   if (!UI.flag.heard) UI.flag.heard = TODAY;
@@ -1116,11 +1135,29 @@ function setChrome(on) {
   document.getElementById("coName").innerHTML = on ? `${esc(D().company.name)}<span class="city"> · ${esc(D().company.city)}</span>` : "California leave, made simple";
 }
 let RENDERING = false;
+// Keyboard and screen-reader users keep their place: after a redraw, focus returns to the same control,
+// or, on a new screen, moves to its heading.
+const screenKey = () => (S ? `${navHash()}|${UI.wiz ? UI.wiz.step : ""}|${UI.access.open}|${UI.reqOpen ? 1 : 0}|${UI.survey.open}` : "login");
+function focusMark() {
+  const a = document.activeElement; if (!a || a === document.body) return null;
+  if (a.id) return "#" + CSS.escape(a.id);
+  const d = [...a.attributes].find((x) => x.name.startsWith("data-")); return d ? `${a.tagName.toLowerCase()}[${d.name}="${CSS.escape(d.value)}"]` : null;
+}
+function keepFocus(before, screen) {
+  if (document.activeElement && document.activeElement !== document.body) return;
+  const same = screen === screenKey(), el = same && before ? document.querySelector(before) : null;
+  if (el) { el.focus({ preventScroll: true }); return; }
+  if (!same || before) {
+    const h = document.querySelector("#root main h2, #root main h3, #root h1, #root h2");
+    if (h) { h.setAttribute("tabindex", "-1"); h.focus({ preventScroll: true }); }
+  }
+}
 function render() {
   // Replacing the page can blur a focused input, which fires change and asks for another render. Queue it instead.
   if (RENDERING) { queueMicrotask(render); return; }
   RENDERING = true;
-  try { renderNow(); } finally { RENDERING = false; }
+  const before = focusMark(), screen = screenKey();
+  try { renderNow(); syncNav(); keepFocus(before, screen); } finally { RENDERING = false; }
 }
 function renderNow() {
   if (!S) return renderLogin();
@@ -1143,6 +1180,8 @@ function renderNow() {
       + (UI.moreOpen ? `<div class="more-menu" role="menu">${rest.map(([k, n]) => `<button role="menuitem" data-tab="${k}" aria-current="${UI.tab === k}">${n}</button>`).join("")}</div>` : "");
   } else tabs.innerHTML = list.map(tabBtn).join("");
   document.body.classList.toggle("has-bottom-tabs", phone && list.length > 1);
+  // The More menu opens over the Feedback button's spot, so the button steps aside while it is open.
+  document.body.classList.toggle("more-open", !!(phone && UI.moreOpen));
   const focusId = document.activeElement && document.activeElement.id;
   const v = viewOf();
   const html = UI.access.open ? accessView() : FB() && UI.survey.open ? surveyView() : UI.tab === "guide" ? guideView() : v === "emp" ? empView() : v === "mgr" ? mgrView() : { overview: hrOverview, cases: hrCases, plan: hrPlan, employees: hrEmployees, access: hrUsers, settings: hrSettings }[UI.tab]();
@@ -1176,6 +1215,17 @@ function renderHome(root) {
   if (UI.access.open) { setChrome(false); root.innerHTML = `<section class="access-wrap">${accessView()}</section>`; return; }
   // An approved request carries the company's details, so the setup form starts filled in.
   if (u && ME.prefill && !H.prefilled) { H.prefilled = true; Object.assign(f, { name: f.name || ME.prefill.name || "", city: f.city || ME.prefill.city || "", headcount: ME.prefill.headcount || f.headcount }); }
+  // Opened the setup link from an approved request, not signed in yet: one clear step.
+  if (!u && UI.setup) {
+    setChrome(false);
+    root.innerHTML = `<section class="access-wrap"><div class="panel access"><span class="hero-badge">Your invite</span>
+      <h2>Welcome. ${UI.setup.company ? `${esc(UI.setup.company)} is ready to set up.` : "Your workspace is ready to set up."}</h2>
+      <p>Sign in with Google${UI.setup.email ? ` using <b>${esc(UI.setup.email)}</b>` : ""} to start. Setup takes about 10 minutes, and your company details are already filled in.</p>
+      ${ME && ME.google ? gButton() : `<p class="err">Google sign-in is not set up on this site yet.</p>`}
+      ${err ? `<p class="err" role="alert">${esc(err)}</p>` : ""}
+      <p class="small muted"><a href="/privacy">Privacy</a></p></div></section>`;
+    return;
+  }
   if (!u) {
     // The sign-in page. The cards on the right show the product at work, with made-up names.
     root.innerHTML = `<section class="hero">
@@ -1211,9 +1261,9 @@ function renderHome(root) {
     <div class="stack">
       ${(ME.pending || []).length ? `<div class="grp"><span class="label">Invitations</span>${ME.pending.map((x) => `<div class="banner"><span><b>${esc(x.name)}</b> invited you as ${esc(x.roleName)}<span class="small muted"> · from ${esc(x.invitedBy)}</span>${x.domainBlocked ? `<br><span class="small">Needs a Google Workspace account on @${esc(x.domain)}.</span>` : ""}</span><span class="btns" style="margin:0"><button class="btn sm" data-decline="${esc(x.id)}">Decline</button>${x.domainBlocked ? "" : `<button class="btn sm primary" data-accept="${esc(x.id)}">Accept</button>`}</span></div>`).join("")}<p class="small muted">Only accept invitations you expect.</p></div>` : ""}
       <div class="grp"><span class="label">Your spaces</span>
-        ${sp.length ? `<div class="accts">${sp.map(card).join("")}</div>` : `<div class="infobox">Nothing here yet. If you were invited, ask the sender to use ${esc(u.email)}, or open the invite link you were sent.</div>${ACCOUNTS && ACCOUNTS.sandboxOn ? `<div class="sandbox-cta" style="margin-top:8px"><button class="btn primary" data-sandbox>Try it with a made-up company</button><span class="small muted">No sign-up. Your own copy, deleted after 7 days.</span></div>` : ""}`}
+        ${sp.length ? `<div class="accts">${sp.map(card).join("")}</div>` : C.ok ? `<p class="small muted">None yet. Set one up below.</p>` : (ME.pending || []).length ? "" : `<div class="infobox">Nothing here yet. If you were invited, ask the sender to use ${esc(u.email)}, or open the invite link you were sent.</div>${ACCOUNTS && ACCOUNTS.sandboxOn ? `<div class="sandbox-cta" style="margin-top:8px"><button class="btn primary" data-sandbox>Try it with a made-up company</button><span class="small muted">No sign-up. Your own copy, deleted after 7 days.</span></div>` : ""}`}
       </div>
-      ${C.ok ? `<section class="panel" data-form="home"><h3>Set up a workspace for your company</h3>
+      ${C.ok ? `<section class="panel" data-form="home" ${ME.prefill && !sp.some((x) => x.kind === "org") ? 'style="order:-1"' : ""}><h3>${ME.prefill && ME.prefill.name && !sp.some((x) => x.kind === "org") ? `Set up ${esc(ME.prefill.name)}` : "Set up a workspace for your company"}</h3>
         <p class="small muted">Your own workspace, where you invite your HR team, managers and employees with their Google accounts. Each user sees only what their role allows.</p>
         <div class="note-box"><b>Made-up details only for now.</b> Real employee names, dates and health information are not supported until the security review is done. Use made-up employees to try how it would work for your team.</div>
         <div class="row"><div class="field"><label for="ws-name">Company name</label><input type="text" id="ws-name" data-bind="name" value="${esc(f.name)}" maxlength="80" placeholder="Bayside Dental"></div>
@@ -1415,7 +1465,7 @@ async function joinFromLink() {
   const u = new URL(location.href), code = u.searchParams.get("invite");
   if (!code) return;
   u.searchParams.delete("invite"); history.replaceState(null, "", u.pathname + (u.search || "") + u.hash);
-  try { await api("join", { code }); ACCOUNTS = null; }
+  try { const r = await api("join", { code }); ACCOUNTS = null; if (r && r.setup) UI.setup = r.setup; }
   catch (e) { UI.login.error = e.message; }
 }
 
@@ -1471,7 +1521,13 @@ document.addEventListener("click", async (ev) => {
   if (b.dataset.walkFlow) { if (S.me.role !== "hr") return; UI.walk = { flow: b.dataset.walkFlow, i: 0 }; render(); return; }
   if (b.dataset.walk || b.dataset.walkTo) { const key = (S.me.role === "hr" && UI.walk && UI.walk.flow) || S.me.role, cur = UI.walk && UI.walk.flow === key ? UI.walk.i : 0; UI.walk = { flow: key, i: b.dataset.walkTo ? +b.dataset.walkTo : Math.max(0, cur + +b.dataset.walk) }; render(); return; }
   if (b.hasAttribute("data-wiz-start")) { UI.wiz = { step: 1, need: null, relation: "parent", start: (() => { let d = addDays(TODAY, 14); while (new Date(d + "T00:00:00Z").getUTCDay() !== 1) d = addDays(d, 1); return d; })(), due: addDays(TODAY, 90), bond: true, weeks: 4, days: 3, hours: 8 }; render(); window.scrollTo(0, 0); return; }
-  if (b.dataset.wizNeed) { UI.wiz.need = b.dataset.wizNeed; UI.wiz.step = 2; render(); window.scrollTo(0, 0); return; }
+  if (b.dataset.wizNeed) {
+    const W = UI.wiz; W.need = b.dataset.wizNeed; W.step = 2;
+    // A loss or a sick day usually starts now, not weeks away, and the law gives 5 days for a loss.
+    if (["bereavement", "repro", "sick"].includes(W.need) && !W.startTouched) W.start = nextWorkday(TODAY, D().company.holidays || []);
+    if (["bereavement", "repro"].includes(W.need) && !W.daysTouched) W.days = 5;
+    render(); window.scrollTo(0, 0); return;
+  }
   if (b.hasAttribute("data-wiz-back")) { UI.wiz.step = Math.max(1, UI.wiz.step - 1); render(); return; }
   if (b.hasAttribute("data-wiz-close")) { UI.wiz = null; render(); window.scrollTo(0, 0); return; }
   if (b.hasAttribute("data-wiz-next")) { document.querySelectorAll('[data-form="wiz"] [data-bind]').forEach((el) => { UI.wiz[el.dataset.bind] = el.type === "checkbox" ? el.checked : el.hasAttribute("data-num") ? +el.value : el.value; }); UI.wiz.step = 3; render(); window.scrollTo(0, 0); return; }

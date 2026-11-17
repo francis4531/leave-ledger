@@ -567,14 +567,19 @@ async function route_(req, store, env) {
     await claimInviteEmails(store, user);
     const s = readSession(req, env);
     if (s && s.t) await linkInvite(store, user, s.t);
+    // A setup link opened before signing in is linked to whichever Google account signs in next.
+    const j = readObj(cookieOf(req, "ll_join"), env);
+    if (j && j.k === "join" && validCode(j.c)) await linkInvite(store, user, j.c);
     await saveUser(store, user);
-    return redirect(safeNext(r.next), [clear, userCookie(user, env)]);
+    return redirect(safeNext(r.next), [clear, userCookie(user, env), ...(j ? [setCookie("", 0, "ll_join")] : [])]);
   }
   if (route === "auth/signout" && req.method === "POST") return withCookies(json({ ok: true }), [clearUserCookie(), clearSess()]);
 
   const R = await resolve(req, store, env, today);
 
   if (route === "me" && req.method === "GET") {
+    // An invite approved while this user was already signed in is picked up here, without signing out and in.
+    if (R.user) await claimInviteEmails(store, R.user);
     const linkCode = R.kind === "preview" && R.s && R.s.t ? R.id : null;
     const spaces = await spacesFor(store, R.user, linkCode);
     const pending = R.user ? await listPending(store, R.user) : [];
@@ -676,6 +681,12 @@ async function route_(req, store, env) {
     const inv = validCode(code) && all.items[code];
     if (!inv || inv.disabled) { await failed(store, req, "join"); return err("This invite link is not active. Ask the sender for a new one.", 403); }
     if (!inv.joined) { inv.joined = new Date().toISOString(); await store.setJSON(IKEY, all); }
+    // An invite from an approved access request opens the user's own setup, not the made-up company.
+    if (inv.prefill) {
+      if (R.user) await linkInvite(store, R.user, code);
+      const out = json({ ok: true, setup: { company: inv.prefill.name || "", email: inv.email || "", signedIn: !!R.user } });
+      return R.user ? out : withCookies(out, [setCookie(signObj({ k: "join", c: code }, 30 * 86400, env), 30 * 86400, "ll_join")]);
+    }
     await load(store, today, tenantKey(code));
     if (R.user) await linkInvite(store, R.user, code);
     return json({ ok: true }, 200, { "set-cookie": sessCookie({ t: code }, env) });

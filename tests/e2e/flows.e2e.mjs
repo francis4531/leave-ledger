@@ -28,6 +28,33 @@ describe("test site", { skip }, () => {
   before(async () => { S = await startServer("test"); });
   after(async () => { await S.close(); });
 
+  test("Back, Forward and reload keep your place; focus stays put; a loss starts now and lasts 5 days", async () => {
+    const pick = async (who) => { const x = await page(); await x.p.goto(S.base); await x.p.fill("#lg-pw", "test-pass-123"); await x.p.click(`[data-pick="${who}@mesaverde.example"]`); await x.p.waitForSelector("#tabs button"); return x; };
+    const hr = await pick("grace"), p = hr.p;
+    await p.click('[data-tab="cases"]'); await p.click('tr[data-open]:has-text("Marcus Bell")'); await p.waitForSelector("[data-back]");
+    assert.match(p.url(), /#cases\/c\w+/);
+    await p.reload(); await p.waitForSelector("[data-back]");
+    assert.match(await p.textContent("main"), /Marcus Bell/, "reload stays on the open leave");
+    await p.goBack(); await p.waitForSelector("tr[data-open]");
+    assert.match(p.url(), /#cases$/);
+    await p.goBack(); await p.waitForSelector(".kcards, .firstday");
+    assert.match(p.url(), /#overview$/);
+    await p.goForward(); await p.waitForSelector("tr[data-open]");
+    // Keyboard: Enter on a tab, and focus lands on the new screen, not lost on the page.
+    await p.focus('[data-tab="employees"]'); await p.keyboard.press("Enter"); await p.waitForTimeout(150);
+    assert.notEqual(await p.evaluate(() => document.activeElement.tagName), "BODY");
+    const emp = await pick("ben");
+    await emp.p.click('[data-tab="guide"]'); await emp.p.click("[data-wiz-start]"); await emp.p.click('[data-wiz-need="bereavement"]');
+    const days = await emp.p.$('[data-form="wiz"] [data-bind="days"]');
+    if (days) assert.equal(await days.inputValue(), "5");
+    const start = await emp.p.$('[data-form="wiz"] [data-bind="start"]');
+    if (start) {
+      const v = await start.inputValue(), now = new Date(), wk = new Date(now.getTime() + 6 * 864e5);
+      const iso = (d) => d.toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+      assert.ok(v >= iso(now) && v <= iso(wk), "starts now, not weeks away: " + v);
+    }
+    for (const x of [hr, emp]) assert.deepEqual(x.errors, []);
+  });
   test("warmer screens: HR record, a celebration for a new child, managers see coverage and never the type of leave", async () => {
     const pick = async (who) => { const x = await page(); await x.p.goto(S.base); await x.p.fill("#lg-pw", "test-pass-123"); await x.p.click(`[data-pick="${who}@mesaverde.example"]`); await x.p.waitForSelector("#tabs button"); return x; };
     const hr = await pick("grace");

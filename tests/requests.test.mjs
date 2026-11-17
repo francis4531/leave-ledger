@@ -66,6 +66,29 @@ describe("access requests", () => {
     assert.equal((await pat.get("/api/me")).body.prefill, null);
   });
 
+  test("the emailed link opens the user's own setup, not the made-up company, whichever Google account signs in next", async () => {
+    const s = site(), v = s.as();
+    await v.post("/api/access/request", SAM);
+    const a = await admin(s), id = (await a.get("/api/admin/state")).body.requests[0].id;
+    const { code } = (await a.post("/api/admin/request", { id, action: "approve" })).body;
+    const visitor = s.as();
+    const j = await visitor.post("/api/join", { code });
+    assert.equal(j.status, 200); assert.equal(j.body.setup.company, "Bayside Dental"); assert.equal(j.body.setup.signedIn, false);
+    assert.equal((await visitor.get("/api/accounts")).body.invited, false, "no made-up company opened");
+    await visitor.google(ACCTS.pat); // a different Google account than the request
+    const me = (await visitor.get("/api/me")).body;
+    assert.equal(me.create.ok, true); assert.equal(me.prefill.name, "Bayside Dental");
+  });
+  test("someone already signed in when approved can set up without signing out and in", async () => {
+    const s = site(), sam = s.as();
+    await sam.google(ACCTS.sam);
+    assert.equal((await sam.get("/api/me")).body.create.ok, false);
+    await sam.post("/api/access/request", SAM);
+    const a = await admin(s), id = (await a.get("/api/admin/state")).body.requests[0].id;
+    await a.post("/api/admin/request", { id, action: "approve" });
+    const me = (await sam.get("/api/me")).body;
+    assert.equal(me.create.ok, true); assert.equal(me.prefill.name, "Bayside Dental");
+  });
   test("decline and reopen; with email off, approve still works and returns the link to send by hand", async () => {
     const env = { ...PREVIEW_ENV }; const s = site(env), v = s.as();
     await v.post("/api/access/request", SAM);
