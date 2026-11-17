@@ -607,7 +607,7 @@ function hrPlan() {
       <p class="small muted">Saving records today as the request date. The 5 business day deadline for the first notice starts now.</p>
     </section>
     <div class="stack">
-      <section class="panel"><div class="panel-h"><div class="person">${avatar(e)}<h3>${esc(e.name)}</h3></div><span class="small muted">Back to work ${fmt(p.end)}</span></div>${timelineHTML(p)}${payHTML(p)}</section>
+      <section class="panel"><div class="panel-h"><div class="person">${avatar(e)}<h3>${esc(e.name)}</h3></div><span class="small muted">Back to work ${fmt(p.back || p.end)}</span></div>${timelineHTML(p)}${payHTML(p)}</section>
       <section class="panel"><h3>Does ${esc(first(e.name))} qualify?</h3>${eligHTML(p, f.reason)}${factsHTML(p)}</section>
     </div>
   </div>`;
@@ -1015,7 +1015,7 @@ function mgrView() {
   <div class="grid2">
     <section class="panel"><h3>Plan coverage</h3>${leaves.length ? leaves.map((c) => { const e = emp(c.empId); return `<div class="field" style="border-top:1px solid var(--line);padding-top:12px">
       <div class="panel-h"><div class="person">${avatar(e, "sm")}<b>${esc(e.name)}</b></div>${pill(c.status.t, c.status.cls)}</div>
-      <div class="small">Out <span class="mono">${fmtS(c.start)}</span>, back <span class="mono">${fmtS(c.end)}</span>. ${c.approved ? "Approved by HR." : "HR confirms the return date."}</div>
+      <div class="small">Out <span class="mono">${fmtS(c.start)}</span>, back <span class="mono">${fmtS(nextWorkday(c.end, D().company.holidays || []))}</span>. ${c.approved ? "Approved by HR." : "HR confirms the return date."}</div>
       ${(c.notices || []).length ? `<details class="more"><summary class="small">Message from HR · ${fmtS(c.notices[c.notices.length - 1].sentOn)}</summary><div class="letter-text">${esc(c.notices[c.notices.length - 1].body)}</div></details>` : ""}
       <label for="cov-${c.id}" class="small" style="font-weight:600">Who covers what${(c.coverage || "").trim() ? ` <span class="pill ok">${SVG(ICONS.check, 12)} Covered</span>` : ` <span class="small muted" style="font-weight:400">Once you write a plan, the bar turns green.</span>`}</label><textarea id="cov-${c.id}" data-cov="${c.id}" placeholder="For example: Ben takes the Tuesday roasts. Saves when you click away.">${esc(c.coverage)}</textarea></div>`; }).join("") : '<p class="muted">Nobody on your team has time off coming up.</p>'}
       ${flags.length ? `<div class="small muted">Sent to HR, waiting on them: ${flags.map((c) => esc(emp(c.empId).name)).join(", ")}</div>` : ""}

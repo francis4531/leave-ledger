@@ -84,3 +84,62 @@ describe("letters", () => {
     }
   });
 });
+
+// Found by role-playing testers in November 2026. Each test pins one fix.
+describe("letters, tasks and dates follow eligibility", () => {
+  const sofia = () => D.employees.find((e) => e.id === "e3");
+  test("a notice to someone who does not qualify never promises the job or health coverage", () => {
+    const L = letter("c5", "notice");
+    assert.match(L.body, /You do not qualify yet/);
+    assert.doesNotMatch(L.body, /same job or a comparable one/);
+    assert.doesNotMatch(L.body, /group health coverage continues/);
+    assert.doesNotMatch(L.body, /Medical certification/, "no certification is asked for when no protected leave applies");
+    assert.match(L.body, /not protected by state or federal leave law/);
+    assert.doesNotMatch(L.body, /enclosed/, "no forms are promised that the app does not provide");
+  });
+  test("someone who qualifies still gets the rights paragraph", () => {
+    assert.match(letter("c3", "notice").body, /same job or a comparable one/);
+  });
+  test("family care asks for the family member's doctor, not the employee's", () => {
+    const L = letter("c3", "notice", (c) => { c.reason = "family_care"; c.opts.relation = "parent"; });
+    assert.match(L.body, /ask your parent's health care provider/);
+    assert.doesNotMatch(L.body, /ask your health care provider/);
+  });
+  test("the HR steps leave out designation and health coverage when no protected leave applies", () => {
+    const P = E.buildPlan(sofia(), D.company, "family_care", { start: "2026-12-07", weeks: 4, relation: "parent" });
+    const keys = E.makeTasks("family_care", TODAY, P, D.company).map((t) => t.key);
+    assert.ok(keys.includes("notice") && keys.includes("brochure"));
+    for (const k of ["cert", "designate", "benefits"]) assert.ok(!keys.includes(k), k);
+  });
+  test("below 5 employees: no BY LAW leave steps, and the right reason for bereavement", () => {
+    const co = { ...D.company, headcount: 3 }, e = D.employees.find((x) => x.id === "e1");
+    const P = E.buildPlan(e, co, "pregnancy_bonding", { start: "2026-12-07", disWeeks: 6, bondWeeks: 8 });
+    const T = E.makeTasks("pregnancy_bonding", TODAY, P, co);
+    assert.equal(T.find((t) => t.key === "notice").legal, false);
+    assert.ok(!T.some((t) => ["designate", "benefits", "cert"].includes(t.key)));
+    assert.ok(!P.facts.some((f) => /7 months of job protection|Keep group health/.test(f.t)));
+    const B = E.buildPlan(e, co, "bereavement", { start: "2026-12-07", days: 5, relation: "parent" });
+    assert.ok(B.warnings.some((w) => /fewer than 5 employees/.test(w.t)));
+    assert.ok(!B.warnings.some((w) => /under 30 days/.test(w.t)), "a 3-year employee is not told they are too new");
+  });
+  test("the return date is the next workday, the same in the plan and every letter", () => {
+    // 6 weeks from Dec 7 ends Jan 18, a company holiday, so the first day back is Tuesday Jan 19.
+    const e = D.employees.find((x) => x.id === "e1");
+    const P = E.buildPlan(e, D.company, "family_care", { start: "2026-12-07", weeks: 6, relation: "parent" });
+    assert.equal(P.end, "2027-01-18"); assert.equal(P.back, "2027-01-19");
+    const c = { ...structuredClone(caseOf("c3")), empId: "e1", reason: "family_care", opts: { start: "2026-12-07", weeks: 6, relation: "parent" } };
+    c.tasks = E.makeTasks("family_care", TODAY, P, D.company);
+    for (const k of ["designate", "return"]) assert.match(draftLetter(k, c, e, D.company, P, TODAY, "Grace").body, /Jan 19, 2027/, k);
+  });
+  test("pregnancy disability longer than 4 months is called out, with what it means for pay", () => {
+    const e = D.employees.find((x) => x.id === "e1");
+    const P = E.buildPlan(e, D.company, "pregnancy_bonding", { start: "2026-12-07", disWeeks: 20, bondWeeks: 12 });
+    const w = P.warnings.find((x) => /past 4 months of PDL/.test(x.t));
+    assert.ok(w && w.bad); assert.match(w.t, /SDI keeps paying instead/);
+  });
+  test("the note to a manager catches pregnancy, surgery and grief wording, and lets ordinary notes through", async () => {
+    const { sensitiveNote } = await import("../public/notices.mjs");
+    for (const t of ["She is expecting in February", "newborn arrives in Feb", "recovers from the C-section", "OB appointments and labor", "She is due Feb 10", "post-op recovery", "Recovering from an operation", "grieving", "under a lot of stress"]) assert.ok(sensitiveNote(t), t);
+    for (const t of ["A temp starts Monday", "Please keep the delivery route covered", "Due back on Monday", "Sofia covers the register on weekends"]) assert.equal(sensitiveNote(t), null, t);
+  });
+});

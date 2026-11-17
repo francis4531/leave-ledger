@@ -96,6 +96,16 @@ describe("test site: what each role can see", () => {
       }
     }
   });
+  test("crafted leave types and impossible dates are refused, without breaking the server", async () => {
+    const s = testSite();
+    const ben = await signedIn(s, "ben@mesaverde.example");
+    for (const reason of ["__proto__", "constructor", "toString", "hasOwnProperty", 5, null]) {
+      const r = await ben.post("/api/action", { type: "createCase", empId: "e8", reason, opts: { start: "2027-01-11", hours: 8 } });
+      assert.equal(r.status, 400, String(reason));
+    }
+    for (const start of ["2026-02-31", "2026-13-01", "2026-00-10", "9999-99-99"]) assert.equal((await ben.post("/api/action", { type: "createCase", empId: "e8", reason: "sick", opts: { start, hours: 8 } })).status, 400, start);
+    assert.equal((await ben.post("/api/action", { type: "createCase", empId: "e8", reason: "sick", opts: { start: "2028-02-29", hours: 8 } })).status, 200, "a real leap day is fine");
+  });
   test("an employee can only request leave for themselves; a manager can only flag their own team", async () => {
     const s = testSite();
     const ben = await signedIn(s, "ben@mesaverde.example");
@@ -570,10 +580,16 @@ describe("approving a leave and telling the manager", () => {
     const own = (await marcus.get("/api/state")).body.data.cases.find((c) => c.id === marcusCase.id);
     assert.ok(own.approvedOn); assert.ok(!("mgrNotices" in own), "employee does not get the manager's copy");
 
+    // Changing the dates of an approved leave tells the manager the new dates by itself.
     assert.equal((await hr2.post("/api/action", { type: "updateCase", caseId: marcusCase.id, opts: { start: "2026-11-18", weeks: 6 } })).status, 200);
-    assert.equal((await hr2.post("/api/action", { type: "notifyManager", caseId: marcusCase.id })).status, 200);
     const again = (await mei.get("/api/state")).body.data.teamCases.find((c) => c.empId === "e2");
     assert.equal(again.notices.length, 2); assert.match(again.notices[1].subject, /^Updated dates/);
+    assert.match(again.notices[1].body, /Nov 18/);
+    // A change that keeps the same dates sends nothing new; HR can still resend by hand.
+    assert.equal((await hr2.post("/api/action", { type: "updateCase", caseId: marcusCase.id, opts: { start: "2026-11-18", weeks: 6 } })).status, 200);
+    assert.equal((await mei.get("/api/state")).body.data.teamCases.find((c) => c.empId === "e2").notices.length, 2);
+    assert.equal((await hr2.post("/api/action", { type: "notifyManager", caseId: marcusCase.id })).status, 200);
+    assert.equal((await mei.get("/api/state")).body.data.teamCases.find((c) => c.empId === "e2").notices.length, 3);
   });
   test("the test site and sample copies never send real email", async () => {
     const store = memoryStore(), env = { ...TEST_ENV, LL_RESEND_API_KEY: "re_x", LL_MAIL_FROM: "a@b.co" };

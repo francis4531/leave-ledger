@@ -123,6 +123,9 @@ export function eligibility(emp, co, start){
   };
 }
 
+// The next workday on or after a date (weekends and company holidays skipped). The first day back at work.
+export function nextWorkday(s, hol = []) { let d = s; for (let i = 0; i < 14; i++) { const w = new Date(d + "T00:00:00Z").getUTCDay(); if (w !== 0 && w !== 6 && !hol.includes(d)) return d; d = addDays(d, 1); } return s; }
+
 /* ---------- Plan engine ---------- */
 export function buildPlan(emp, co, reason, o){
   const el = eligibility(emp, co, o.start);
@@ -153,26 +156,30 @@ export function buildPlan(emp, co, reason, o){
   };
 
   if (reason==='pregnancy_bonding'){
-    const dis = Math.min(o.disWeeks, RULES.pdl.weeks);
-    const pdlEnd = addDays(o.start, wk(dis));
+    // PDL covers up to 4 months; bonding starts when it ends. When the disability runs longer, say so plainly:
+    // the plan below assumes bonding (and PFL pay) from the end of PDL.
+    const dis = Math.min(o.disWeeks, RULES.pdl.weeks), pdlEnd = addDays(o.start, wk(dis));
     if (el.pdl.ok){ seg('protect','pdl','Pregnancy leave', o.start, pdlEnd, `PDL · ${plural(+dis.toFixed(2),'week')} of up to 4 months`); P.laws.push('PDL'); }
-    if (o.disWeeks > RULES.pdl.weeks) P.warnings.push({t:'Disability runs past 4 months of PDL. CFRA does not cover pregnancy disability, but more leave may be a reasonable accommodation under FEHA. Start the interactive process.'});
+    if (o.disWeeks > RULES.pdl.weeks) P.warnings.push({bad:true, t:`Disability runs ${plural(+(o.disWeeks - RULES.pdl.weeks).toFixed(1),'week')} past 4 months of PDL. This plan starts bonding and Paid Family Leave on ${fmt(pdlEnd)}. If she still cannot work then, SDI keeps paying instead and PFL starts later, and more leave may be a reasonable accommodation under FEHA. Start the interactive process.`});
+    const disEnd = pdlEnd;
     fmlaAlong(o.start, dis + o.bondWeeks);
     const bondEnd = protectCFRA(pdlEnd, o.bondWeeks, 'Bonding leave');
-    if (!el.cfra.ok) P.warnings.push({bad:true, t:'Not eligible for CFRA, so bonding time after PDL is not job protected under state law. PFL can still pay. Check company policy before setting a return date.'});
+    if (!el.cfra.ok && o.bondWeeks > 0) P.warnings.push({bad:true, t: el.pdl.ok ? 'Not eligible for CFRA, so bonding time after PDL is not job protected under state law. PFL can still pay. Check company policy before setting a return date.' : 'The company has fewer than 5 employees, so neither pregnancy leave nor bonding time is job protected under state law. SDI and PFL can still pay.'});
     // pay
     const w1 = addDays(o.start, RULES.sdi.wait);
-    seg('pay','wait','Waiting week', o.start, w1 < pdlEnd ? w1 : pdlEnd, 'State pay starts day 8 · sick leave or PTO can cover');
-    if (w1 < pdlEnd){ seg('pay','sdi','Disability pay', w1, pdlEnd, `SDI from the state · ${amt}`); P.pays.sdi=true; }
-    const pflW = Math.min(RULES.pfl.maxWeeks, o.bondWeeks);
-    const pflEnd = addDays(pdlEnd, wk(pflW));
-    seg('pay','pfl','Family leave pay', pdlEnd, pflEnd, `PFL from the state · ${plural(pflW,'week')} · ${amt}`); P.pays.pfl = pflW>0;
-    seg('pay','unpaid','Unpaid', pflEnd, bondEnd, 'Vacation or PTO can cover');
+    seg('pay','wait','Waiting week', o.start, w1 < disEnd ? w1 : disEnd, 'State pay starts day 8 · sick leave or PTO can cover');
+    if (w1 < disEnd){ seg('pay','sdi','Disability pay', w1, disEnd, `SDI from the state · ${amt}`); P.pays.sdi=true; }
+    const pflW = Math.min(RULES.pfl.maxWeeks, o.bondWeeks), pflEnd = addDays(disEnd, wk(pflW));
+    if (pflW > 0) seg('pay','pfl','Family leave pay', disEnd, pflEnd, `PFL from the state · ${plural(pflW,'week')} · ${amt}`);
+    P.pays.pfl = pflW>0;
+    if (pflEnd < bondEnd) seg('pay','unpaid','Unpaid', pflEnd, bondEnd, 'Vacation or PTO can cover');
     P.end = bondEnd;
-    P.facts.push({t:`Pregnancy leave is up to 4 months of this employee's normal schedule: about ${pdlHours(emp)} hours at ${weeklyOf(emp)} hours a week. It can be taken all at once or in parts, and it applies per pregnancy.`, c:'2 CCR § 11042'});
-    P.facts.push({t:'PDL and CFRA bonding are separate entitlements. Together they can reach about 7 months of job protection.', c:RULES.pdl.cite});
-    P.facts.push({t:'CFRA bonding must be finished within one year of the birth.', c:RULES.cfra.cite});
-    P.facts.push({t:'Keep group health coverage on the same terms during PDL and CFRA.', c:'Gov. Code § 12945(a)(2)'});
+    if (el.pdl.ok){
+      P.facts.push({t:`Pregnancy leave is up to 4 months of this employee's normal schedule: about ${pdlHours(emp)} hours at ${weeklyOf(emp)} hours a week. It can be taken all at once or in parts, and it applies per pregnancy.`, c:'2 CCR § 11042'});
+      if (el.cfra.ok) P.facts.push({t:'PDL and CFRA bonding are separate entitlements. Together they can reach about 7 months of job protection.', c:RULES.pdl.cite});
+      if (el.cfra.ok) P.facts.push({t:'CFRA bonding must be finished within one year of the birth.', c:RULES.cfra.cite});
+      P.facts.push({t:`Keep group health coverage on the same terms during PDL${el.cfra.ok ? ' and CFRA' : ''}.`, c:'Gov. Code § 12945(a)(2)'});
+    } else P.facts.push({t:'Pregnancy leave and CFRA apply to employers with 5 or more employees. State pay (SDI and PFL) does not depend on company size.', c:RULES.pdl.cite});
   }
   else if (reason==='own_health' || reason==='family_care' || reason==='bonding'){
     const fmlaCovers = reason!=='family_care' || ['spouse','child','parent'].includes(o.relation);
@@ -203,7 +210,7 @@ export function buildPlan(emp, co, reason, o){
     }
     if (reason==='family_care' && o.relation==='designated') P.facts.push({t:'CFRA lets the employee name one designated individual per 12-month period. You may limit it to one.', c:RULES.cfra.cite});
     if (reason==='bonding') P.facts.push({t:'If both parents work here, each gets their own 12 weeks of CFRA bonding.', c:RULES.cfra.cite});
-    P.facts.push({t:'Keep group health coverage on the same terms during CFRA leave.', c:RULES.cfra.cite});
+    if (el.cfra.ok || (el.fmla.ok && fmlaCovers)) P.facts.push({t:'Keep group health coverage on the same terms during CFRA leave.', c:RULES.cfra.cite});
     P.end = end;
   }
   else if (reason==='bereavement' || reason==='repro'){
@@ -217,9 +224,9 @@ export function buildPlan(emp, co, reason, o){
     } else if (el.short.ok){
       seg('protect','short', isR?'Reproductive loss leave':'Bereavement leave', okDays.start, okDays.end, `${plural(days,'workday')}`);
       if (o.days>days) seg('protect','none', days<Math.min(o.days,5) ? 'Past the 20-day limit' : 'Past 5 days', okDays.end, sp.end, 'Not required by law');
-    } else seg('protect','none','Not eligible', sp.start, sp.end, 'Employed under 30 days');
+    } else seg('protect','none','Not eligible', sp.start, sp.end, el.short.checks[0].ok ? 'Employed under 30 days' : 'Fewer than 5 employees');
     seg('pay','unpaid','Unpaid unless policy pays', sp.start, sp.end, 'Employee may use sick leave, vacation, or PTO');
-    if (!el.short.ok) P.warnings.push({bad:true, t:'Employee has worked here under 30 days, so this leave is not required by law. Company policy may still allow it.'});
+    if (!el.short.ok) P.warnings.push({bad:true, t: el.short.checks[0].ok ? 'Employee has worked here under 30 days, so this leave is not required by law. Company policy may still allow it.' : 'The company has fewer than 5 employees, so this leave is not required by law. Company policy may still allow it.'});
     if (o.days>5) P.warnings.push({t:'The law requires 5 days. Anything more comes from company policy.'});
     if (isR){
       const want = Math.min(o.days, RULES.bereave.days);
@@ -246,6 +253,7 @@ export function buildPlan(emp, co, reason, o){
     P.end = sp.end;
   }
   P.wba = wba;
+  P.back = nextWorkday(P.end, hol || []);
   return P;
 }
 
@@ -254,18 +262,23 @@ export function makeTasks(reason, req, plan, co){
   const hol = co.holidays, bd = n => addBiz(req, n, hol), t = [];
   const fmlaOn = co.headcount>=50;
   const big = ['pregnancy_bonding','own_health','family_care','bonding'].includes(reason);
+  // Which protected leave applies. With none, the steps that only follow from one (certification, designation,
+  // health coverage) are left out, and below 5 employees the notice is good practice rather than a legal deadline.
+  const el = plan && plan.el, covered = co.headcount >= RULES.cfra.minCo || fmlaOn;
+  const prot = !el || (reason==='pregnancy_bonding' && el.pdl.ok) || el.cfra.ok || el.fmla.ok;
   if (big){
-    const notice = reason==='pregnancy_bonding' ? `Send the pregnancy leave and CFRA rights notices${fmlaOn?' and the FMLA notice':''}` : `Send the eligibility and rights notice (${fmlaOn?'CFRA and FMLA':'CFRA'})`;
-    t.push({key:'notice', label:notice, hint:'Tell the employee what they qualify for. If they do not qualify, say why.', due:bd(5), legal:true});
+    const notice = !covered ? 'Tell the employee what the law gives them' : reason==='pregnancy_bonding' ? `Send the pregnancy leave and CFRA rights notices${fmlaOn?' and the FMLA notice':''}` : `Send the eligibility and rights notice (${fmlaOn?'CFRA and FMLA':'CFRA'})`;
+    t.push({key:'notice', label:notice, hint: covered ? 'Tell the employee what they qualify for. If they do not qualify, say why.' : 'With fewer than 5 employees, CFRA and pregnancy leave do not apply. State pay still can.', due:bd(5), legal:covered});
     const br = reason==='pregnancy_bonding' ? 'Give the state pay brochures (DE 2515 and DE 2511)' : reason==='own_health' ? 'Give the disability pay brochure (DE 2515)' : 'Give the family leave pay brochure (DE 2511)';
     t.push({key:'brochure', label:br, hint:'Hand it over when you learn of the leave.', due:bd(5), legal:true});
-    if (reason!=='bonding'){
+    if (!prot){ /* no protected leave: no certification, designation or health coverage steps */ }
+    else if (reason!=='bonding'){
       t.push({key:'cert', label:'Get the medical certification back', hint:'Give the employee at least 15 calendar days.', due:addDays(req, RULES.cert.calDays), legal:false});
       t.push({key:'designate', label:'Send designation notice', hint:'Confirm in writing how the time is counted, within 5 business days of the certification.', due:null, after:'cert', legal:true});
     } else {
       t.push({key:'designate', label:'Send designation notice', hint:'Confirm in writing how the time is counted.', due:bd(5), legal:true});
     }
-    t.push({key:'benefits', label:'Keep health coverage going', hint:'Same terms as if the employee were working.', due:bd(5), legal:true});
+    if (prot) t.push({key:'benefits', label:'Keep health coverage going', hint:'Same terms as if the employee were working, from the first day of leave.', due: plan.start && plan.start > bd(5) ? plan.start : bd(5), legal:true});
     t.push({key:'return', label:'Plan the return to work', hint:'Confirm the date and the same or a comparable role.', due:addDays(plan.end,-7), legal:false});
   } else if (reason==='bereavement'){
     t.push({key:'confirm', label:'Confirm leave dates with employee', hint:'Must be used within 3 months of the death.', due:bd(2), legal:false});

@@ -1,7 +1,8 @@
 /* Leave Ledger notices: first drafts of the letters HR owes, written from the case and the rules engine.
    Shared by the browser and the server. Deterministic on purpose: no AI writes legal content. HR reviews,
    edits and sends every letter. Never includes a diagnosis or the manager's note. Not legal advice. */
-import { RULES, REASONS, fmt, addDays, plural, money, relName, weeklyBenefit, pdlHours, weeklyOf } from "./engine.mjs";
+import { RULES, REASONS, fmt, addDays, plural, money, relName, weeklyBenefit, pdlHours, weeklyOf, nextWorkday } from "./engine.mjs";
+export { nextWorkday };
 
 // Which tasks have a letter, and its title.
 export const LETTERS = {
@@ -64,6 +65,11 @@ export function draftLetter(key, c, emp, co, P, today, hr) {
   // Large leaves: pregnancy, own health, family care, bonding.
   const pdl = span(segs(P, "pdl")), cfra = span(segs(P, "cfra")), fmla = span(segs(P, "fmla"));
   const protectedEnd = [pdl, cfra].filter(Boolean).map((s) => s.end).sort().pop();
+  // The first day back at work: the day after the leave, moved past weekends and company holidays.
+  const back = nextWorkday(P.end, co.holidays || []);
+  // Whether any protected leave applies. The rights paragraph and the certification only belong when one does.
+  const prot = !!(pdl || cfra || (fmla && el && el.fmla.ok));
+  const job = emp.role && emp.role !== "Employee" ? `your job as ${emp.role}` : "your job";
   const wba = weeklyBenefit(emp, co);
   const pay = [];
   if (P.pays.sdi) pay.push(`State Disability Insurance (SDI) may pay you while you cannot work. File with the Employment Development Department (EDD) at SDI Online within ${RULES.sdi.fileWithin} days of your first day out. The first 7 days are a waiting period; you may use sick leave or vacation for them.`);
@@ -89,11 +95,15 @@ export function draftLetter(key, c, emp, co, P, today, hr) {
         : `\nFamily and Medical Leave Act (FMLA). You do not qualify for federal FMLA leave. These requirements are not met:\n${el.fmla.checks.filter((x) => !x.ok).map((x) => `- ${x.t}`).join("\n")}`);
     }
     const cert = c.tasks.find((t) => t.key === "cert");
-    if (cert && c.reason !== "bonding") {
-      p.push(`\nMedical certification. Please ask your health care provider to complete the enclosed certification form and return it to me by ${fmt(cert.due)}. The form asks only whether there is a serious health condition, when it started, and how long you will need to be away. You do not need to share a diagnosis.`);
+    if (prot && cert && c.reason !== "bonding") {
+      p.push(c.reason === "family_care"
+        ? `\nMedical certification. Please ask your ${c.opts.relation ? relName(c.opts.relation).toLowerCase() + "'s" : "family member's"} health care provider to complete a certification form and return it to me by ${fmt(cert.due)}. I will send you the form. It asks only whether they have a serious health condition, when it started, and how long you will need to care for them. You do not need to share a diagnosis.`
+        : `\nMedical certification. Please ask your health care provider to complete a certification form and return it to me by ${fmt(cert.due)}. I will send you the form. It asks only whether there is a serious health condition, when it started, and how long you will need to be away. You do not need to share a diagnosis.`);
     }
-    p.push(`\nYour rights while on leave.\n- Your group health coverage continues on the same terms as if you were working.\n- When you return, you will get the same job or a comparable one.\n- We will not retaliate against you for asking for or taking this leave.`);
-    if (pay.length) p.push(`\nPay while you are away. We do not pay you during this leave, but the State of California may:\n${pay.map((x) => `- ${x}`).join("\n")}\nThe EDD brochures ${P.pays.sdi && P.pays.pfl ? "DE 2515 and DE 2511 are" : P.pays.sdi ? "DE 2515 is" : "DE 2511 is"} enclosed.`);
+    p.push(prot
+      ? `\nYour rights while on leave.\n- Your group health coverage continues on the same terms as if you were working.\n- When you return, you will get the same job or a comparable one.\n- We will not retaliate against you for asking for or taking this leave.`
+      : `\nWhat this means. Because this leave is not protected by state or federal leave law, the law does not hold your job or your health coverage while you are away. We will not retaliate against you for asking. Let's talk about what we can do under company policy.`);
+    if (pay.length) p.push(`\nPay while you are away. We do not pay you during this leave, but the State of California may:\n${pay.map((x) => `- ${x}`).join("\n")}\nEDD's ${P.pays.sdi && P.pays.pfl ? "brochures DE 2515 and DE 2511 explain" : P.pays.sdi ? "brochure DE 2515 explains" : "brochure DE 2511 explains"} more. I will give you a copy, and they are also at edd.ca.gov.`);
     return { subject: `Your leave request: what you qualify for`, body: p.join("\n") + `\n${sign(co, hr)}` };
   }
 
@@ -103,16 +113,16 @@ export function draftLetter(key, c, emp, co, P, today, hr) {
     if (cfra) p.push(`${pdl ? "" : "\n"}- California Family Rights Act leave: ${fmt(cfra.start)} to ${last(cfra.end)}. This counts as ${plural(Math.round((Date.parse(cfra.end) - Date.parse(cfra.start)) / 864e5 / 7 * 100) / 100, "week")} of your 12-week CFRA entitlement.`);
     if (fmla) p.push(`- Federal FMLA leave runs at the same time: ${fmt(fmla.start)} to ${last(fmla.end)}.`);
     if (!pdl && !cfra) p.push(`\nYour leave does not qualify as job-protected leave under California law. ${c.reason === "own_health" ? "We will continue to talk with you about any accommodation you need." : "Please talk with me about the options available."}`);
-    if (protectedEnd) p.push(`\nYour expected return date is ${fmt(protectedEnd)}.${c.reason === "own_health" || c.reason === "pregnancy_bonding" ? " Before you return, please give us a note from your health care provider confirming that you can return to work, and listing any restrictions." : ""}`);
+    const fitNote = c.reason === "own_health" || (c.reason === "pregnancy_bonding" && !(c.opts.bondWeeks > 0));
+    if (protectedEnd) p.push(`\nYour expected return date is ${fmt(back)}.${fitNote ? " Before you return, please give us a note from your health care provider confirming that you can return to work, and listing any restrictions." : ""}`);
     if (pay.length) p.push(`\nReminder about state pay:\n${pay.map((x) => `- ${x}`).join("\n")}`);
     return { subject: `Your leave: dates and how they are counted`, body: p.join("\n") + `\n${sign(co, hr)}` };
   }
 
   if (key === "return") {
-    const back = protectedEnd || P.end;
     return {
       subject: `Your return to work on ${fmt(back)}`,
-      body: `${head}We are looking forward to having you back. Your return date is ${fmt(back)}.\n\nYou will return to your job as ${emp.role}${co.name ? ` at ${co.name}` : ""}, or a comparable one, with the same pay and benefits.${c.reason === "own_health" || c.reason === "pregnancy_bonding" ? "\n\nIf you have not already, please send a note from your health care provider confirming that you can return to work, and listing any restrictions. We will talk with you about any accommodation you need." : ""}\n\nIf you need to change your return date, please let me know as soon as you can.\n${sign(co, hr, false)}`,
+      body: `${head}We are looking forward to having you back. Your return date is ${fmt(back)}.\n\nYou will return to ${job}${co.name ? ` at ${co.name}` : ""}${prot ? ", or a comparable one, with the same pay and benefits" : ""}.${c.reason === "own_health" || (c.reason === "pregnancy_bonding" && !(c.opts.bondWeeks > 0)) ? "\n\nIf you have not already, please send a note from your health care provider confirming that you can return to work, and listing any restrictions. We will talk with you about any accommodation you need." : ""}\n\nIf you need to change your return date, please let me know as soon as you can.\n${sign(co, hr, false)}`,
     };
   }
   return null;
@@ -126,10 +136,9 @@ export function draftLetter(key, c, emp, co, P, today, hr) {
 const DAYNAME = (s) => new Date(s + "T00:00:00Z").toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" });
 const longDate = (s) => `${DAYNAME(s)}, ${fmt(s)}`;
 // The next workday on or after a date (weekends and company holidays skipped).
-export function nextWorkday(s, hol = []) { let d = s; for (let i = 0; i < 14; i++) { const w = new Date(d + "T00:00:00Z").getUTCDay(); if (w !== 0 && w !== 6 && !hol.includes(d)) return d; d = addDays(d, 1); } return s; }
 
 // Words that would give away the reason. HR's optional note is checked for these before it goes to a manager.
-const SENSITIVE = /\b(pregnan\w*|baby|birth|matern\w*|patern\w*|adopt\w*|foster\w*|bond\w*|miscarr\w*|stillbirth|ivf|fertility|surrogac\w*|surg\w*|cancer|chemo\w*|diagnos\w*|illness|ill|sick|disab\w*|medical|doctor|hospital\w*|therapy|mental|depress\w*|anxiety|injur\w*|condition|health|died|death|funeral|bereave\w*|passed away|grief|cfra|fmla|pdl|sdi|pfl|edd|dad|mom|father|mother|parents?|sons?|daughters?|wife|husband|spouse|child|children|kids?|grand\w+|siblings?|brother|sister|caring|caregiv\w*)\b/i;
+const SENSITIVE = /\b(pregnan\w*|baby|birth|matern\w*|patern\w*|adopt\w*|foster\w*|bond\w*|miscarr\w*|stillbirth|ivf|fertility|surrogac\w*|surg\w*|cancer|chemo\w*|diagnos\w*|illness|ill|sick|disab\w*|medical|doctor|hospital\w*|therapy|mental|depress\w*|anxiety|injur\w*|condition|health|died|death|funeral|bereave\w*|passed away|grief|cfra|fmla|pdl|sdi|pfl|edd|dad|mom|father|mother|parents?|sons?|daughters?|wife|husband|spouse|child|children|kids?|grand\w+|siblings?|brother|sister|caring|caregiv\w*|expect\w*|due\s+(?:date|in|on|around|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*)|newborn|infant|labou?r|gave birth|c-?section|cesarean|ob(?:\/gyn|gyn)?|prenatal|postpartum|postnatal|nursing|lactat\w*|operat(?:ion|ions|ed)|post-?op|recover\w*|rehab\w*|treatment\w*|procedure|clinic|physical therapy|stroke|heart attack|tumou?r|broken|fractur\w*|concussion|covid|flu|virus|infection|chronic|hospice|dying|terminal|grieving|mourning|loss|lost (?:a|her|his|their)|widow\w*|stress|burnout|breakdown|psych\w*|counsel\w*|rehab|addiction|sober\w*|detox|alcohol|drug|substance|pregnancy|abortion|leave of absence|baby shower)\b/i;
 export const sensitiveNote = (t) => { const m = String(t || "").match(SENSITIVE); return m ? m[0] : null; };
 
 // kind: "approved" for the first notice, "update" when the dates change later.

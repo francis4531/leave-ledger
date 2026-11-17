@@ -118,9 +118,12 @@ export function viewFor(D, acct, today, env = {}, space = { kind: "test" }) {
 const newId = () => "c" + Date.now().toString(36) + crypto.randomBytes(2).toString("hex");
 const trim = (s, n = 1000) => String(s ?? "").slice(0, n);
 
+const realDate = (d) => { const t = Date.parse(d + "T00:00:00Z"); return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === d; };
 function validOpts(reason, o) {
-  if (!E.REASONS[reason] || reason === "unknown") return "Unknown leave type";
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(o.start || "")) return "Pick the first day off.";
+  if (typeof reason !== "string" || !Object.hasOwn(E.REASONS, reason) || reason === "unknown") return "Unknown leave type";
+  // A real calendar date, so 2026-02-31 is refused rather than rolled into March.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(o.start || "") || !realDate(o.start)) return "Pick the first day off.";
+  if (o.relation != null && (typeof o.relation !== "string" || o.relation.length > 20)) return "Unknown family member";
   const n = (v, lo, hi) => Number.isFinite(+v) && +v >= lo && +v <= hi;
   if (!n(o.weeks ?? 1, 1, 52) || !n(o.disWeeks ?? 1, 1, 30) || !n(o.bondWeeks ?? 0, 0, 12) || !n(o.days ?? 1, 1, 20) || !n(o.hours ?? 1, 1, 80)) return "Length is out of range";
   return null;
@@ -296,7 +299,16 @@ function apply(D, acct, a, today, kind = "test") {
       c.tasks = E.makeTasks(c.reason, c.requested, plan, D.company).map((t) => { const o = done.find((x) => x.key === t.key); return o ? { ...t, done: true, doneOn: o.doneOn } : t; });
       const certDone = c.tasks.find((t) => t.key === "cert" && t.done); if (certDone) E.markTask(c, "cert", true, certDone.doneOn, D.company.holidays);
       const after = E.caseDates(c, D);
-      log(`Changed dates for ${emp(c.empId).name}: ${before.start} to ${before.end} became ${after.start} to ${after.end}`); return null;
+      log(`Changed dates for ${emp(c.empId).name}: ${before.start} to ${before.end} became ${after.start} to ${after.end}`);
+      // A manager who was already told the dates gets the new ones, so the old message never stands alone.
+      const e = emp(c.empId), m = e && e.mgr ? emp(e.mgr) : null;
+      if (c.approvedOn && m && (before.start !== after.start || before.end !== after.end) && (c.mgrNotices || []).some((n) => n.to === m.id) && a.notify !== false) {
+        const msg = managerNotice("update", { emp: e, mgr: m, co: D.company, start: after.start, end: after.end, protectedLeave: plan.segs.some((x) => x.lane === "protect" && x.cls !== "none"), hr: who, note: "" });
+        c.mgrNotices = [...(c.mgrNotices || []), { kind: "update", to: m.id, ...msg, start: after.start, end: after.end, sentOn: today, by: who, delivery: "app" }].slice(-20);
+        a._mail = { caseId: c.id, to: m.id };
+        log(`Told ${m.name} the new dates for ${e.name}`);
+      }
+      return null;
     }
     case "markReturned": {
       if (!hr) return "HR only";
