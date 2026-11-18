@@ -3,7 +3,7 @@
 > A living strategy built across 6 weekly sessions, using the Product School AI product strategy template. Each week adds one module. By week 6, this folder is the strategy: version-controlled and ready for a board.
 
 **The bet:** California leave of absence management for employers with 5 to 200 employees.
-**Last updated:** Nov 10, 2026 (Week 4)
+**Last updated:** Nov 17, 2026 (Week 5)
 **Customer interviews:** 0 of 10 (kill criteria check on Nov 23, 2026)
 **Partner challenges done:** 0 of 6
 
@@ -17,7 +17,7 @@
 | **The Moat** | M2 | Oct 28 | [x] Draft, needs partner challenge | `02-the-moat/` |
 | **The Margin** | M3 | Nov 4 | [x] Draft, needs partner challenge | `03-the-margin/` |
 | **The Contract** | M4 | Nov 11 | [x] Draft, needs partner challenge | `04-the-contract/` |
-| **The Guardrails** | M5 | Nov 18 | [ ] | `05-the-guardrails/` |
+| **The Guardrails** | M5 | Nov 18 | [x] Draft, needs partner challenge | `05-the-guardrails/` |
 | **The Pitch** | M6 | Nov 25 | [ ] | `06-the-pitch/` |
 
 ---
@@ -79,6 +79,7 @@
 - **Confidence UX:** Per-field human-in-loop trigger. High: filled in. Medium or low: filled in and marked orange with "please check". Leave type unclear: nothing filled, user picks. The labels are Clerk's own and unproven; check them against what users fix (high-confidence fields changed under 5%) once there are about 50 real intakes.
 - **HITL Architecture:** Four checkpoints, Clerk only in the first: the user checks the draft and presses send; the rules engine decides eligibility (no AI); HR approves every leave and signs every notice; the employee confirms receipt. Unclear or suspicious messages still become a case for HR, because the notice clock does not wait.
 - **Failure Mode Coverage:** 10 adversarial rows (hijack attempts, prying for other employees' reasons, diagnoses, nonsense) all handled. Not covered: legal time off with no category (jury duty, voting show as "not sure"), unproven confidence labels, a privacy check limited to a word list, p95 latency. Self red-team only; partner challenge not done.
+- **Decided Nov 11:** live accuracy lines wait for the first 50 real intakes; jury duty and voting become simple HR-handled categories in the rules engine; Spanish grows to 10 golden rows and the English and Spanish promise stays; intake records kept four years. As of Nov 17 the jury duty, voting and four-year items are not built yet (see M5).
 
 → Details: [`04-the-contract/`](04-the-contract/)
 
@@ -88,11 +89,11 @@
 
 **What breaks when this scales, and what compounds.**
 
-- **Compounding System:** [describe feedback loops]
-- **Governance Posture:** [approach]
-- **Shadow AI Status:** __ tools found, __ triaged
-- **Agent Boundaries:**
-- **Regulatory Exposure:**
+- **Compounding System:** 7 loops mapped: 1 active (rules engine hardening), 1 partial (golden set gate, run by hand), 3 idle or missing (Clerk corrections becoming test rows, confidence calibration, sandbox red-team), 1 broken until interviews land (customer evidence). The one that matters most, corrections, is built but idle: 0 real intakes. The leaking one: decisions to code, with 2 of 4 Week 4 decisions (jury duty and voting, four-year records) decided Nov 11 and not built.
+- **Governance Posture:** Clerk only drafts and the code enforces it (fixed output fields, no access to other employees, users press send, HR signs every notice). The tightest rules go on AI coding sessions, which wrote 35 of the last 50 commits and deploy when tests pass: proposed Francis review for changes to privacy, eligibility and Clerk-check code, and a written never-build line (no scoring or predicting employees by leave use).
+- **Shadow AI Status:** 6 tools found, 6 triaged (3 keep, 3 govern, 0 kill). Hidden spend: the Claude plan behind the coding sessions is not in M3's $40 a month running costs.
+- **Agent Boundaries:** Clerk intake and column matching draft only (column matching never sees employee values); rules engine decides; HR approves; coding sessions can change anything today; the weekly strategy task writes `strategy/` only.
+- **Regulatory Exposure:** Medium. Four-year records under the Civil Rights Council ADS rules (Oct 2025) decided but not built; medical and leave-reason confidentiality is the core promise. Low: CPPA ADMT rules (Jan 1, 2027) apply only above $26.6 million revenue; SB 947 "No Robo Bosses" (July 1, 2027) covers discipline and firing, which Leave Ledger stays out of. EU AI Act: none (California only). Draft, for partner challenge and lawyer review.
 
 → Details: [`05-the-guardrails/`](05-the-guardrails/)
 
@@ -112,12 +113,12 @@
 
 ---
 
-## Open decisions (Week 4)
+## Open decisions (Week 5)
 
-1. **Live accuracy bar.** Clerk passed the golden set (100% of 50), but real use is the true test. Proposed: if users change Clerk's leave type in 3 of a design partner's last 20 intakes, review them that week; at 5 of 20, that workspace goes to "suggest only" (Clerk shows its reading but does not fill the form). Accept these lines, set different ones, or wait for the first 50 real intakes?
-2. **Jury duty, voting and other legal time off.** California protects time off for jury duty and gives up to 2 paid hours to vote, but Clerk and the rules engine have no category for them, so users see "I could not tell what kind of time off this is." Add them as simple categories HR handles (no eligibility math), build them into the rules engine, or keep them out of scope for the 5 to 49 pilot?
-3. **Languages Clerk promises.** The form says "English or Spanish is fine" and the golden set has 4 Spanish rows and 1 Tagalog. Grow Spanish to 10 rows before design partners and keep the promise at English and Spanish, add other common California languages (Chinese, Vietnamese, Tagalog, Korean), or drop the Spanish line until it is tested?
-4. **Four-year records.** California's rules on automated-decision systems in employment (in force since Oct 1, 2025) ask employers to keep related records for four years. Leave Ledger keeps the last 300 intakes per workspace. Keep intake records for four years now (a code change), or wait for the lawyer review to say whether Clerk and the rules engine count?
+1. **Owed Week 4 builds.** Jury duty and voting categories and four-year intake records were decided Nov 11 but are not built (the intake log still keeps the last 300 entries per workspace). Build both before any design partner goes live, build the four-year records first and leave jury duty and voting for later, or change either decision?
+2. **Review gate for AI-written code.** AI coding sessions wrote 35 of the last 50 commits, and Netlify deploys every push to main once tests pass. Require your approval (a pull request) only for changes to the protected rules (role views, the manager note filter, Clerk's output checks, the real-data switch, eligibility rules), require it for every change, or keep direct pushes with tests as the gate?
+3. **Never-build line.** SB 947 (in force July 1, 2027) bars using automated systems to predict or act against workers for exercising legal rights. Commit in writing that Leave Ledger will never score, rank or predict employees by leave use and never feed discipline or performance decisions, commit with exceptions, or leave it open?
+4. **Interviews before Nov 23.** The kill criteria check is in 6 days and 0 of 10 interviews are recorded. Hold the date and judge on however many are done, move the check to a later date, or record the ones already held in `strategy/` (count, payroll provider, felt the pain, would pay $2)?
 
 ## Changelog
 
@@ -129,3 +130,4 @@
 | 2 | Oct 28, 2026 | M2 drafted: flywheel 6/20, competitive map, encroachment threats (Gusto, Tilt, CalChamber), 90-day attack and defense, kill switch audit (portability Partial). Schedule moved to Wednesday sessions |
 | 3 | Nov 3, 2026 | M3 drafted: cost model (Clerk about $0.0003 an intake, gross margin about 76% at 20 employees, 14% at 5), no-model-first cascade, pricing on the Nov 2 decisions, stress tests incl. Tilt at $2.50, break-even. M1 and M2 summaries note the Nov 2 decisions and Tilt's new price |
 | 4 | Nov 10, 2026 | M4 drafted: golden set audit (50 rows, 10 adversarial, gaps), per-field confidence UX and calibration check, reliability contract with alert lines, four-checkpoint HITL design, self red-team. M1 notes kill criterion 4 passed on our own set; M3 notes the Nov 3 and 4 price and prepay decisions |
+| 5 | Nov 17, 2026 | M5 drafted: 7 feedback loops (corrections idle, decisions to code leaking), governance policy with protected rules and a never-build line, agent topology incl. AI coding sessions, shadow AI audit (6 found, 6 triaged), California regulatory map (CRD ADS rules, CPPA ADMT, SB 947, confidentiality). M4 notes the Nov 11 decisions and the two not yet built |
