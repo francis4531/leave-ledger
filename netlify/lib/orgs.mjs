@@ -74,6 +74,8 @@ export function cleanCreate(b, user) {
   if (b.agree !== true) return { error: "Please confirm you will use made-up employee details only." };
   const headcount = Math.round(+b.headcount);
   if (!(headcount >= 1 && headcount <= 100000)) return { error: "Enter the number of employees." };
+  // A user who signed in with an emailed link has no name on file yet; the form asks for it.
+  if (!user.name) { const yn = trim(b.yourName, 80); if (!yn) return { error: "Add your name." }; user.name = yn; }
   return { name, city: trim(b.city, 60) || "California", headcount, start: b.start === "empty" ? "empty" : "sample", jobTitle: trim(b.jobTitle, 60) || "HR" };
 }
 

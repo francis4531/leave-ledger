@@ -143,3 +143,53 @@ describe("letters, tasks and dates follow eligibility", () => {
     for (const t of ["A temp starts Monday", "Please keep the delivery route covered", "Due back on Monday", "Sofia covers the register on weekends"]) assert.equal(sensitiveNote(t), null, t);
   });
 });
+
+// Separate days off: Ben's father has surgery, then follow-up appointments.
+describe("separate days off", () => {
+  const ben = () => D.employees.find((x) => x.id === "e8");
+  const DAYS = [{ d: "2026-12-02" }, { d: "2026-12-09", h: 4 }, { d: "2026-12-16" }, { d: "2026-11-26" }];
+  test("only the hours taken count, weekends and holidays are left out, and each day is protected", () => {
+    const P = E.buildPlan(ben(), D.company, "family_care", { pattern: "days", relation: "parent", dates: DAYS });
+    assert.deepEqual(P.days.map((x) => x.d), ["2026-12-02", "2026-12-09", "2026-12-16"].filter((d) => !D.company.holidays.includes(d)));
+    if (D.company.holidays.includes("2026-11-26")) assert.ok(P.warnings.some((w) => /weekend or company holiday/.test(w.t)));
+    assert.ok(P.days.every((x) => x.protected));
+    assert.equal(P.start, "2026-12-02"); assert.equal(P.end, "2026-12-17");
+    assert.ok(P.pays.pfl, "PFL can pay separate days of family care");
+    assert.ok(P.facts.some((f) => /only the hours actually taken count/.test(f.t)));
+    const T = E.makeTasks("family_care", TODAY, P, D.company).map((t) => t.key);
+    assert.ok(!T.includes("return"), "no return-to-work step between days");
+  });
+  test("days past the CFRA balance are marked, and own health days point to sick leave, not SDI", () => {
+    const e = { ...ben(), cfraUsed: 11.8 };
+    const P = E.buildPlan(e, D.company, "own_health", { pattern: "days", dates: [{ d: "2026-12-02" }, { d: "2026-12-03" }] });
+    assert.equal(P.days[0].protected, true); assert.equal(P.days[1].protected, false);
+    assert.ok(P.warnings.some((w) => /Later days are not CFRA protected/.test(w.t)));
+    assert.equal(P.pays.sdi, false);
+    assert.ok(P.facts.some((f) => /Sick leave can cover these days/.test(f.t)));
+  });
+  test("not every leave can be separate days, and a block is unchanged", () => {
+    assert.equal(E.isDays("bereavement", { pattern: "days", dates: DAYS }), false);
+    const P = E.buildPlan(ben(), D.company, "family_care", { start: "2026-12-07", weeks: 4, relation: "parent", pattern: "block" });
+    assert.equal(P.days, undefined);
+  });
+  test("an employee is out only on the days themselves", () => {
+    const c = { reason: "family_care", opts: { pattern: "days", relation: "parent", dates: DAYS }, empId: "e8" };
+    assert.equal(E.outOn(c, D, "2026-12-09"), true);
+    assert.equal(E.outOn(c, D, "2026-12-10"), false);
+    assert.equal(E.caseStatus(c, D, "2026-12-10").t, "Days off ahead");
+    assert.equal(E.caseStatus(c, D, "2026-12-09").t, "Out today");
+    assert.equal(E.caseStatus(c, D, "2026-12-20").t, "Done");
+  });
+  test("letters and the manager's message list the days, and the manager's never says why", async () => {
+    const { managerNotice } = await import("../public/notices.mjs");
+    const P = E.buildPlan(ben(), D.company, "family_care", { pattern: "days", relation: "parent", dates: DAYS });
+    const c = { ...structuredClone(caseOf("c3")), empId: "e8", reason: "family_care", opts: { start: P.start, pattern: "days", relation: "parent", dates: DAYS } };
+    c.tasks = E.makeTasks("family_care", TODAY, P, D.company);
+    const des = draftLetter("designate", c, ben(), D.company, P, TODAY, "Grace").body;
+    assert.match(des, /Dec 9, 2026 \(4 hours\)/); assert.match(des, /Only the hours you take count/);
+    assert.match(draftLetter("notice", c, ben(), D.company, P, TODAY, "Grace").body, /on separate days: Dec 2, 2026/);
+    const m = managerNotice("approved", { emp: ben(), mgr: D.employees.find((x) => x.id === "e9"), co: D.company, start: P.start, end: P.end, days: P.days.map((x) => x.d), protectedLeave: true, hr: "Grace", note: "" });
+    assert.match(m.subject, /out on \d days between/); assert.match(m.body, /Out on these days:/);
+    assert.doesNotMatch(m.body + m.subject, /surgery|father|parent|caring|care for|medical condition|CFRA|PFL/i);
+  });
+});

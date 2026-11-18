@@ -1,6 +1,6 @@
 import {
   addDays, diffDays, fmt, fmtS, money, esc, plural, RULES, REASONS, REL, relName, sickUseCap, sickBalanceCap, sickUsable, shiftOf, weeklyOf, pdlHours, LOCAL_SICK, localSick,
-  weeklyBenefit, eligibility, buildPlan, makeTasks,
+  weeklyBenefit, eligibility, buildPlan, makeTasks, DAYS_REASONS, isDays, leaveDays, outOn as outOnD,
   planFor as planForD, caseDates as caseDatesD, caseStatus as caseStatusD,
 } from "./engine.mjs";
 import { LETTERS, hasLetter, draftLetter, managerNotice, sensitiveNote, nextWorkday, legalSummary } from "./notices.mjs";
@@ -24,6 +24,8 @@ const UI = {
   conv: { caseId: null, draft: null, busy: false, error: "" },
   fb: { open: false, rating: 0, kind: "", note: "", busy: false, error: "" },
   survey: { open: false, q: null, a: {}, busy: false, error: "", done: null, later: false },
+  dayDraft: {}, ce: null,
+  emailLink: { open: false, sent: false, busy: false, error: "", email: "", devLink: "" },
   access: { open: false, sent: false, busy: false, error: "", form: { name: "", email: "", company: "", headcount: "", city: "", note: "" } },
   home: { busy: false, error: "", form: { name: "", city: "", headcount: 20, jobTitle: "", start: "sample", lockDomain: false, agree: false } },
   users: { list: null, domain: null, canLock: false, myDomain: null, email: "", role: "emp", empId: "", busy: false, error: "" },
@@ -196,7 +198,17 @@ function timelineHTML(p) {
       ${todayIn ? `<div class="today-line" style="left:${pos(TODAY)}%" title="Today"></div>` : ""}
     </div></div>`).join("")}
   </div>
-  <div class="seglist">${p.segs.map((s) => `<div><span class="sw" style="background:${COLORS[s.cls]}"></span><span><b>${esc(s.label)}</b> <span class="muted small">${esc(s.sub || "")}</span></span><span class="mono small">${range(s.start, s.end)}</span></div>`).join("")}</div>`;
+  ${p.days ? daysList(p) : `<div class="seglist">${p.segs.map((s) => `<div><span class="sw" style="background:${COLORS[s.cls]}"></span><span><b>${esc(s.label)}</b> <span class="muted small">${esc(s.sub || "")}</span></span><span class="mono small">${range(s.start, s.end)}</span></div>`).join("")}</div>`}`;
+}
+// Separate days: one line per kind of day, not one line per day.
+function daysList(p) {
+  const full = (x) => x.h >= 7.99, one = (x) => `${fmtS(x.d)}${full(x) ? "" : ` (${x.h}h)`}`;
+  const pr = p.days.filter((x) => x.protected), np = p.days.filter((x) => !x.protected);
+  const rows = [];
+  if (pr.length) rows.push(["cfra", "Days off, job protected", `CFRA${p.laws.includes("FMLA") ? " and FMLA" : ""}`, pr.map(one).join(", ")]);
+  if (np.length) rows.push(["none", "Days off, not job protected", "", np.map(one).join(", ")]);
+  if (p.pays.pfl) rows.push(["pfl", "Family leave pay", "PFL from the state for each day", ""]);
+  return `<div class="seglist">${rows.map(([c, l, sub, d]) => `<div><span class="sw" style="background:${COLORS[c]}"></span><span><b>${esc(l)}</b> <span class="muted small">${esc(sub)}</span></span><span class="mono small">${esc(d)}</span></div>`).join("")}</div>`;
 }
 function factsHTML(p) {
   const facts = [...p.facts];
@@ -223,15 +235,40 @@ function eligHTML(p, reason) {
 function relSelect(id, kind, val) {
   return `<div class="field"><label for="${id}">Family member</label><select id="${id}" data-bind="relation">${REL[kind].map(([k, n]) => `<option value="${k}" ${k === val ? "selected" : ""}>${n}</option>`).join("")}</select></div>`;
 }
+// Separate days off (own or family health): a list of days, each a full or part day, instead of a number of weeks.
+const daysForm = (f) => f.pattern === "days" && DAYS_REASONS.includes(f.reason);
+const HOURS_OPTS = [["", "Full day"], ["6", "6 hours"], ["4", "Half day (4 hours)"], ["2", "2 hours"], ["1", "1 hour"]];
+const wdLong = (d) => new Date(d + "T00:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+function patternField(prefix, f) {
+  const days = daysForm(f);
+  return `<fieldset class="choice-row"><legend>How will the time off be taken?</legend>
+    <label><input type="radio" name="${prefix}pat" value="block" data-bind="pattern" ${days ? "" : "checked"}> One stretch of time</label>
+    <label><input type="radio" name="${prefix}pat" value="days" data-bind="pattern" ${days ? "checked" : ""}> Separate days or part days</label></fieldset>`;
+}
+function daysEditor(prefix, f) {
+  const list = leaveDays({ dates: f.dates || [] });
+  return `<div class="field daysed"><span class="lbl">Days off</span>
+    ${list.length ? `<ul class="daylist">${list.map((x) => `<li><span>${wdLong(x.d)}</span><span class="muted">${x.h ? `${x.h} ${x.h === 1 ? "hour" : "hours"}` : "Full day"}</span><button class="linkish" data-day-del="${prefix}|${x.d}" aria-label="Remove ${fmt(x.d)}">Remove</button></li>`).join("")}</ul>` : `<p class="small muted" style="margin:0">No days yet. Add the first one below.</p>`}
+    <div class="row-inline"><input type="date" id="${prefix}nd" aria-label="Day off" value="${esc(UI.dayDraft[prefix] || "")}"><select id="${prefix}nh" aria-label="How long">${HOURS_OPTS.map(([v, t]) => `<option value="${v}">${t}</option>`).join("")}</select><button class="btn" data-day-add="${prefix}">Add day</button></div>
+    <span class="hint">Add days as they are known, like treatment or appointment dates. More can be added later.</span></div>`;
+}
 function lengthFields(prefix, f) {
   const u = REASONS[f.reason].unit;
+  if (u === "weeks" && DAYS_REASONS.includes(f.reason)) return patternField(prefix, f) + (daysForm(f) ? daysEditor(prefix, f) : `<div class="field"><label for="${prefix}wk">How many weeks?</label><input id="${prefix}wk" type="number" min="1" max="52" step="1" value="${f.weeks}" data-bind="weeks" data-num></div>`);
   if (u === "two") return `<div class="row"><div class="field"><label for="${prefix}dis">Weeks unable to work</label><input id="${prefix}dis" type="number" min="1" max="30" step="1" value="${f.disWeeks}" data-bind="disWeeks" data-num><span class="hint">Before and after the birth, as the doctor advises</span></div><div class="field"><label for="${prefix}bond">Bonding weeks after</label><input id="${prefix}bond" type="number" min="0" max="12" step="1" value="${f.bondWeeks}" data-bind="bondWeeks" data-num><span class="hint">Up to 12</span></div></div>`;
   if (u === "weeks") return `<div class="field"><label for="${prefix}wk">How many weeks?</label><input id="${prefix}wk" type="number" min="1" max="52" step="1" value="${f.weeks}" data-bind="weeks" data-num></div>`;
   if (u === "days") return `<div class="field"><label for="${prefix}dy">How many workdays?</label><input id="${prefix}dy" type="number" min="1" max="20" step="1" value="${f.days}" data-bind="days" data-num><span class="hint">They do not have to be in a row</span></div>`;
   if (u === "hours") return `<div class="field"><label for="${prefix}hr">How many hours?</label><input id="${prefix}hr" type="number" min="1" max="80" step="1" value="${f.hours}" data-bind="hours" data-num></div>`;
   return "";
 }
-const optsFrom = (f) => ({ start: f.start, weeks: +f.weeks, disWeeks: +f.disWeeks, bondWeeks: +f.bondWeeks, days: +f.days, hours: +f.hours, relation: f.relation });
+const optsFrom = (f) => {
+  const o = { start: f.start, weeks: +f.weeks, disWeeks: +f.disWeeks, bondWeeks: +f.bondWeeks, days: +f.days, hours: +f.hours, relation: f.relation };
+  if (!daysForm(f)) return { ...o, pattern: "block" };
+  const dates = leaveDays({ dates: f.dates || [] }).map((x) => (x.h ? x : { d: x.d }));
+  return { ...o, pattern: "days", dates, start: dates.length ? dates[0].d : f.start };
+};
+// With separate days chosen but none added yet, there is nothing to plan.
+const daysEmpty = (f) => daysForm(f) && !(f.dates || []).length;
 const reasonOptions = (sel, key) => Object.entries(REASONS).filter(([k]) => k !== "unknown").map(([k, r]) => `<option value="${k}" ${k === sel ? "selected" : ""}>${r[key]}</option>`).join("");
 
 function lawRows() {
@@ -262,6 +299,11 @@ function applyDraft(f, d) {
   if (d.relation) f.relation = d.relation;
   if (d.start) f.start = d.start;
   LEN_KEYS.forEach((k) => { if (d[k] != null) f[k] = d[k]; });
+  // Words like "a day here and there" mean separate days. The days themselves are added by the user.
+  const txt = (UI.reqAI && UI.reqAI.sent) || "";
+  if (DAYS_REASONS.includes(f.reason) && /here and there|separate days|some days|a day (?:a|each|every) (?:week|month)|days? (?:a|each|every|per) (?:week|month)|on and off|off and on|intermittent|appointments|treatments|chemo|dialysis|part days|half days|a few days over/i.test(txt)) {
+    f.pattern = "days"; if (!(f.dates || []).length && d.start) f.dates = [{ d: d.start }];
+  }
 }
 function unsure(d) { if (!d) return []; return Object.entries(d.confidence || {}).filter(([k, v]) => v !== "high" && !(k === "relation" && !REASONS[d.reason]?.rel)).map(([k]) => k); }
 async function askClerk(text) {
@@ -316,9 +358,9 @@ function taskRow(c, t, showWho, compact) {
 function hrOverview() {
   const open = openTasks();
   const now = open.filter((x) => dueState(x.t).g === "now"), week = open.filter((x) => dueState(x.t).g === "week"), later = open.filter((x) => dueState(x.t).g === "later");
-  const out = D().cases.filter((c) => caseStatus(c).t === "On leave");
-  const back30 = D().cases.filter((c) => { const d = caseDates(c); return d.end && d.end > TODAY && diffDays(TODAY, d.end) <= 30; });
-  const active = D().cases.filter((c) => caseStatus(c).t !== "Returned");
+  const out = D().cases.filter((c) => ["On leave", "Out today"].includes(caseStatus(c).t));
+  const back30 = D().cases.filter((c) => { if (isDays(c.reason, c.opts)) return false; const d = caseDates(c); return d.end && d.end > TODAY && diffDays(TODAY, d.end) <= 30; });
+  const active = D().cases.filter((c) => !["Returned", "Done"].includes(caseStatus(c).t));
   const log = (D().log || []).filter((l) => l.by !== "System").slice(0, 6);
   const sum = now.length
     ? `<span class="bad"><b>${now.length} ${now.length === 1 ? "thing needs" : "things need"} your attention now.</b></span> ${week.length ? `${week.length} more ${week.length === 1 ? "is" : "are"} due in the next 7 days.` : ""}`
@@ -358,7 +400,7 @@ function setupSteps() {
       done: `Done. ${hc} employees, so ${hc >= 5 ? "CFRA applies" : "CFRA does not apply yet"}${hc >= 50 ? " and so does federal FMLA" : " and federal FMLA does not"}.`, btn: `<button class="btn primary" data-tab="settings">Open settings</button>` },
     { t: "Bring in your employees", ok: D().employees.length >= 2, s: "Upload the list your payroll system exports, Excel or CSV. You check every row before anything is saved. About 5 minutes.",
       done: `Done. ${plural(D().employees.length, "employee")} on file.`, btn: `<button class="btn primary" data-setup-import>Upload a file</button>` },
-    { t: "Invite your managers", ok: mgrs > 0, s: "They sign in with Google and see dates only, never reasons. About 2 minutes.",
+    { t: "Invite your managers", ok: mgrs > 0, s: "They sign in with Google or an emailed link, and see dates only, never reasons. About 2 minutes.",
       done: `Done. ${plural(mgrs, "manager")} invited.`, btn: CAP("users") ? `<button class="btn primary" data-tab="access">Invite managers</button>` : "" },
   ];
 }
@@ -473,14 +515,14 @@ function wizardView() {
     ${R.rel ? relSelect("wz-rel", R.rel, W.relation) : ""}
     ${W.need === "pregnancy_bonding" ? `<div class="field"><label for="wz-due">Due date</label><input type="date" id="wz-due" data-bind="due" value="${esc(W.due)}"><span class="hint">Doctors usually take you off work up to 4 weeks before the due date, and for 6 weeks after (8 after a cesarean).</span></div>
       <label class="check"><input type="checkbox" data-bind="bond" ${W.bond ? "checked" : ""}>I also want time to bond with the baby after</label>`
-      : `<div class="field"><label for="wz-start">First day off</label><input type="date" id="wz-start" data-bind="start" value="${esc(W.start)}"></div>${lengthFields("wz-", { ...W, reason: W.need })}`}
+      : `${daysForm({ ...W, reason: W.need }) ? "" : `<div class="field"><label for="wz-start">First day off</label><input type="date" id="wz-start" data-bind="start" value="${esc(W.start)}"></div>`}${lengthFields("wz-", { ...W, reason: W.need })}`}
     <div class="btns">${back}<button class="btn primary" data-wiz-next>See what I get</button></div></section>`;
   // Step 3: the plan from the rules engine, for this employee.
   const o = wizOpts(W), p = buildPlan(me, co, W.need, o), prot = p.segs.filter((s) => s.lane === "protect" && s.cls !== "none");
   const fake = { reason: W.need, opts: o, edd: {} }, wba = weeklyBenefit(me, co);
   const E3 = eddSteps(fake, p);
   return `${head(3, "Here is what you would get")}<section class="panel"><div class="panel-h"><h3>${esc(R.emp)}</h3></div>${timelineHTML(p)}
-    <ul class="plain">${prot.length ? `<li>Your job is protected from <b>${fmtS(prot[0].start)}</b> to <b>${fmtS(addDays(prot[prot.length - 1].end, -1))}</b>.</li>` : `<li>This time is not job protected by state law. Ask HR about company policy.</li>`}
+    <ul class="plain">${p.days ? `<li>${plural(p.days.length, "day")} off, ${+p.daysHours.toFixed(1)} hours in all. ${prot.length === p.days.length ? "Your job is protected on every one of these days." : prot.length ? `Your job is protected on ${plural(prot.length, "day")} of them.` : "These days are not job protected by state law. HR will go over your options."}</li>${p.pays.pfl ? "<li>Paid Family Leave can pay for each of these days. You file once, then report the days.</li>" : "<li>Sick leave can cover these days.</li>"}` : prot.length ? `<li>Your job is protected from <b>${fmtS(prot[0].start)}</b> to <b>${fmtS(addDays(prot[prot.length - 1].end, -1))}</b>.</li>` : `<li>This time is not job protected by state law. Ask HR about company policy.</li>`}
       ${wba && (p.pays.sdi || p.pays.pfl) ? `<li>The state may pay you about <b>${money(wba.amount)} a week</b>${p.pays.sdi ? ", after a 7-day wait" : ""}. EDD decides the final amount.</li>` : ""}
       ${["own_health", "family_care", "bonding"].includes(W.need) && !p.el.cfra.ok ? `<li>You may not qualify for job-protected family leave yet. It needs 12 months here and 1,250 hours worked in the last year. HR will confirm, and state pay can still apply.</li>` : ""}
       ${W.need === "pregnancy_bonding" && W.bond && !p.el.cfra.ok ? `<li>Your pregnancy leave is protected from day one. Bonding time after it may not be job protected yet, because that needs 12 months and 1,250 hours. State pay can still apply.</li>` : ""}
@@ -490,6 +532,7 @@ function wizardView() {
     <div class="btns">${back}<button class="btn primary" data-wiz-use>Use this for my request</button></div></section>`;
 }
 function wizOpts(W) {
+  if (daysForm({ ...W, reason: W.need })) { const o = optsFrom({ ...W, reason: W.need }); return { ...o, relation: W.relation || "parent" }; }
   if (W.need === "pregnancy_bonding") { const due = W.due || addDays(TODAY, 60); return { start: addDays(due, -28), disWeeks: 10, bondWeeks: W.bond ? 12 : 0, weeks: 4, days: 5, hours: 8, relation: "parent" }; }
   return { start: W.start, weeks: +W.weeks || 4, disWeeks: 10, bondWeeks: 12, days: +W.days || 3, hours: +W.hours || 8, relation: W.relation || "parent" };
 }
@@ -499,8 +542,7 @@ function changePanel(c) {
   const d = caseDates(c), started = c.opts.start <= TODAY;
   return `<section class="panel"><h3>Change this leave</h3>
     <p class="small muted">New dates or length? Steps already done stay done, and open deadlines move with the new plan.</p>
-    <div class="field"><label for="ce-start">First day off</label><input type="date" id="ce-start" value="${c.opts.start}"></div>
-    ${lengthFields("ce-", { ...c.opts, reason: c.reason })}
+    ${(() => { const f = ceForm(c); return `${daysForm(f) ? "" : `<div class="field"><label for="ce-start">First day off</label><input type="date" id="ce-start" value="${c.opts.start}"></div>`}${lengthFields("ce-", f)}`; })()}
     <div class="btns"><button class="btn" data-change="${c.id}">Save new dates</button></div>
     <div class="sendrow">${c.returnedOn
       ? `<p class="small" style="margin:0">Came back on <b>${fmt(c.returnedOn)}</b>.</p><button class="btn sm" data-unreturn="${c.id}">Undo</button>`
@@ -509,9 +551,18 @@ function changePanel(c) {
     <div class="btns" style="justify-content:flex-end"><button class="btn sm danger" data-delete="${c.id}">Delete this leave</button></div>
   </section>`;
 }
+// The change form keeps its own copy of the pattern and days until saved.
+function ceForm(c) {
+  if (!UI.ce || UI.ce.caseId !== c.id) UI.ce = { caseId: c.id, pattern: isDays(c.reason, c.opts) ? "days" : "block", dates: (c.opts.dates || []).map((x) => ({ ...x })) };
+  return { ...c.opts, reason: c.reason, pattern: UI.ce.pattern, dates: UI.ce.dates };
+}
 function readChange() {
   const g = (id) => document.getElementById(id), n = (id) => (g(id) ? +g(id).value : undefined), o = { start: g("ce-start")?.value };
   for (const [id, k] of [["ce-dis", "disWeeks"], ["ce-bond", "bondWeeks"], ["ce-wk", "weeks"], ["ce-dy", "days"], ["ce-hr", "hours"]]) if (g(id)) o[k] = n(id);
+  if (UI.ce && document.querySelector('input[name="ce-pat"]')) {
+    if (UI.ce.pattern === "days") { const dates = leaveDays({ dates: UI.ce.dates }); return { pattern: "days", dates: dates.map((x) => (x.h ? x : { d: x.d })), start: dates.length ? dates[0].d : o.start }; }
+    o.pattern = "block";
+  }
   return o;
 }
 
@@ -613,22 +664,22 @@ function hrCase(c) {
 /* ---------- HR: Plan a leave ---------- */
 function hrPlan() {
   const f = UI.planner, e = emp(f.empId), R = REASONS[f.reason];
-  const p = buildPlan(e, D().company, f.reason, optsFrom(f));
+  const p = daysEmpty(f) ? null : buildPlan(e, D().company, f.reason, optsFrom(f));
   return `<div class="head"><div><h2>Plan a leave</h2><p>Pick an employee and a reason. You will see every leave they qualify for, what the state pays, and the notices you owe, before anything is saved.</p></div></div>
   <div class="grid2 form">
     <section class="panel" data-form="planner">
       <div class="field"><label for="pl-emp">Employee</label><select id="pl-emp" data-bind="empId">${D().employees.map((x) => `<option value="${x.id}" ${x.id === f.empId ? "selected" : ""}>${esc(x.name)} · ${esc(x.role)}</option>`).join("")}</select></div>
       <div class="field"><label for="pl-reason">Reason</label><select id="pl-reason" data-bind="reason">${reasonOptions(f.reason, "hr")}</select></div>
       ${R.rel ? relSelect("pl-rel", R.rel, f.relation) : ""}
-      <div class="field"><label for="pl-start">${f.reason === "bereavement" ? "First day off" : "Start date"}</label><input type="date" id="pl-start" value="${f.start}" data-bind="start"></div>
+      ${daysForm(f) ? "" : `<div class="field"><label for="pl-start">${f.reason === "bereavement" ? "First day off" : "Start date"}</label><input type="date" id="pl-start" value="${f.start}" data-bind="start"></div>`}
       ${lengthFields("pl-", f)}
       <div class="btns"><button class="btn primary" data-createcase>Save and start the clock</button></div>
       <p class="small muted">Saving records today as the request date. The 5 business day deadline for the first notice starts now.</p>
     </section>
-    <div class="stack">
-      <section class="panel"><div class="panel-h"><div class="person">${avatar(e)}<h3>${esc(e.name)}</h3></div><span class="small muted">Back to work ${fmt(p.back || p.end)}</span></div>${timelineHTML(p)}${payHTML(p)}</section>
+    ${p ? `<div class="stack">
+      <section class="panel"><div class="panel-h"><div class="person">${avatar(e)}<h3>${esc(e.name)}</h3></div><span class="small muted">${p.days ? `${plural(p.days.length, "day")} off · ${+p.daysHours.toFixed(1)} hours` : `Back to work ${fmt(p.back || p.end)}`}</span></div>${timelineHTML(p)}${payHTML(p)}</section>
       <section class="panel"><h3>Does ${esc(first(e.name))} qualify?</h3>${eligHTML(p, f.reason)}${factsHTML(p)}</section>
-    </div>
+    </div>` : `<div class="stack"><section class="panel"><h3>Add the days off</h3><p class="muted">Add each day ${esc(first(e.name))} will be out. The plan, the pay and the notices appear here as soon as there is one.</p></section></div>`}
   </div>`;
 }
 
@@ -720,7 +771,7 @@ function legalBox(c) {
 }
 function approveForm(c, e, m, kind) {
   const A = UI.appr, d = caseDates(c), P = planFor(c);
-  const msg = m ? managerNotice(kind, { emp: e, mgr: m, co: D().company, start: d.start, end: d.end, protectedLeave: P.segs.some((x) => x.lane === "protect" && x.cls !== "none"), hr: S.me.name, note: A.note.trim() }) : null;
+  const msg = m ? managerNotice(kind, { emp: e, mgr: m, co: D().company, start: d.start, end: d.end, days: P.days ? P.days.map((x) => x.d) : null, protectedLeave: P.segs.some((x) => x.lane === "protect" && x.cls !== "none"), hr: S.me.name, note: A.note.trim() }) : null;
   const bad = sensitiveNote(A.note);
   const delivery = !m ? "" : S.space.kind !== "org" ? `Sample data: ${esc(first(m.name))} reads this on their My team page. No real email is sent.`
     : S.mail && S.mail.on ? (m.email ? `Emailed to ${esc(m.email)} and shown on ${esc(first(m.name))}'s My team page.` : `${esc(m.name)} has no email on file, so this shows on their My team page only.`)
@@ -738,7 +789,7 @@ function refreshApproval() {
   const box = document.querySelector(".appr-form"), go = box && box.querySelector("[data-appr-go]"); if (!go) return;
   const c = D().cases.find((x) => x.id === go.dataset.apprGo), e = emp(c.empId), m = e.mgr ? emp(e.mgr) : null; if (!m) return;
   const d = caseDates(c), P = planFor(c), bad = sensitiveNote(UI.appr.note);
-  const msg = managerNotice(go.dataset.apprKind, { emp: e, mgr: m, co: D().company, start: d.start, end: d.end, protectedLeave: P.segs.some((x) => x.lane === "protect" && x.cls !== "none"), hr: S.me.name, note: UI.appr.note.trim() });
+  const msg = managerNotice(go.dataset.apprKind, { emp: e, mgr: m, co: D().company, start: d.start, end: d.end, days: P.days ? P.days.map((x) => x.d) : null, protectedLeave: P.segs.some((x) => x.lane === "protect" && x.cls !== "none"), hr: S.me.name, note: UI.appr.note.trim() });
   const lt = box.querySelector(".mailprev .letter-text"); if (lt) lt.textContent = msg.body;
   const h = box.querySelector("#ap-note + .hint"); if (h) { h.textContent = bad ? `Take out "${bad}". The manager may know the dates, not the reason.` : "Keep it to logistics. No reason, health or family details."; h.classList.toggle("bad-t", !!bad); }
   go.disabled = !!bad;
@@ -864,6 +915,13 @@ function previewHTML(p, reason) {
   const paid = p.segs.filter((s) => ["sdi", "pfl", "sick"].includes(s.cls));
   const unpaid = p.segs.filter((s) => s.cls === "unpaid");
   const rows = [];
+  if (p.days) {
+    const pr = p.days.filter((x) => x.protected).length;
+    rows.push(["Days off", `${plural(p.days.length, "day")}, ${+p.daysHours.toFixed(1)} hours`]);
+    rows.push([pr === p.days.length ? "Your job is protected" : pr ? "Job protected" : "Not job protected", pr === p.days.length ? "On all of these days" : pr ? `On ${plural(pr, "day")} of ${p.days.length}` : "On these days"]);
+    rows.push(["Pay", p.pays.pfl ? "Paid Family Leave can pay for each day" : "Sick leave can cover these days"]);
+    return `<div class="preview" aria-live="polite"><b>What you would get</b>${rows.map(([k, v]) => `<div class="row2"><span class="k">${esc(k)}</span><span class="mono">${esc(v)}</span></div>`).join("")}${p.warnings.length ? `<span class="small muted">HR will go over a few details with you.</span>` : ""}</div>`;
+  }
   if (prot.length) rows.push(["Your job is protected", range(prot[0].start, prot[prot.length - 1].end)]);
   if (unprot.length) rows.push(["Not job protected", range(unprot[0].start, unprot[unprot.length - 1].end)]);
   paid.forEach((s) => rows.push([s.cls === "sick" ? "Paid from sick leave" : s.label, s.cls === "sick" ? s.sub : (p.wba ? `about ${money(p.wba.amount)}/week` : "from the state")]));
@@ -876,7 +934,7 @@ function empView() {
   const mine = D().cases.filter((c) => c.empId === e.id && c.reason !== "unknown");
   const avail = sickUsable(e, co);
   const wba = weeklyBenefit(e, co);
-  const p = buildPlan(e, co, f.reason, optsFrom(f));
+  const p = daysEmpty(f) ? null : buildPlan(e, co, f.reason, optsFrom(f));
   return `<div class="head"><div class="person">${avatar(e, "lg")}<div><h2 class="greet">Hi ${esc(first(e.name))}</h2><p class="muted">Your time off, your requests, and what to do next.</p></div></div></div>
   ${welcomeBack(e, mine, el)}
   <section class="panel"><h3>What you have</h3><div class="balance">
@@ -909,14 +967,14 @@ function accessView() {
   const A = UI.access, f = A.form;
   if (A.sent) return `<section class="panel access"><span class="ac-ic ok" aria-hidden="true">${SVG(ICONS.check, 30)}</span><h2>Thanks, ${esc(first(f.name))}. Your request is in.</h2>
     <p>Francis will reply to <b>${esc(f.email)}</b> within 1 business day. When it is approved, you get an email with a link to set up ${esc(f.company)}. It takes about 10 minutes.</p>
-    <p class="small muted">Sign in with that same Google account when you open the link.</p>
+    <p class="small muted">Sign in with that same email address when you open the link, with Google or an emailed link.</p>
     <div class="btns"><button class="btn" data-access-close>${S && S.space ? "Back to the sandbox" : "Back"}</button></div></section>`;
   return `<section class="panel access" data-form="access"><h2>Use Leave Ledger for your company</h2>
     <p class="muted">Tell us a little about your company. We set up your own workspace and email you a link, usually within 1 business day.</p>
     <div class="row"><div class="field"><label for="ax-name">Your name</label><input type="text" id="ax-name" data-ax="name" value="${esc(f.name)}" maxlength="80" autocomplete="name"></div>
       <div class="field"><label for="ax-email">Work email</label><input type="email" id="ax-email" data-ax="email" value="${esc(f.email)}" maxlength="120" autocomplete="email"><span class="hint">Use the Google account you will sign in with.</span></div></div>
     <div class="row"><div class="field"><label for="ax-company">Company name</label><input type="text" id="ax-company" data-ax="company" value="${esc(f.company)}" maxlength="80" autocomplete="organization"></div>
-      <div class="field"><label for="ax-hc">Number of employees</label><input type="number" id="ax-hc" data-ax="headcount" value="${esc(f.headcount)}" min="1"><span class="hint">Companies with 1 to 4 employees are free.</span></div></div>
+      <div class="field"><label for="ax-hc">Number of employees</label><input type="number" id="ax-hc" data-ax="headcount" value="${esc(f.headcount)}" min="1"><span class="hint">This decides which California laws apply.</span></div></div>
     <div class="field"><label for="ax-city">City (optional)</label><input type="text" id="ax-city" data-ax="city" value="${esc(f.city)}" maxlength="60" placeholder="San Jose, CA"></div>
     <div class="field"><label for="ax-note">Anything we should know? (optional)</label><textarea id="ax-note" data-ax="note" maxlength="500" placeholder="For example: we have someone going on leave next month.">${esc(f.note)}</textarea></div>
     <p class="small muted">For now the preview uses made-up employee details only. We will tell you when real employee data is supported.</p>
@@ -943,9 +1001,9 @@ function reqForm(f, R, p) {
       ${S.ai.on ? copilotBox() : ""}
       <div class="field"><label for="rq-reason">What is it for?</label><select id="rq-reason" data-bind="reason">${reasonOptions(f.reason, "emp")}</select></div>
       ${R.rel ? relSelect("rq-rel", R.rel, f.relation) : ""}
-      <div class="field"><label for="rq-start">First day off</label><input type="date" id="rq-start" value="${f.start}" data-bind="start"></div>
+      ${daysForm(f) ? "" : `<div class="field"><label for="rq-start">First day off</label><input type="date" id="rq-start" value="${f.start}" data-bind="start"></div>`}
       ${lengthFields("rq-", f)}
-      ${previewHTML(p, f.reason)}
+      ${p ? previewHTML(p, f.reason) : `<p class="small muted">Add the days you need. You will see what you would get before anything is sent.</p>`}
       <p class="small muted">HR keeps the reason private. Your manager only sees the dates you are out.${f.reason === "repro" ? " Nobody will ask you for documentation." : ""}</p>
       <div class="btns"><button class="btn primary" data-submitreq>Send to HR</button></div>
     </section>`;
@@ -954,10 +1012,11 @@ function empCase(c) {
   const p = planFor(c), steps = [];
   const cert = c.tasks.find((t) => t.key === "cert"), notice = c.tasks.find((t) => t.key === "notice");
   const prot = p.segs.filter((s) => s.lane === "protect" && s.cls !== "none");
-  if (notice && !notice.done) steps.push(`HR will confirm what you qualify for by <b>${fmtS(notice.due)}</b>.`);
-  if (cert && !cert.done) steps.push(`Ask your doctor to fill in the medical certification, then send it to HR by <b>${fmtS(cert.due)}</b>.`);
+  if (notice && !notice.done && !c.approvedOn) steps.push(`HR will confirm what you qualify for by <b>${fmtS(notice.due)}</b>.`);
+  if (cert && !cert.done) steps.push(c.reason === "family_care" ? `Ask your ${c.opts.relation ? esc(relName(c.opts.relation).toLowerCase()) + "'s" : "family member's"} doctor to fill in the medical certification, then send it to HR by <b>${fmtS(cert.due)}</b>.` : `Ask your doctor to fill in the medical certification, then send it to HR by <b>${fmtS(cert.due)}</b>.`);
   if (p.pays.sdi || p.pays.pfl) steps.push(`Apply to the state (EDD) for pay while you are out. The steps and dates are below.`);
-  if (prot.length) steps.push(`Your job is held for you from <b>${fmtS(prot[0].start)}</b> to <b>${fmtS(addDays(prot[prot.length - 1].end, -1))}</b>, and your health coverage stays the same.`);
+  if (p.days) { const pr = p.days.filter((x) => x.protected).length; if (pr) steps.push(`Your job is protected on ${pr === p.days.length ? "each of these days" : `${plural(pr, "day")} of them`}, and your health coverage stays the same. Need more days? Tell HR, and they can be added.`); }
+  else if (prot.length) steps.push(`Your job is held for you from <b>${fmtS(prot[0].start)}</b> to <b>${fmtS(addDays(prot[prot.length - 1].end, -1))}</b>, and your health coverage stays the same.`);
   if (c.reason === "bereavement") steps.push("HR may ask for proof of the death within 30 days of your first day off.");
   if (c.reason === "sick") steps.push("Your next pay stub will show your new balance.");
   const s = caseStatus(c);
@@ -977,7 +1036,7 @@ function empCase(c) {
   if (burst && stage === 3) store.set("ll-cele-" + c.id, "1");
   const banner = s.t === "Returned" ? "" : stage === 3
     ? `<div class="status-banner ok ${tone} ${burst ? "burst" : ""}" role="status">${tone === "joy" ? `<span class="confetti" aria-hidden="true">${"<i></i>".repeat(8)}</span>` : ""}<span class="sb-ic" aria-hidden="true">✓</span><div><div class="sb-t">${tone === "joy" ? `Congratulations, ${esc(first(emp(c.empId).name))}. ` : ""}Confirmed by HR${confOn ? ` on ${fmtS(confOn)}` : ""}</div>
-        <div>You are off <b>${wd(d.start)}</b>${lastDay !== d.start ? ` to <b>${wd(lastDay)}</b>` : ""}, and back at work <b>${wd(back)}</b>.${tone === "calm" ? " There is nothing else you need to do now. Take the time you need." : ""}</div>
+        <div>${p.days ? `You are off on ${plural(p.days.length, "day")}: ${p.days.map((x) => `<b>${wd(x.d)}</b>${x.h < (weeklyOf(emp(c.empId)) / 5) - 0.01 ? ` (${x.h} hours)` : ""}`).join(", ")}.` : `You are off <b>${wd(d.start)}</b>${lastDay !== d.start ? ` to <b>${wd(lastDay)}</b>` : ""}, and back at work <b>${wd(back)}</b>.`}${tone === "calm" ? " There is nothing else you need to do now. Take the time you need." : ""}</div>
         <div class="small">${c.approvedOn ? "Your manager was told the dates only, never the reason." : "Your manager sees the dates only, never the reason."}${letter}</div></div></div>`
     : `<div class="status-banner ${stage === 2 ? "wait" : "sent"}" role="status"><span class="sb-ic" aria-hidden="true">${stage === 2 ? "…" : "→"}</span><div><div class="sb-t">${stage === 2 ? "HR is reviewing your request" : "Sent to HR"}</div>
         <div>${stage === 2 ? "Not confirmed yet. HR has sent what you qualify for and will confirm your dates." : `Not confirmed yet.${reviewed && reviewed.due ? ` HR replies by <b>${fmtS(reviewed.due)}</b>.` : ""}`}</div></div></div>`;
@@ -992,6 +1051,7 @@ function empCase(c) {
 
 // The leave as a path: sent, confirmed, filed with the state (when it pays), out, back. Plus a countdown and the next step.
 function journeyHTML(c, p, { stage, confOn, reviewed, d, back, wd, tone }) {
+  if (p.days) return journeyDays(c, p, { stage, confOn, reviewed, wd });
   const E2 = (p.pays.sdi || p.pays.pfl) ? eddSteps(c, p) : null, done = c.edd || {};
   const claimOpen = E2 && E2.claims.find((cl) => cl.steps.some((x) => !done[x.id]));
   const stops = [
@@ -1015,6 +1075,27 @@ function journeyHTML(c, p, { stage, confOn, reviewed, d, back, wd, tone }) {
   <div class="nextline"><span class="nl-ic" aria-hidden="true">→</span><span>${next}</span>${stops[cur] && stops[cur].key === "edd" ? `<a class="btn primary sm" href="#edd-${c.id}">Start filing</a>` : ""}</div>`;
 }
 
+// Separate days off: sent, confirmed, filed with the state (when PFL pays), then the days themselves.
+function journeyDays(c, p, { stage, confOn, reviewed, wd }) {
+  const E2 = p.pays.pfl ? eddSteps(c, p) : null, done = c.edd || {};
+  const claimOpen = E2 && E2.claims.find((cl) => cl.steps.some((x) => !done[x.id]));
+  const taken = p.days.filter((x) => x.d < TODAY).length, next = p.days.find((x) => x.d >= TODAY);
+  const stops = [
+    { t: "Sent to HR", sub: fmtS(c.requested), ok: true },
+    { t: "Confirmed", sub: stage === 3 ? (confOn ? fmtS(confOn) : "") : stage === 2 ? "HR is reviewing" : reviewed && reviewed.due ? `HR replies by ${fmtS(reviewed.due)}` : "HR replies soon", ok: stage === 3 },
+  ];
+  if (E2) stops.push({ t: "File with the state", sub: claimOpen ? `By ${fmtS(claimOpen.window.to)}` : "Done", ok: !claimOpen, key: "edd" });
+  stops.push({ t: "Days off", sub: `${taken} of ${p.days.length} taken`, ok: taken === p.days.length, home: true });
+  const cur = stops.findIndex((x) => !x.ok), doneN = stops.filter((x) => x.ok).length;
+  const nd = next ? diffDays(TODAY, next.d) : null;
+  const nextTxt = cur === 1 ? "HR confirms your days next. You will see a green Confirmed here."
+    : stops[cur] && stops[cur].key === "edd" ? "Next, file with the state so you are paid for these days. The steps and dates are below."
+    : next ? `Next day off: ${wd(next.d)}. Need another day? Tell HR and it can be added.` : "All your planned days are done. Need more? Tell HR.";
+  return `<div class="journey-h"><span class="small muted">${doneN} of ${stops.length} steps done · asked ${fmt(c.requested)}</span>${nd !== null && nd > 0 ? `<span class="countdown"><b>${nd}</b> ${nd === 1 ? "day until your next day off" : "days until your next day off"}</span>` : nd === 0 ? `<span class="countdown">Today is a day off</span>` : ""}</div>
+  <ol class="journey" aria-label="Your leave, step by step" style="--n:${stops.length};--fill:${((cur === -1 ? stops.length - 1 : cur) / (stops.length - 1)) * 100}%">${stops.map((x, i) => `<li class="${x.ok ? "done" : i === cur ? "now" : ""}" ${i === cur ? 'aria-current="step"' : ""}><span class="jdot" aria-hidden="true">${x.ok ? SVG(ICONS.check, 18) : x.home ? SVG(ICONS.home, 16) : ""}</span><b>${esc(x.t)}</b><span class="small muted">${esc(x.sub)}</span></li>`).join("")}</ol>
+  <div class="nextline"><span class="nl-ic" aria-hidden="true">→</span><span>${nextTxt}</span>${stops[cur] && stops[cur].key === "edd" ? `<a class="btn primary sm" href="#edd-${c.id}">Start filing</a>` : ""}</div>`;
+}
+
 /* ---------- Manager ---------- */
 function mgrView() {
   const m = emp(S.me.empId), team = D().team, cases = D().teamCases;
@@ -1023,18 +1104,22 @@ function mgrView() {
   const weeks = []; for (let i = 0; i <= 13; i++) weeks.push(addDays(s0, i * 7));
   const marks = [1, 5, 9, 13];
   const f = UI.flag, leaves = cases.filter((c) => !c.flagged), flags = cases.filter((c) => c.flagged);
-  const outNow = leaves.filter((c) => c.start <= TODAY && c.end > TODAY).length;
+  const isOut = (c) => (c.days ? c.days.includes(TODAY) : c.start <= TODAY && c.end > TODAY);
+  const outNow = leaves.filter(isOut).length;
   return `<div class="head"><div><h2 class="greet">${greeting()}, ${esc(first(m.name))}</h2><p class="sumline" style="margin-top:6px">${outNow ? `<b>${outNow}</b> of your ${team.length} team members ${outNow === 1 ? "is" : "are"} out today.` : `Everyone on your team of ${team.length} is in today.`} ${leaves.length - outNow > 0 ? `${leaves.length - outNow} upcoming.` : ""} ${(() => { const n = leaves.filter((c) => c.end > TODAY && !(c.coverage || "").trim()).length; return n ? `<b>${n}</b> still ${n === 1 ? "needs" : "need"} a coverage plan.` : leaves.length ? "Every leave has a coverage plan." : ""; })()}</p><p class="small muted">You see dates only. Reasons and medical details stay with HR.</p></div></div>
   <section class="panel"><div class="panel-h"><h3>Next 12 weeks</h3><span class="legend small"><span><i class="lgd cov"></i>Covered</span><span><i class="lgd nocov"></i>Needs a coverage plan</span><span class="muted">The dark line is today</span></span></div><div class="calw"><div class="cal">
     <div class="tl-axis">${marks.map((i, k) => `<span class="${k === 1 || k === 2 ? "mid" : ""}" style="${i === 13 ? "left:auto;right:0;transform:none" : "left:" + pos(weeks[i]) + "%"}">${fmtS(weeks[i])}</span>`).join("")}</div>
     ${team.map((t) => { const cs = leaves.filter((c) => c.empId === t.id); return `<div class="lane"><div class="ln"><div class="person">${avatar(t, "sm")}<div>${esc(t.name)}<div class="small muted">${esc(t.role)}</div></div></div></div><div class="track">${weeks.map((d) => `<span class="wk" style="left:${pos(d)}%"></span>`).join("")}
-      ${cs.map((c) => { if (!c.end || c.end <= s0 || c.start >= e0) return ""; const w = Math.max(1.2, pos(c.end) - pos(c.start)); const cov = !!(c.coverage || "").trim(); return `<div class="sg ${cov ? "cov" : "nocov"} ${w < 8 ? "narrow" : ""}" style="left:${pos(c.start)}%;width:${w}%" title="Out ${range(c.start, c.end)}${cov ? ", covered" : ", needs a coverage plan"}">${w < 14 ? "Out" : cov ? `${SVG(ICONS.check, 13)} Out, covered` : "Out · who covers?"}</div>`; }).join("")}
+      ${cs.map((c) => { if (!c.end || c.end <= s0 || c.start >= e0) return ""; const cov = !!(c.coverage || "").trim();
+        // Separate days: one small mark per day off.
+        if (c.days) return c.days.filter((d) => d >= s0 && d < e0).map((d) => `<div class="sg ${cov ? "cov" : "nocov"} narrow dayx" style="left:${pos(d)}%;width:${Math.max(1.1, pos(addDays(d, 1)) - pos(d))}%" title="Out ${fmtS(d)}${cov ? ", covered" : ", needs a coverage plan"}"><span class="sr">Out ${fmtS(d)}</span></div>`).join("");
+        const w = Math.max(1.2, pos(c.end) - pos(c.start)); return `<div class="sg ${cov ? "cov" : "nocov"} ${w < 8 ? "narrow" : ""}" style="left:${pos(c.start)}%;width:${w}%" title="Out ${range(c.start, c.end)}${cov ? ", covered" : ", needs a coverage plan"}">${w < 14 ? "Out" : cov ? `${SVG(ICONS.check, 13)} Out, covered` : "Out · who covers?"}</div>`; }).join("")}
       <div class="today-line" style="left:${pos(TODAY)}%"></div></div></div>`; }).join("")}
   </div></div></section>
   <div class="grid2">
     <section class="panel"><h3>Plan coverage</h3>${leaves.length ? leaves.map((c) => { const e = emp(c.empId); return `<div class="field" style="border-top:1px solid var(--line);padding-top:12px">
       <div class="panel-h"><div class="person">${avatar(e, "sm")}<b>${esc(e.name)}</b></div>${pill(c.status.t, c.status.cls)}</div>
-      <div class="small">Out <span class="mono">${fmtS(c.start)}</span>, back <span class="mono">${fmtS(nextWorkday(c.end, D().company.holidays || []))}</span>. ${c.approved ? "Approved by HR." : "HR confirms the return date."}</div>
+      <div class="small">${c.days ? `Out on ${plural(c.days.length, "day")}: <span class="mono">${c.days.map(fmtS).join(", ")}</span>. Working the other days.` : `Out <span class="mono">${fmtS(c.start)}</span>, back <span class="mono">${fmtS(nextWorkday(c.end, D().company.holidays || []))}</span>.`} ${c.approved ? "Approved by HR." : c.days ? "HR confirms the days." : "HR confirms the return date."}</div>
       ${(c.notices || []).length ? `<details class="more"><summary class="small">Message from HR · ${fmtS(c.notices[c.notices.length - 1].sentOn)}</summary><div class="letter-text">${esc(c.notices[c.notices.length - 1].body)}</div></details>` : ""}
       <label for="cov-${c.id}" class="small" style="font-weight:600">Who covers what${(c.coverage || "").trim() ? ` <span class="pill ok">${SVG(ICONS.check, 12)} Covered</span>` : ` <span class="small muted" style="font-weight:400">Once you write a plan, the bar turns green.</span>`}</label><textarea id="cov-${c.id}" data-cov="${c.id}" placeholder="For example: Ben takes the Tuesday roasts. Saves when you click away.">${esc(c.coverage)}</textarea></div>`; }).join("") : '<p class="muted">Nobody on your team has time off coming up.</p>'}
       ${flags.length ? `<div class="small muted">Sent to HR, waiting on them: ${flags.map((c) => esc(emp(c.empId).name)).join(", ")}</div>` : ""}
@@ -1166,7 +1251,7 @@ function renderNow() {
   const roleName = { hr: "HR admin", mgr: S.me.label, emp: "Employee" }[S.me.role];
   const whoBtns = ORG() ? `<button class="btn sm" data-home>Spaces</button><button class="btn sm" data-signout>Sign out</button>`
     : FB() && ME && ME.user ? `<button class="btn sm" data-logout>Switch user</button><button class="btn sm" data-home>Spaces</button>`
-    : FB() && S.space && S.space.sandbox ? `<button class="btn sm" data-logout>Switch user</button><button class="btn sm" data-leave-sandbox aria-label="Leave sandbox"><span class="wide">Leave sandbox</span><span class="narrow">Exit</span></button>` : `<button class="btn sm" data-logout>Switch user</button>`;
+    : FB() && S.space && S.space.sandbox ? `<button class="btn sm" data-logout>Switch user</button><button class="btn sm" data-leave-sandbox aria-label="Leave sandbox"><span class="lbl-wide">Leave sandbox</span><span class="lbl-narrow">Exit</span></button>` : `<button class="btn sm" data-logout>Switch user</button>`;
   document.getElementById("who").innerHTML = `${avatar(me)}<span class="meta"><span class="nm">${esc(S.me.name)}</span><span class="r">${esc(ORG() ? `${roleName} · ${S.space.name}` : roleName)}</span></span>${whoBtns}`;
   const tabs = document.getElementById("tabs"), list = tabsFor(S.me.role);
   tabs.hidden = list.length < 2;
@@ -1220,8 +1305,9 @@ function renderHome(root) {
     setChrome(false);
     root.innerHTML = `<section class="access-wrap"><div class="panel access"><span class="hero-badge">Your invite</span>
       <h2>Welcome. ${UI.setup.company ? `${esc(UI.setup.company)} is ready to set up.` : "Your workspace is ready to set up."}</h2>
-      <p>Sign in with Google${UI.setup.email ? ` using <b>${esc(UI.setup.email)}</b>` : ""} to start. Setup takes about 10 minutes, and your company details are already filled in.</p>
-      ${ME && ME.google ? gButton() : `<p class="err">Google sign-in is not set up on this site yet.</p>`}
+      <p>Sign in${UI.setup.email ? ` as <b>${esc(UI.setup.email)}</b>` : ""} to start. Setup takes about 10 minutes, and your company details are already filled in.</p>
+      ${ME && ME.google ? gButton() : ""}
+      ${emailLinkBox()}
       ${err ? `<p class="err" role="alert">${esc(err)}</p>` : ""}
       <p class="small muted"><a href="/privacy">Privacy</a></p></div></section>`;
     return;
@@ -1235,12 +1321,13 @@ function renderHome(root) {
         <p class="lede">When someone on your team needs leave, Leave Ledger works out what California requires, what the state pays them, and every notice you owe, then helps you send it.</p>
         ${sandboxCta()}
         <p class="small">Ready to use it for your company? <button class="linkish" data-access-open>Ask for access</button></p>
-        ${ME && ME.google ? `<div class="hero-or">${gButton()}<span class="small muted">Invited to the preview? Open the link you were sent, or use the Google account your invite went to.</span></div>` : `<p class="small muted">Invited to the preview? Open the link you were sent.</p>`}
+        ${ME && ME.google ? `<div class="hero-or">${gButton()}<span class="small muted">Invited to the preview? Open the link you were sent, or use the account your invite went to.</span></div>` : `<p class="small muted">Invited to the preview? Open the link you were sent.</p>`}
+        ${emailLinkBox()}
         ${err ? `<p class="err" role="alert">${esc(err)}</p>` : ""}
         <p class="small muted"><a href="/privacy">Privacy</a></p>
       </div>
       <div class="hero-art" aria-hidden="true">
-        <div class="float f1"><div class="fr"><span class="av c1">SD</span><div style="flex:1"><b>Sofia's bonding leave</b><div class="small muted">Dec 3 to Jan 27</div></div><span class="pill ok">Confirmed</span></div>
+        <div class="float f1"><div class="fr"><span class="av c1">LK</span><div style="flex:1"><b>Lena's bonding leave</b><div class="small muted">Dec 3 to Jan 27</div></div><span class="pill ok">Confirmed</span></div>
           <div class="bars"><i class="d"></i><i class="d"></i><i class="n"></i><i></i></div><span class="small">Job protected for 8 weeks. The state pays about $547 a week.</span></div>
         <div class="float f2"><span class="ok-ic">${SVG(ICONS.check, 22)}</span><div><b>Eligibility notice sent</b><div class="small muted">2 days before the legal deadline</div></div></div>
         <div class="float f3"><span class="label">What the manager sees</span><span>Out Dec 3, back Jan 28. <span class="muted">Never the reason.</span></span></div>
@@ -1253,7 +1340,7 @@ function renderHome(root) {
   const C = ME.create || { ok: false };
   root.innerHTML = `<section class="login">
     <div class="panel welcome" style="gap:14px">
-      <div><h1>Hi ${esc(u.name.split(" ")[0])}</h1><p class="lede" style="margin-top:6px">Signed in as ${esc(u.email)}.</p></div>
+      <div><h1>${u.name ? `Hi ${esc(u.name.split(" ")[0])}` : "Welcome"}</h1><p class="lede" style="margin-top:6px">Signed in as ${esc(u.email)}.</p></div>
       <div class="btns">${ME.admin ? `<a class="btn sm" style="text-decoration:none;color:inherit" href="/inbox">Inbox</a><a class="btn sm" style="text-decoration:none;color:inherit" href="/strategy">Strategy</a>` : ""}<button class="btn sm" data-signout>Sign out</button></div>
       ${err ? `<p class="err" role="alert">${esc(err)}</p>` : ""}
       <p class="small muted"><a href="/privacy">Privacy</a></p>
@@ -1264,12 +1351,13 @@ function renderHome(root) {
         ${sp.length ? `<div class="accts">${sp.map(card).join("")}</div>` : C.ok ? `<p class="small muted">None yet. Set one up below.</p>` : (ME.pending || []).length ? "" : `<div class="infobox">Nothing here yet. If you were invited, ask the sender to use ${esc(u.email)}, or open the invite link you were sent.</div>${ACCOUNTS && ACCOUNTS.sandboxOn ? `<div class="sandbox-cta" style="margin-top:8px"><button class="btn primary" data-sandbox>Try it with a made-up company</button><span class="small muted">No sign-up. Your own copy, deleted after 7 days.</span></div>` : ""}`}
       </div>
       ${C.ok ? `<section class="panel" data-form="home" ${ME.prefill && !sp.some((x) => x.kind === "org") ? 'style="order:-1"' : ""}><h3>${ME.prefill && ME.prefill.name && !sp.some((x) => x.kind === "org") ? `Set up ${esc(ME.prefill.name)}` : "Set up a workspace for your company"}</h3>
-        <p class="small muted">Your own workspace, where you invite your HR team, managers and employees with their Google accounts. Each user sees only what their role allows.</p>
+        <p class="small muted">Your own workspace, where you invite your HR team, managers and employees by email. They sign in with Google or an emailed link. Each user sees only what their role allows.</p>
         <div class="note-box"><b>Made-up details only for now.</b> Real employee names, dates and health information are not supported until the security review is done. Use made-up employees to try how it would work for your team.</div>
         <div class="row"><div class="field"><label for="ws-name">Company name</label><input type="text" id="ws-name" data-bind="name" value="${esc(f.name)}" maxlength="80" placeholder="Bayside Dental"></div>
           <div class="field"><label for="ws-city">City</label><input type="text" id="ws-city" data-bind="city" value="${esc(f.city)}" maxlength="60" placeholder="San Jose, CA"></div></div>
         <div class="row"><div class="field"><label for="ws-hc">Number of employees</label><input type="number" id="ws-hc" data-bind="headcount" data-num min="1" value="${esc(f.headcount)}"><span class="hint">This decides which laws apply.</span></div>
           <div class="field"><label for="ws-job">Your job title</label><input type="text" id="ws-job" data-bind="jobTitle" value="${esc(f.jobTitle)}" maxlength="60" placeholder="Office manager"></div></div>
+        ${!u.name ? `<div class="field"><label for="ws-you">Your name</label><input type="text" id="ws-you" data-bind="yourName" value="${esc(f.yourName || "")}" maxlength="80" autocomplete="name"><span class="hint">Shown to your team on letters and notices.</span></div>` : ""}
         <div class="field"><span class="label" style="font-weight:600;font-size:.86rem;text-transform:none;letter-spacing:0;color:var(--ink)">Start with</span>
           <label class="check"><input type="radio" name="ws-start" data-bind="start" value="sample" ${f.start === "sample" ? "checked" : ""}>10 made-up employees and a few leaves, with you as the HR admin</label>
           <label class="check"><input type="radio" name="ws-start" data-bind="start" value="empty" ${f.start === "empty" ? "checked" : ""}>Just me. I will add made-up employees myself</label></div>
@@ -1323,8 +1411,8 @@ function sampleUsers() {
   return `<div class="head"><div><h2>Users</h2><p>Everyone who can use your copy of ${esc(D().company.name)}. Try the app as any of them${solo ? "" : ", or invite a colleague to explore it with you"}.</p></div></div>
   <div class="grid2 form">
     ${solo ? `<section class="panel"><h3>Just you</h3><p class="small muted">A sandbox is a private copy for one visitor and cannot be shared. Each colleague can open their own from the home page.</p></section>` : `<section class="panel" data-form="users"><h3>Invite a colleague</h3>
-      <p class="small muted">They sign in at this site with Google using this email, and see this same copy, with your changes.</p>
-      <div class="field"><label for="us-email">Google account email</label><input type="email" id="us-email" data-bind="email" value="${esc(U.email)}" placeholder="name@company.com" autocomplete="off"></div>
+      <p class="small muted">They sign in at this site with this email, using Google or an emailed link, and see this same copy, with your changes.</p>
+      <div class="field"><label for="us-email">Their email</label><input type="email" id="us-email" data-bind="email" value="${esc(U.email)}" placeholder="name@company.com" autocomplete="off"></div>
       ${U.error ? `<p class="err" role="alert">${esc(U.error)}</p>` : ""}
       <div class="btns"><button class="btn primary" data-invite-colleague ${U.busy ? "disabled" : ""}>Invite</button></div>
       ${U.colleagues.length ? `<div class="queue">${U.colleagues.map((c) => `<div class="qrow" style="grid-template-columns:minmax(0,1fr) auto auto"><div class="small">${esc(c.email)}</div>${c.joined ? pill("Signed in", "ok") : pill("Invited", "")}<button class="btn sm" data-uncolleague="${esc(c.email)}">Remove</button></div>`).join("")}</div>` : `<p class="small muted">No colleagues invited yet.</p>`}
@@ -1349,15 +1437,15 @@ function hrUsers() {
   const emps = D().employees, taken = new Set(U.list.map((m) => m.empId));
   const free = emps.filter((e) => !taken.has(e.id));
   const nameOf = (id) => (emps.find((e) => e.id === id) || {}).name || "Removed employee";
-  return `<div class="head"><div><h2>Users</h2><p>Who can sign in to ${esc(S.space.name)} with Google, and what they see. HR admins see everything, managers see dates and coverage for their team, and employees see their own leave.</p></div></div>
+  return `<div class="head"><div><h2>Users</h2><p>Who can sign in to ${esc(S.space.name)}, and what they see. HR admins see everything, managers see dates and coverage for their team, and employees see their own leave.</p></div></div>
   <div class="grid2 form">
     <section class="panel" data-form="users"><h3>Invite a user</h3>
-      <div class="field"><label for="us-email">Google account email</label><input type="email" id="us-email" data-bind="email" value="${esc(U.email)}" placeholder="${U.domain ? "name@" + esc(U.domain) : "name@company.com"}" autocomplete="off"></div>
+      <div class="field"><label for="us-email">Their email</label><input type="email" id="us-email" data-bind="email" value="${esc(U.email)}" placeholder="${U.domain ? "name@" + esc(U.domain) : "name@company.com"}" autocomplete="off"></div>
       <div class="field"><label for="us-emp">Which employee is this?</label><select id="us-emp" data-bind="empId"><option value="">Choose</option>${free.map((e) => `<option value="${e.id}" ${U.empId === e.id ? "selected" : ""}>${esc(e.name)} · ${esc(e.role)}</option>`).join("")}</select>${free.length ? "" : `<span class="hint">Everyone already has access. Add an employee first.</span>`}</div>
       <div class="field"><label for="us-role">Role</label><select id="us-role" data-bind="role">${Object.entries(ROLE_NAMES).map(([k, n]) => `<option value="${k}" ${U.role === k ? "selected" : ""}>${n}</option>`).join("")}</select></div>
       ${U.error ? `<p class="err" role="alert">${esc(U.error)}</p>` : ""}
       <div class="btns"><button class="btn primary" data-invite-user ${U.busy ? "disabled" : ""}>Invite</button></div>
-      <p class="small muted">They sign in at this site with Google using that email. There is no email sent yet, so tell them yourself.</p>
+      <p class="small muted">They sign in at this site with that email, using Google or an emailed link. There is no email sent yet, so tell them yourself.</p>
       ${U.lockReason === "sample" && !U.domain ? "" : `<h3>Company Google accounts only</h3>
       ${U.canLock || U.domain ? `<label class="check"><input type="checkbox" data-lock ${U.domain ? "checked" : ""}>Only allow @${esc(U.domain || U.myDomain)} accounts</label><span class="hint small muted">Users must sign in with a Google Workspace account on your company domain.</span>` : `<p class="small muted">Available when you sign in with a Google Workspace account on your company domain.</p>`}`}
     </section>
@@ -1461,6 +1549,23 @@ async function sendSurvey() {
   try { await api("survey", { answers: V.a }); V.busy = false; V.done = true; V.sent = true; render(); window.scrollTo(0, 0); }
   catch (e) { if (e.message === "signed out") return; V.busy = false; V.error = e.message; render(); }
 }
+// Finishing a sign-in from an emailed link (?signin=...). The POST here is what signs in, not opening the link.
+async function signInFromLink() {
+  const u = new URL(location.href), t = u.searchParams.get("signin");
+  if (!t) return;
+  u.searchParams.delete("signin"); history.replaceState(null, "", u.pathname + (u.search || "") + u.hash);
+  try { await api("auth/email/finish", { t }); ACCOUNTS = null; ME = null; UI.setup = null; }
+  catch (e) { UI.login.error = e.message; }
+}
+// The emailed-link form, on the sign-in page and the setup screen.
+function emailLinkBox() {
+  const L = UI.emailLink;
+  if (L.sent) return `<div class="infobox"><b>Check your email.</b> We sent a sign-in link to ${esc(L.email)}. It works once, for 15 minutes.${L.devLink ? ` <a href="${esc(L.devLink)}">Open it here</a> (local copy only).` : ""} <button class="linkish" data-email-again>Use a different email</button></div>`;
+  if (!L.open) return `<p class="small">No Google account? <button class="linkish" data-email-open>Get a sign-in link by email</button></p>`;
+  return `<div class="emailbox" data-form="emaillink"><label for="el-email">Your work email</label>
+    <div class="row-inline"><input type="email" id="el-email" value="${esc(L.email)}" autocomplete="email" placeholder="you@company.com"><button class="btn primary" data-email-send ${L.busy ? "disabled" : ""}>${L.busy ? "Sending..." : "Email me a link"}</button></div>
+    ${L.error ? `<p class="err" role="alert">${esc(L.error)}</p>` : ""}</div>`;
+}
 async function joinFromLink() {
   const u = new URL(location.href), code = u.searchParams.get("invite");
   if (!code) return;
@@ -1486,6 +1591,14 @@ document.addEventListener("click", async (ev) => {
     return;
   }
   if (b.hasAttribute("data-signout")) { signOutGoogle(); return; }
+  if (b.hasAttribute("data-email-open")) { UI.emailLink.open = true; UI.emailLink.email ||= (UI.setup && UI.setup.email) || ""; renderLogin(); setTimeout(() => document.getElementById("el-email")?.focus(), 0); return; }
+  if (b.hasAttribute("data-email-again")) { Object.assign(UI.emailLink, { sent: false, open: true, devLink: "" }); renderLogin(); return; }
+  if (b.hasAttribute("data-email-send")) {
+    const L = UI.emailLink; L.email = document.getElementById("el-email").value.trim(); L.busy = true; L.error = ""; renderLogin();
+    try { const r = await api("auth/email/start", { email: L.email }); Object.assign(L, { busy: false, sent: true, devLink: (r && r.devLink) || "" }); }
+    catch (e) { Object.assign(L, { busy: false, error: e.message }); }
+    renderLogin(); return;
+  }
   if (b.hasAttribute("data-access-open")) {
     const A = UI.access; A.open = true; A.sent = false; A.error = "";
     if (ME && ME.user) { A.form.email ||= ME.user.email; A.form.name ||= ME.user.name || ""; }
@@ -1530,15 +1643,27 @@ document.addEventListener("click", async (ev) => {
   }
   if (b.hasAttribute("data-wiz-back")) { UI.wiz.step = Math.max(1, UI.wiz.step - 1); render(); return; }
   if (b.hasAttribute("data-wiz-close")) { UI.wiz = null; render(); window.scrollTo(0, 0); return; }
-  if (b.hasAttribute("data-wiz-next")) { document.querySelectorAll('[data-form="wiz"] [data-bind]').forEach((el) => { UI.wiz[el.dataset.bind] = el.type === "checkbox" ? el.checked : el.hasAttribute("data-num") ? +el.value : el.value; }); UI.wiz.step = 3; render(); window.scrollTo(0, 0); return; }
+  if (b.hasAttribute("data-wiz-next")) { document.querySelectorAll('[data-form="wiz"] [data-bind]').forEach((el) => { if (el.type === "radio" && !el.checked) return; UI.wiz[el.dataset.bind] = el.type === "checkbox" ? el.checked : el.hasAttribute("data-num") ? +el.value : el.value; }); if (daysEmpty({ ...UI.wiz, reason: UI.wiz.need })) { toast("Add at least one day off"); return; } UI.wiz.step = 3; render(); window.scrollTo(0, 0); return; }
   if (b.hasAttribute("data-wiz-use")) {
     const W = UI.wiz, o = wizOpts(W);
-    Object.assign(UI.req, { reason: W.need, relation: o.relation, start: o.start, weeks: o.weeks, disWeeks: o.disWeeks, bondWeeks: o.bondWeeks, days: o.days, hours: o.hours });
+    Object.assign(UI.req, { reason: W.need, relation: o.relation, start: o.start, weeks: o.weeks, disWeeks: o.disWeeks, bondWeeks: o.bondWeeks, days: o.days, hours: o.hours, pattern: o.pattern === "days" ? "days" : "block", dates: o.dates || [] });
     UI.wiz = null; UI.tab = "myleave"; UI.reqOpen = true; render();
     setTimeout(() => { document.querySelector('[data-form="req"]')?.scrollIntoView({ behavior: "smooth", block: "start" }); }, 0);
     toast("Check the details, then send it to HR."); return;
   }
-  if (b.dataset.change) { await act({ type: "updateCase", caseId: b.dataset.change, opts: readChange() }, "New dates saved. Deadlines updated."); return; }
+  if (b.dataset.dayAdd || b.dataset.dayDel) {
+    const prefix = b.dataset.dayAdd || b.dataset.dayDel.split("|")[0];
+    const target = { "pl-": UI.planner, "rq-": UI.req, "wz-": UI.wiz, "ce-": UI.ce }[prefix]; if (!target) return;
+    target.dates = target.dates || [];
+    if (b.dataset.dayDel) { const d = b.dataset.dayDel.split("|")[1]; target.dates = target.dates.filter((x) => x.d !== d); render(); return; }
+    const d = document.getElementById(prefix + "nd")?.value, h = document.getElementById(prefix + "nh")?.value;
+    if (!d) { toast("Pick a day first"); return; }
+    const day = new Date(d + "T00:00:00Z").getUTCDay();
+    if (day === 0 || day === 6 || (D().company.holidays || []).includes(d)) { toast("That day is a weekend or company holiday"); return; }
+    target.dates = [...target.dates.filter((x) => x.d !== d), h ? { d, h: +h } : { d }];
+    UI.dayDraft[prefix] = ""; render(); document.getElementById(prefix + "nd")?.focus(); return;
+  }
+  if (b.dataset.change) { const o = readChange(); if (o.pattern === "days" && !o.dates.length) { toast("Add at least one day off"); return; } await act({ type: "updateCase", caseId: b.dataset.change, opts: o }, "New dates saved. Deadlines updated."); UI.ce = null; render(); return; }
   if (b.dataset.returned) { await act({ type: "markReturned", caseId: b.dataset.returned, on: document.getElementById("ce-back")?.value }, "Marked as returned"); return; }
   if (b.dataset.unreturn) { await act({ type: "markReturned", caseId: b.dataset.unreturn, on: null }, "Return undone"); return; }
   if (b.dataset.dl) {
@@ -1609,12 +1734,12 @@ document.addEventListener("click", async (ev) => {
   }
   if (b.hasAttribute("data-invite-user")) {
     const U = UI.users;
-    if (await usersChange({ op: "invite", email: U.email.trim(), role: U.role, empId: U.empId }, "Invited. Ask them to sign in with Google.")) { U.email = ""; U.empId = ""; render(); }
+    if (await usersChange({ op: "invite", email: U.email.trim(), role: U.role, empId: U.empId }, "Invited. Ask them to sign in with that email.")) { U.email = ""; U.empId = ""; render(); }
     return;
   }
   if (b.hasAttribute("data-invite-colleague")) {
     const U = UI.users; U.busy = true; U.error = "";
-    try { const j = await api("preview/members", { op: "invite", email: (document.getElementById("us-email")?.value || "").trim() }); Object.assign(U, { colleagues: j.colleagues, email: "", busy: false }); render(); toast("Invited. Ask them to sign in with Google."); }
+    try { const j = await api("preview/members", { op: "invite", email: (document.getElementById("us-email")?.value || "").trim() }); Object.assign(U, { colleagues: j.colleagues, email: "", busy: false }); render(); toast("Invited. Ask them to sign in with that email."); }
     catch (e) { if (e.message !== "signed out") { U.busy = false; U.error = e.message; render(); } }
     return;
   }
@@ -1656,10 +1781,12 @@ document.addEventListener("click", async (ev) => {
   if (b.dataset.open) { UI.tab = "cases"; UI.caseId = b.dataset.open; render(); window.scrollTo(0, 0); return; }
   if (b.hasAttribute("data-back")) { UI.caseId = null; render(); return; }
   if (b.hasAttribute("data-createcase")) {
+    if (daysEmpty(UI.planner)) { toast("Add at least one day off"); return; }
     const f = UI.planner; const j = await act({ type: "createCase", empId: f.empId, reason: f.reason, opts: optsFrom(f) });
     if (j) { UI.tab = "cases"; UI.caseId = j.createdId; render(); window.scrollTo(0, 0); toast("Saved. The first notice is due in 5 business days."); } return;
   }
   if (b.hasAttribute("data-submitreq")) {
+    if (daysEmpty(UI.req)) { toast("Add at least one day off"); return; }
     const f = UI.req, A = UI.reqAI;
     const j = await act({ type: "createCase", empId: S.me.empId, reason: f.reason, opts: optsFrom(f), intake: A.draft ? { text: A.sent, ai: A.draft } : undefined });
     if (j) { UI.reqAI = { text: "", sent: "", draft: null, busy: false, error: "" }; UI.reqOpen = false; render(); }
@@ -1715,6 +1842,8 @@ document.addEventListener("change", (ev) => {
     return;
   }
   if (!S) return;
+  if (el.name === "ce-pat" && UI.ce) { UI.ce.pattern = el.value; render(); return; }
+  if (el.type === "date" && /^(pl|rq|wz|ce)-nd$/.test(el.id)) { UI.dayDraft[el.id.slice(0, 3)] = el.value; return; }
   if (el.dataset.userRole) { usersChange({ op: "role", email: el.dataset.userRole, role: el.value }, "Role changed"); return; }
   if (el.hasAttribute("data-lock")) { usersChange({ op: "lock", on: el.checked }, el.checked ? "Company accounts only" : "Any Google account can be invited"); return; }
   if (UI.letter && ["lt-on", "lt-how"].includes(el.id)) { readLetterFields(); return; }
@@ -1769,7 +1898,7 @@ function bind(el) {
   if (el.type === "date" && !v) return;
   target[el.dataset.bind] = v;
   if (el.dataset.bind === "reason" && REASONS[v].rel === "bereave" && !REL.bereave.some((r) => r[0] === target.relation)) target.relation = "parent";
-  if (!["flag", "wiz"].includes(form.dataset.form)) render(); // re-rendering on blur would swallow the next click
+  if (!["flag", "wiz"].includes(form.dataset.form) || el.dataset.bind === "pattern") render(); // re-rendering on blur would swallow the next click
 }
 
 // Opening a letter on the employee's leave page records that it was read (once). No re-render, so the letter stays open.
@@ -1790,6 +1919,7 @@ document.addEventListener("visibilitychange", async () => {
 });
 
 (async () => {
+  await signInFromLink();
   await joinFromLink();
   const u0 = new URL(location.href), ae = u0.searchParams.get("auth_error");
   const AUTH_MSG = { cancelled: "Google sign-in was cancelled.", expired: "Sign-in took too long or started in another browser. Try again.", failed: "Sign-in could not be confirmed. Try again.", unreachable: "Could not reach Google. Try again.", unverified: "Your Google account email is not verified yet.", off: "Google sign-in is not set up yet." };

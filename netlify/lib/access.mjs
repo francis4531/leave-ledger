@@ -39,7 +39,7 @@ export const inviteEmail = ({ name, company }, link) => ({
 
 Thanks for asking to use Leave Ledger for ${company}. You are in.
 
-Open this link and sign in with this Google account to set up your workspace:
+Open this link and sign in with this email address, using Google or an emailed link, to set up your workspace:
 ${link}
 
 It takes about 10 minutes: tell us about your company, bring in your employees, and invite your managers.

@@ -96,6 +96,37 @@ describe("test site: what each role can see", () => {
       }
     }
   });
+  test("separate days off: saved, checked, shown to the manager as days only, and changes are passed on", async () => {
+    const s = testSite();
+    const hr = await signedIn(s, "grace@mesaverde.example");
+    const days = [{ d: "2027-01-06" }, { d: "2027-01-13", h: 4 }];
+    for (const bad of [
+      { reason: "bereavement", opts: { pattern: "days", relation: "parent", dates: days } },
+      { reason: "family_care", opts: { pattern: "days", relation: "parent", dates: [] } },
+      { reason: "family_care", opts: { pattern: "days", relation: "parent", dates: [{ d: "2027-02-30" }] } },
+      { reason: "family_care", opts: { pattern: "days", relation: "parent", dates: [{ d: "2027-01-06", h: 99 }] } },
+      { reason: "family_care", opts: { pattern: "sometimes", start: "2027-01-06", weeks: 2 } },
+    ]) assert.equal((await hr.post("/api/action", { type: "createCase", empId: "e8", ...bad })).status, 400, JSON.stringify(bad));
+    const r = await hr.post("/api/action", { type: "createCase", empId: "e8", reason: "family_care", opts: { pattern: "days", relation: "parent", dates: days } });
+    assert.equal(r.status, 200);
+    const c = r.body.data.cases.find((x) => x.empId === "e8" && x.opts.pattern === "days");
+    assert.equal(c.opts.start, "2027-01-06"); assert.deepEqual(c.opts.dates, [{ d: "2027-01-06", h: 0 }, { d: "2027-01-13", h: 4 }]);
+    await hr.post("/api/action", { type: "approveCase", caseId: c.id, notify: true });
+    const dana = await signedIn(s, "dana@mesaverde.example");
+    let tc = (await dana.get("/api/state")).body.data.teamCases.find((x) => x.id === c.id);
+    assert.deepEqual(tc.days, ["2027-01-06", "2027-01-13"]);
+    assert.equal(tc.reason, undefined); assert.equal(tc.opts, undefined);
+    assert.doesNotMatch(JSON.stringify(tc), /family_care|parent|relation|pattern/);
+    // HR adds a day: the manager gets the new list.
+    const n0 = tc.notices.length;
+    await hr.post("/api/action", { type: "updateCase", caseId: c.id, opts: { pattern: "days", dates: [...days, { d: "2027-01-20" }] } });
+    tc = (await dana.get("/api/state")).body.data.teamCases.find((x) => x.id === c.id);
+    assert.equal(tc.days.length, 3); assert.equal(tc.notices.length, n0 + 1); assert.match(tc.notices.at(-1).body, /January 20|Jan 20/);
+    // Back to one block works too.
+    assert.equal((await hr.post("/api/action", { type: "updateCase", caseId: c.id, opts: { pattern: "block", start: "2027-01-06", weeks: 2 } })).status, 200);
+    tc = (await dana.get("/api/state")).body.data.teamCases.find((x) => x.id === c.id);
+    assert.equal(tc.days, null);
+  });
   test("crafted leave types and impossible dates are refused, without breaking the server", async () => {
     const s = testSite();
     const ben = await signedIn(s, "ben@mesaverde.example");

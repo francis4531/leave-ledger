@@ -47,7 +47,7 @@ export function startServer(mode = "test", port = 0) {
     });
     server.listen(port, () => {
       const base = `http://localhost:${server.address().port}`;
-      env = mode === "preview" ? { ...PREVIEW_ENV, LL_GOOGLE_AUTH_URL: base + "/fake-google" } : { ...TEST_ENV };
+      env = mode === "preview" ? { ...PREVIEW_ENV, LL_GOOGLE_AUTH_URL: base + "/fake-google", LL_DEV_EMAIL_LINKS: "show" } : { ...TEST_ENV };
       resolve({ server, base, store, close: () => new Promise((r) => { server.close(r); server.closeAllConnections(); }) });
     });
   });

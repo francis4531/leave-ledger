@@ -15,7 +15,7 @@ const r = spawnSync(process.execPath, ["--test", "--test-reporter=spec", "--test
 // Which part of the product each test file covers, in plain words.
 const AREAS = {
   "rules.test.mjs": "Leave rules (answer key)", "local-sick.test.mjs": "City sick leave", "access.test.mjs": "Access, privacy and security",
-  "notices.test.mjs": "Letters and notices", "roster.test.mjs": "Employee import and manager notice", "guide.test.mjs": "Guide and state pay steps", "requests.test.mjs": "Access requests",
+  "notices.test.mjs": "Letters and notices", "roster.test.mjs": "Employee import and manager notice", "guide.test.mjs": "Guide and state pay steps", "requests.test.mjs": "Access requests", "signin.test.mjs": "Signing in",
 };
 let events = [];
 try { events = JSON.parse(fs.readFileSync(tmp, "utf8")); } catch (e) { events = []; }

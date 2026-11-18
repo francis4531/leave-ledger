@@ -17,7 +17,7 @@ import GOLDEN from "./golden-data.mjs";
 import { runCases, summarizeRun } from "./eval.mjs";
 import { IKEY, FKEY, SKEY, SURVEY, loadInvites, validCode, newCode, addFeedback, cleanFeedback, cleanSurvey, summarize, aiGlobalOk, dict } from "./feedback.mjs";
 import { json, err, redirect, withCookies, signObj, readObj, cookieOf, setCookie, safeEqual } from "./session.mjs";
-import { googleOn, startGoogle, finishGoogle, upsertUser, userCookie, clearUserCookie, currentUser, saveUser, isAdminEmail, safeNext, baseUrl } from "./google.mjs";
+import { googleOn, startGoogle, finishGoogle, upsertUser, userForGoogle, userForEmail, newLoginToken, useLoginToken, signInEmail, userCookie, clearUserCookie, currentUser, saveUser, isAdminEmail, safeNext, baseUrl } from "./google.mjs";
 import { ROLES, EMAIL_RE, loadOrg, saveOrg, loadOrgIndex, orgDataKey, memberFor, domainOk, listPending, acceptInvite, declineInvite, cleanCreate, createOrg, acctFor, changeMembers } from "./orgs.mjs";
 
 export { signObj, readObj, cookieOf, setCookie };
@@ -109,7 +109,8 @@ export function viewFor(D, acct, today, env = {}, space = { kind: "test" }) {
       const st = c.reason === "unknown" ? { t: "Sent to HR", cls: "warn" } : E.caseStatus(c, D, today);
       // Only what California lets a manager know: dates, status, coverage, and the notices HR sent this manager.
       const notices = (c.mgrNotices || []).filter((n) => n.to === me.id).map(({ subject, body, sentOn, delivery }) => ({ subject, body, sentOn, delivery }));
-      return { id: c.id, empId: c.empId, start: d.start, end: d.end, status: st, coverage: c.coverage, flagged: c.reason === "unknown", approved: !!c.approvedOn, notices };
+      const days = c.reason !== "unknown" && E.isDays(c.reason, c.opts) ? (E.planFor(c, D).days || []).map((x) => x.d) : null;
+      return { id: c.id, empId: c.empId, start: d.start, end: d.end, days, status: st, coverage: c.coverage, flagged: c.reason === "unknown", approved: !!c.approvedOn, notices };
     });
   }
   return { ...out, data };
@@ -121,6 +122,14 @@ const trim = (s, n = 1000) => String(s ?? "").slice(0, n);
 const realDate = (d) => { const t = Date.parse(d + "T00:00:00Z"); return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === d; };
 function validOpts(reason, o) {
   if (typeof reason !== "string" || !Object.hasOwn(E.REASONS, reason) || reason === "unknown") return "Unknown leave type";
+  // Separate days off: a list of real dates, each a full or part day.
+  if (o.pattern === "days") {
+    if (!E.DAYS_REASONS.includes(reason)) return "Separate days off are for an own or family health condition.";
+    if (!Array.isArray(o.dates) || !o.dates.length) return "Add at least one day off.";
+    if (o.dates.length > 120) return "That is more than 120 days. Plan it as one block instead.";
+    for (const x of o.dates) if (!x || typeof x.d !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(x.d) || !realDate(x.d) || (x.h != null && !(+x.h > 0 && +x.h <= 24))) return "One of the days is not a real date or has the wrong hours.";
+    o = { ...o, start: [...o.dates].map((x) => x.d).sort()[0] };
+  } else if (o.pattern != null && o.pattern !== "block") return "Unknown leave pattern";
   // A real calendar date, so 2026-02-31 is refused rather than rolled into March.
   if (!/^\d{4}-\d{2}-\d{2}$/.test(o.start || "") || !realDate(o.start)) return "Pick the first day off.";
   if (o.relation != null && (typeof o.relation !== "string" || o.relation.length > 20)) return "Unknown family member";
@@ -128,7 +137,12 @@ function validOpts(reason, o) {
   if (!n(o.weeks ?? 1, 1, 52) || !n(o.disWeeks ?? 1, 1, 30) || !n(o.bondWeeks ?? 0, 0, 12) || !n(o.days ?? 1, 1, 20) || !n(o.hours ?? 1, 1, 80)) return "Length is out of range";
   return null;
 }
-const cleanOpts = (o) => ({ start: o.start, weeks: +o.weeks || 1, disWeeks: +o.disWeeks || 1, bondWeeks: +o.bondWeeks || 0, days: +o.days || 1, hours: +o.hours || 1, relation: trim(o.relation, 20) || "parent" });
+const cleanOpts = (o) => {
+  const base = { start: o.start, weeks: +o.weeks || 1, disWeeks: +o.disWeeks || 1, bondWeeks: +o.bondWeeks || 0, days: +o.days || 1, hours: +o.hours || 1, relation: trim(o.relation, 20) || "parent" };
+  if (o.pattern !== "days") return base;
+  const dates = E.leaveDays({ dates: o.dates.map((x) => ({ d: x.d, h: x.h == null ? 0 : Math.round(+x.h * 4) / 4 })) });
+  return { ...base, start: dates[0].d, pattern: "days", dates };
+};
 
 // Keeps what Clerk read next to what the user finally sent. This is the correction signal.
 function attachIntake(D, c, a, today, source) {
@@ -235,7 +249,7 @@ function apply(D, acct, a, today, kind = "test") {
       if (a.type === "approveCase") { c.approvedOn = today; c.approvedBy = who; log(`Approved ${e.name}'s leave`); }
       if (m && (a.type === "notifyManager" || a.notify !== false)) {
         const d = E.caseDates(c, D), P = E.planFor(c, D);
-        const msg = managerNotice(a.type === "approveCase" ? "approved" : "update", { emp: e, mgr: m, co: D.company, start: d.start, end: d.end, protectedLeave: P.segs.some((x) => x.lane === "protect" && x.cls !== "none"), hr: who, note });
+        const msg = managerNotice(a.type === "approveCase" ? "approved" : "update", { emp: e, mgr: m, co: D.company, start: d.start, end: d.end, days: P.days ? P.days.map((x) => x.d) : null, protectedLeave: P.segs.some((x) => x.lane === "protect" && x.cls !== "none"), hr: who, note });
         c.mgrNotices = [...(c.mgrNotices || []), { kind: a.type === "approveCase" ? "approved" : "update", to: m.id, ...msg, start: d.start, end: d.end, sentOn: today, by: who, delivery: "app" }].slice(-20);
         a._mail = { caseId: c.id, to: m.id };
         log(`Told ${m.name} the dates for ${e.name}`);
@@ -292,7 +306,7 @@ function apply(D, acct, a, today, kind = "test") {
       if (!hr) return "HR only";
       const c = kase(a.caseId); if (!c || c.reason === "unknown") return "Case not found";
       const bad = validOpts(c.reason, { ...c.opts, ...(a.opts || {}) }); if (bad) return bad;
-      const before = E.caseDates(c, D);
+      const before = E.caseDates(c, D), beforeDays = (E.planFor(c, D).days || []).map((x) => x.d);
       c.opts = cleanOpts({ ...c.opts, ...(a.opts || {}) });
       const done = c.tasks.filter((t) => t.done);
       const plan = E.buildPlan(emp(c.empId), D.company, c.reason, c.opts);
@@ -302,8 +316,9 @@ function apply(D, acct, a, today, kind = "test") {
       log(`Changed dates for ${emp(c.empId).name}: ${before.start} to ${before.end} became ${after.start} to ${after.end}`);
       // A manager who was already told the dates gets the new ones, so the old message never stands alone.
       const e = emp(c.empId), m = e && e.mgr ? emp(e.mgr) : null;
-      if (c.approvedOn && m && (before.start !== after.start || before.end !== after.end) && (c.mgrNotices || []).some((n) => n.to === m.id) && a.notify !== false) {
-        const msg = managerNotice("update", { emp: e, mgr: m, co: D.company, start: after.start, end: after.end, protectedLeave: plan.segs.some((x) => x.lane === "protect" && x.cls !== "none"), hr: who, note: "" });
+      const daysChanged = JSON.stringify(beforeDays) !== JSON.stringify((plan.days || []).map((x) => x.d));
+      if (c.approvedOn && m && (before.start !== after.start || before.end !== after.end || daysChanged) && (c.mgrNotices || []).some((n) => n.to === m.id) && a.notify !== false) {
+        const msg = managerNotice("update", { emp: e, mgr: m, co: D.company, start: after.start, end: after.end, days: plan.days ? plan.days.map((x) => x.d) : null, protectedLeave: plan.segs.some((x) => x.lane === "protect" && x.cls !== "none"), hr: who, note: "" });
         c.mgrNotices = [...(c.mgrNotices || []), { kind: "update", to: m.id, ...msg, start: after.start, end: after.end, sentOn: today, by: who, delivery: "app" }].slice(-20);
         a._mail = { caseId: c.id, to: m.id };
         log(`Told ${m.name} the new dates for ${e.name}`);
@@ -479,7 +494,7 @@ async function spacesFor(store, user, linkCode) {
   return out;
 }
 function canCreate(env, user, spaces) {
-  if (!user) return { ok: false, why: "Sign in with Google first." };
+  if (!user) return { ok: false, why: "Sign in first." };
   if (isAdminEmail(env, user.email)) return { ok: true };
   const rule = String(env.LL_WORKSPACE_SIGNUP || "invited").toLowerCase();
   if (rule === "off") return { ok: false, why: "New workspaces are not open yet." };
@@ -558,7 +573,7 @@ async function route_(req, store, env) {
     const clear = setCookie("", 0, "ll_oauth");
     const sep = (p) => (p.includes("?") ? "&" : "?");
     if (r.error) return redirect(r.next + sep(r.next) + "auth_error=" + r.error, [clear]);
-    const user = await upsertUser(store, r.claims);
+    const user = await userForGoogle(store, r.claims);
     if (r.intent === "admin") {
       if (!isAdminEmail(env, user.email)) return redirect("/inbox?auth_error=notadmin", [clear]);
       return redirect("/inbox", [clear, setCookie(signObj({ k: "admin", em: user.email }, ADMIN_TTL, env), ADMIN_TTL, "ll_admin")]);
@@ -572,6 +587,34 @@ async function route_(req, store, env) {
     if (j && j.k === "join" && validCode(j.c)) await linkInvite(store, user, j.c);
     await saveUser(store, user);
     return redirect(safeNext(r.next), [clear, userCookie(user, env), ...(j ? [setCookie("", 0, "ll_join")] : [])]);
+  }
+  // Sign in with a link sent by email, for users without a Google account. The link opens the app, which then
+  // finishes the sign-in with a POST, so email scanners that open links do not use it up.
+  if (FB && route === "auth/email/start" && req.method === "POST") {
+    const b = await req.json().catch(() => ({}));
+    const email = String(b.email || "").toLowerCase().trim().slice(0, 120);
+    if (!EMAIL_RE.test(email)) return err("That email does not look right. Check for a typo.");
+    if (await throttled(store, req, "emaillink", 5)) return err("That is a lot of links from here. Wait 15 minutes, then try again.", 429);
+    await failed(store, req, "emaillink");
+    const t = await newLoginToken(store, email), link = `${baseUrl(req, env)}/?signin=${t}`;
+    const m = signInEmail(link);
+    const sent = mailOn(env) ? await sendMail(env, { to: email, subject: m.subject, text: m.text }) : { status: "off" };
+    if (sent.status !== "sent" && env.LL_DEV_EMAIL_LINKS === "show") return json({ ok: true, devLink: link });
+    if (sent.status !== "sent") return err("Sign-in by email is not available right now. Use Google, or try again later.", 503);
+    return json({ ok: true });
+  }
+  if (FB && route === "auth/email/finish" && req.method === "POST") {
+    const b = await req.json().catch(() => ({}));
+    const email = await useLoginToken(store, b.t);
+    if (!email) return err("That sign-in link has expired or was already used. Ask for a new one.", 400);
+    const user = await userForEmail(store, email);
+    await claimInviteEmails(store, user);
+    const s = readSession(req, env);
+    if (s && s.t) await linkInvite(store, user, s.t);
+    const j = readObj(cookieOf(req, "ll_join"), env);
+    if (j && j.k === "join" && validCode(j.c)) await linkInvite(store, user, j.c);
+    await saveUser(store, user);
+    return withCookies(json({ ok: true }), [userCookie(user, env), ...(j ? [setCookie("", 0, "ll_join")] : [])]);
   }
   if (route === "auth/signout" && req.method === "POST") return withCookies(json({ ok: true }), [clearUserCookie(), clearSess()]);
 
@@ -588,7 +631,7 @@ async function route_(req, store, env) {
     return json({ prefill, mode: "feedback", google: googleOn(env), admin: !!(R.user && isAdminEmail(env, R.user.email)), user: R.user ? { email: R.user.email, name: R.user.name, hd: R.user.hd } : null, current: R.kind ? { ...spaceInfo(R), persona: !!R.acct } : null, spaces, pending, create: canCreate(env, R.user, spaces) });
   }
   if ((route === "org/accept" || route === "org/decline") && req.method === "POST") {
-    if (!R.user) return err("Sign in with Google first.", 401);
+    if (!R.user) return err("Sign in first.", 401);
     const body = await req.json().catch(() => ({}));
     if (route === "org/decline") { await declineInvite(store, R.user, String(body.id || "")); return json({ ok: true }); }
     const problem = await acceptInvite(store, R.user, String(body.id || ""));
@@ -608,7 +651,7 @@ async function route_(req, store, env) {
       return json({ ok: true }, 200, { "set-cookie": sessCookie({ t: body.id, ...(R.user ? { u: R.user.sub } : {}) }, env) });
     }
     if (body.kind === "org") {
-      if (!R.user) return err("Sign in with Google first.", 401);
+      if (!R.user) return err("Sign in first.", 401);
       const meta = await loadOrg(store, body.id), m = memberFor(meta, R.user);
       if (!meta || !m) return err("You do not have access to that workspace.", 403);
       if (meta.disabled) return err("That workspace is turned off.", 403);
@@ -620,11 +663,13 @@ async function route_(req, store, env) {
     return err("Bad request");
   }
   if (route === "org/create" && req.method === "POST") {
-    if (!R.user) return err("Sign in with Google first.", 401);
+    if (!R.user) return err("Sign in first.", 401);
     const gate = canCreate(env, R.user, await spacesFor(store, R.user, null));
     if (!gate.ok) return err(gate.why, 403);
+    const hadName = !!R.user.name;
     const o = cleanCreate(await req.json().catch(() => ({})), R.user);
     if (o.error) return err(o.error);
+    if (!hadName) await saveUser(store, R.user);
     const { meta, D } = createOrg(o, R.user, today);
     if (isAdminEmail(env, R.user.email)) meta.test = true; // the site admin's own workspaces are trials
     await store.setJSON(orgDataKey(meta.id), D);

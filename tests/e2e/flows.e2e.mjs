@@ -28,6 +28,31 @@ describe("test site", { skip }, () => {
   before(async () => { S = await startServer("test"); });
   after(async () => { await S.close(); });
 
+  test("separate days off: ask for them, HR approves, the manager sees each day and nothing else", async () => {
+    const pick = async (who) => { const x = await page(); await x.p.goto(S.base); await x.p.fill("#lg-pw", "test-pass-123"); await x.p.click(`[data-pick="${who}@mesaverde.example"]`); await x.p.waitForSelector("#tabs button"); return x; };
+    const wed = (k) => { const d = new Date(); d.setUTCDate(d.getUTCDate() + ((3 - d.getUTCDay() + 7) % 7 || 7) + 7 * k); return d.toISOString().slice(0, 10); };
+    const ben = await pick("alana"), p = ben.p;
+    await p.waitForSelector('[data-form="req"]');
+    await p.selectOption("#rq-reason", "family_care");
+    await p.check('input[name="rq-pat"][value="days"]'); await p.waitForSelector("#rq-nd");
+    await p.click("[data-submitreq]"); await p.waitForSelector("#toast:not([hidden])");
+    assert.match(await p.textContent("#toast"), /Add at least one day/);
+    for (const [k, h] of [[1, ""], [2, "4"]]) { await p.fill("#rq-nd", wed(k)); await p.dispatchEvent("#rq-nd", "change"); await p.selectOption("#rq-nh", h); await p.click('[data-day-add="rq-"]'); }
+    assert.equal((await p.$$(".daylist li")).length, 2);
+    assert.match(await p.textContent(".preview"), /2 days, 12 hours/);
+    await p.click("[data-submitreq]"); await p.waitForSelector(".status-banner.sent");
+    const hr = await pick("grace");
+    await hr.p.click('[data-tab="cases"]'); await hr.p.click('tr[data-open]:has-text("Alana Fuentes")'); await hr.p.click("[data-appr-open]"); await hr.p.click("[data-appr-go]"); await hr.p.waitForSelector(".status-banner.ok");
+    const dana = await pick("dana");
+    await dana.p.waitForSelector(".calw .sg.dayx");
+    assert.equal((await dana.p.$$(".calw .sg.dayx")).length, 2);
+    // Every bar on the calendar is actually visible, short ones too.
+    for (const w of await dana.p.$$eval(".calw .sg", (x) => x.map((e) => e.getBoundingClientRect().width))) assert.ok(w > 0);
+    const cover = await dana.p.textContent('.panel:has(h3:text("Plan coverage"))');
+    assert.match(cover, /Out on 2 days/);
+    assert.doesNotMatch(cover.replace("about health or family matters", ""), /family|parent|caring|surgery/i);
+    for (const x of [ben, hr, dana]) assert.deepEqual(x.errors, []);
+  });
   test("Back, Forward and reload keep your place; focus stays put; a loss starts now and lasts 5 days", async () => {
     const pick = async (who) => { const x = await page(); await x.p.goto(S.base); await x.p.fill("#lg-pw", "test-pass-123"); await x.p.click(`[data-pick="${who}@mesaverde.example"]`); await x.p.waitForSelector("#tabs button"); return x; };
     const hr = await pick("grace"), p = hr.p;

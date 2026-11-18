@@ -80,3 +80,56 @@ export async function currentUser(req, store, env) {
 }
 export const saveUser = (store, u) => store.setJSON(userKey(u.sub), u);
 export const isAdminEmail = (env, email) => !!email && String(env.LL_ADMIN_EMAILS || "").toLowerCase().split(/[\s,]+/).filter(Boolean).includes(String(email).toLowerCase());
+
+/* ---------- One user per email address ----------
+   Google and emailed sign-in links can both prove an address. Both land on the same user record, so a user's
+   workspaces do not depend on how they signed in. */
+const sha = (s) => crypto.createHash("sha256").update(String(s).toLowerCase().trim()).digest("hex");
+const emailKey = (email) => `user-by-email/${sha(email)}`;
+export async function indexUser(store, u) { if (u && u.email) await store.setJSON(emailKey(u.email), { sub: u.sub }); }
+export async function userByEmail(store, email) {
+  const ix = await store.get(emailKey(email), { type: "json" });
+  if (ix && validSub(ix.sub)) { const u = await store.get(userKey(ix.sub), { type: "json" }); if (u) return u; }
+  // Users from before the index existed: look once, then index them.
+  const { blobs } = await store.list({ prefix: "users/" });
+  for (const b of (blobs || []).slice(0, 5000)) {
+    const u = await store.get(b.key, { type: "json" });
+    if (u && String(u.email || "").toLowerCase() === String(email).toLowerCase()) { await indexUser(store, u); return u; }
+  }
+  return null;
+}
+// Google sign-in: if this address already has a user (say, from an emailed link), sign in as that user.
+export async function userForGoogle(store, claims) {
+  const known = await userByEmail(store, claims.email);
+  if (known && known.sub !== claims.sub) { Object.assign(known, { name: claims.name || known.name, hd: claims.hd, last: new Date().toISOString(), google: claims.sub }); await store.setJSON(userKey(known.sub), known); return known; }
+  const u = await upsertUser(store, claims); await indexUser(store, u); return u;
+}
+
+/* ---------- Emailed sign-in links ---------- */
+export const LINK_TTL_MIN = 15;
+const tokenKey = (t) => `login-tokens/${sha(t)}`;
+export async function newLoginToken(store, email) {
+  const t = crypto.randomBytes(24).toString("base64url");
+  await store.setJSON(tokenKey(t), { email: String(email).toLowerCase().trim(), exp: Date.now() + LINK_TTL_MIN * 60000 });
+  return t;
+}
+// One use only, and only within its time.
+export async function useLoginToken(store, t) {
+  if (!/^[A-Za-z0-9_-]{20,64}$/.test(String(t || ""))) return null;
+  const k = tokenKey(t), o = await store.get(k, { type: "json" });
+  if (!o) return null;
+  await store.delete(k);
+  return o.exp > Date.now() ? o.email : null;
+}
+export async function userForEmail(store, email) {
+  const known = await userByEmail(store, email);
+  const now = new Date().toISOString();
+  if (known) { known.last = now; await store.setJSON(userKey(known.sub), known); return known; }
+  const u = { sub: "em_" + sha(email).slice(0, 40), email: String(email).toLowerCase().trim(), name: "", created: now, last: now, invites: [], orgs: [], via: "email" };
+  await store.setJSON(userKey(u.sub), u); await indexUser(store, u);
+  return u;
+}
+export const signInEmail = (link) => ({
+  subject: "Your Leave Ledger sign-in link",
+  text: `Here is your link to sign in to Leave Ledger:\n${link}\n\nIt works once, for the next ${LINK_TTL_MIN} minutes. If you did not ask for it, you can ignore this email.\n\nLeave Ledger`,
+});

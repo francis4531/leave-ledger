@@ -73,11 +73,13 @@ export function draftLetter(key, c, emp, co, P, today, hr) {
   const wba = weeklyBenefit(emp, co);
   const pay = [];
   if (P.pays.sdi) pay.push(`State Disability Insurance (SDI) may pay you while you cannot work. File with the Employment Development Department (EDD) at SDI Online within ${RULES.sdi.fileWithin} days of your first day out. The first 7 days are a waiting period; you may use sick leave or vacation for them.`);
-  if (P.pays.pfl) pay.push(`Paid Family Leave (PFL) may pay you for up to 8 weeks. File with EDD at SDI Online within ${RULES.pfl.fileWithin} days of your first day of family leave.`);
+  if (P.pays.pfl) pay.push(P.days ? `Paid Family Leave (PFL) can pay for separate days of care. File with EDD at SDI Online within ${RULES.pfl.fileWithin} days of your first day off, then report the days on each claim.` : `Paid Family Leave (PFL) may pay you for up to 8 weeks. File with EDD at SDI Online within ${RULES.pfl.fileWithin} days of your first day of family leave.`);
   if (pay.length && wba) pay.push(`Based on the wages we have, EDD may pay about ${money(wba.amount)} a week. EDD decides the final amount.`);
 
   if (key === "notice") {
-    const p = [`${head}We received your request for leave for ${needs[c.reason]}, starting ${fmt(c.opts.start)}. This letter explains the leave you qualify for and what happens next.`];
+    const p = [P.days
+      ? `${head}We received your request for leave for ${needs[c.reason]}, on separate days: ${P.days.map((x) => fmt(x.d)).join(", ")}. This letter explains the leave you qualify for and what happens next.`
+      : `${head}We received your request for leave for ${needs[c.reason]}, starting ${fmt(c.opts.start)}. This letter explains the leave you qualify for and what happens next.`];
     if (c.reason === "pregnancy_bonding") {
       p.push(el.pdl.ok
         ? `\nPregnancy Disability Leave (PDL). You qualify. California law gives you up to 4 months of leave for any time you are unable to work because of pregnancy, childbirth, or a related condition. For your schedule of ${weeklyOf(emp)} hours a week, that is about ${pdlHours(emp)} hours. You do not need to have worked here for any minimum time.`
@@ -107,6 +109,16 @@ export function draftLetter(key, c, emp, co, P, today, hr) {
     return { subject: `Your leave request: what you qualify for`, body: p.join("\n") + `\n${sign(co, hr)}` };
   }
 
+  if (key === "designate" && P.days) {
+    // Separate days off: list the days, and count only the hours taken.
+    const pr = P.days.filter((x) => x.protected), np = P.days.filter((x) => !x.protected);
+    const p = [`${head}This letter confirms how your leave is counted.`];
+    if (pr.length) p.push(`\nThese days are California Family Rights Act leave${fmla ? ", and federal FMLA leave at the same time" : ""}:\n${pr.map((x) => `- ${fmt(x.d)}${x.h < weeklyOf(emp) / 5 - 0.01 ? ` (${x.h} hours)` : ""}`).join("\n")}\nOnly the hours you take count against your 12 weeks: ${+pr.reduce((a, x) => a + x.h, 0).toFixed(1)} hours so far.`);
+    if (np.length) p.push(`\nThese days are not protected by CFRA${el.cfra.ok ? ", because they go past your remaining balance" : ""}:\n${np.map((x) => `- ${fmt(x.d)}`).join("\n")}`);
+    p.push(`\nIf you need more days, tell me and I will add them. You work your normal schedule on the other days.`);
+    if (pay.length) p.push(`\nReminder about state pay:\n${pay.map((x) => `- ${x}`).join("\n")}`);
+    return { subject: `Your leave: days and how they are counted`, body: p.join("\n") + `\n${sign(co, hr)}` };
+  }
   if (key === "designate") {
     const p = [`${head}This letter confirms how your leave is counted.`];
     if (pdl) p.push(`\n- Pregnancy Disability Leave: ${fmt(pdl.start)} to ${last(pdl.end)}.`);
@@ -142,18 +154,21 @@ const SENSITIVE = /\b(pregnan\w*|baby|birth|matern\w*|patern\w*|adopt\w*|foster\
 export const sensitiveNote = (t) => { const m = String(t || "").match(SENSITIVE); return m ? m[0] : null; };
 
 // kind: "approved" for the first notice, "update" when the dates change later.
-export function managerNotice(kind, { emp, mgr, co, start, end, protectedLeave, hr, note }) {
+export function managerNotice(kind, { emp, mgr, co, start, end, days, protectedLeave, hr, note }) {
   const name = first(emp.name), full = emp.name;
   const lastDay = addDays(end, -1), back = nextWorkday(end, co.holidays || []);
   const oneDay = start === lastDay;
-  const subject = kind === "update" ? `Updated dates: ${full} is out ${fmt(start)}${oneDay ? "" : ` to ${fmt(lastDay)}`}` : `${full} will be out ${fmt(start)}${oneDay ? "" : ` to ${fmt(lastDay)}`}`;
+  // Separate days off: the manager gets the list of days, still nothing about why.
+  const sep = Array.isArray(days) && days.length > 0;
+  const when = sep ? `on ${plural(days.length, "day")} between ${fmt(days[0])} and ${fmt(days[days.length - 1])}` : `${fmt(start)}${oneDay ? "" : ` to ${fmt(lastDay)}`}`;
+  const subject = kind === "update" ? `Updated dates: ${full} is out ${when}` : `${full} will be out ${when}`;
   const lines = [
     `Hi ${first(mgr.name)},`,
     "",
     kind === "update" ? `HR has updated the dates for ${full}'s approved time off. Please use these dates from now on.` : `HR has approved time off for ${full}.`,
     "",
-    oneDay ? `Out: ${longDate(start)}` : `Out: ${longDate(start)} through ${longDate(lastDay)}`,
-    `Expected back: ${longDate(back)}`,
+    ...(sep ? ["Out on these days:", ...days.map((d) => `- ${longDate(d)}`), `${name} works as usual on the other days. HR will tell you if days are added or changed.`]
+      : [oneDay ? `Out: ${longDate(start)}` : `Out: ${longDate(start)} through ${longDate(lastDay)}`, `Expected back: ${longDate(back)}`]),
     ...(protectedLeave ? ["", `${name}'s job is protected while away. ${name} comes back to the same job, or one just like it, with the same pay.`] : []),
     "",
     "What to do now",

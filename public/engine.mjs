@@ -126,8 +126,24 @@ export function eligibility(emp, co, start){
 // The next workday on or after a date (weekends and company holidays skipped). The first day back at work.
 export function nextWorkday(s, hol = []) { let d = s; for (let i = 0; i < 14; i++) { const w = new Date(d + "T00:00:00Z").getUTCDay(); if (w !== 0 && w !== 6 && !hol.includes(d)) return d; d = addDays(d, 1); } return s; }
 
+/* ---------- Separate days off (intermittent leave) ----------
+   For an own or family health condition, the leave can be single days or part days instead of one block:
+   treatments, appointments, flare-ups. Only the hours actually taken count against the 12 weeks. */
+export const DAYS_REASONS = ['own_health','family_care'];
+export const isDays = (reason, o) => !!(o && o.pattern==='days' && DAYS_REASONS.includes(reason) && Array.isArray(o.dates) && o.dates.length);
+export const isWorkday = (d, hol=[]) => { const w = new Date(d+'T00:00:00Z').getUTCDay(); return w!==0 && w!==6 && !hol.includes(d); };
+// The days of a separate-days leave, in order, one entry per date.
+export function leaveDays(o){ const m = new Map(); for (const x of o.dates||[]) if (x && x.d) m.set(x.d, +x.h || 0); return [...m].sort((a,b)=>a[0]<b[0]?-1:1).map(([d,h])=>({d,h})); }
+// Whether an employee is off on a given day: inside the block, or one of the separate days.
+export function outOn(c, D, day){
+  if (c.reason==='unknown') return false;
+  if (isDays(c.reason, c.opts)) return leaveDays(c.opts).some(x=>x.d===day) && !(c.returnedOn && day >= c.returnedOn);
+  const {start,end} = caseDates(c, D); return day >= start && day < end;
+}
+
 /* ---------- Plan engine ---------- */
 export function buildPlan(emp, co, reason, o){
+  if (isDays(reason, o)) return buildDaysPlan(emp, co, reason, o);
   const el = eligibility(emp, co, o.start);
   const P = {segs:[], warnings:[], facts:[], el, start:o.start, end:o.start, pays:{sdi:false,pfl:false}, laws:[]};
   const wba = weeklyBenefit(emp, co);
@@ -279,7 +295,7 @@ export function makeTasks(reason, req, plan, co){
       t.push({key:'designate', label:'Send designation notice', hint:'Confirm in writing how the time is counted.', due:bd(5), legal:true});
     }
     if (prot) t.push({key:'benefits', label:'Keep health coverage going', hint:'Same terms as if the employee were working, from the first day of leave.', due: plan.start && plan.start > bd(5) ? plan.start : bd(5), legal:true});
-    t.push({key:'return', label:'Plan the return to work', hint:'Confirm the date and the same or a comparable role.', due:addDays(plan.end,-7), legal:false});
+    if (plan.pattern !== 'days') t.push({key:'return', label:'Plan the return to work', hint:'Confirm the date and the same or a comparable role.', due:addDays(plan.end,-7), legal:false});
   } else if (reason==='bereavement'){
     t.push({key:'confirm', label:'Confirm leave dates with employee', hint:'Must be used within 3 months of the death.', due:bd(2), legal:false});
     t.push({key:'doc', label:'Documentation of death (only if you ask for it)', hint:'Due within 30 days of the first day of leave.', due:addDays(plan.start,30), legal:false, optional:true});
@@ -338,6 +354,43 @@ export function sampleData(TODAY){
 
 
 /* ---------- Case helpers (shared by browser and server) ---------- */
+function buildDaysPlan(emp, co, reason, o){
+  const hol = co.holidays || [], daily = +(weeklyOf(emp)/5).toFixed(2);
+  const all = leaveDays(o).map(x=>({d:x.d, h: Math.min(x.h || daily, 24)}));
+  const days = all.filter(x=>isWorkday(x.d, hol)), skipped = all.length - days.length;
+  const start = days.length ? days[0].d : (o.start || all[0].d);
+  const el = eligibility(emp, co, start);
+  const P = {segs:[], warnings:[], facts:[], el, start, end:start, pays:{sdi:false,pfl:false}, laws:[], days:[], pattern:'days'};
+  const wba = weeklyBenefit(emp, co); P.wba = wba;
+  const seg = (lane,cls,label,s,e,sub) => P.segs.push({lane,cls,label,start:s,end:e,sub});
+  const fmlaCovers = reason!=='family_care' || ['spouse','child','parent'].includes(o.relation);
+  const pflCovers = reason==='family_care' && (o.relation!=='designated' || start >= '2028-07-01');
+  const weekly = weeklyOf(emp), cfraLeftH = el.cfra.ok ? el.cfra.remaining * weekly : 0;
+  let used = 0;
+  for (const x of days){
+    const prot = el.cfra.ok && used + x.h <= cfraLeftH + 0.01;
+    used += x.h;
+    const e = addDays(x.d, 1), hrs = `${+x.h.toFixed(2)} ${x.h===1?'hour':'hours'}`;
+    seg('protect', prot ? 'cfra' : 'none', prot ? 'Day off' : 'Not job protected', x.d, e, prot ? `CFRA · ${hrs}` : el.cfra.ok ? 'Past the CFRA balance' : 'Does not qualify for CFRA yet');
+    if (el.fmla.ok && fmlaCovers) seg('concurrent','fmla','Federal FMLA', x.d, e, `Runs at the same time · ${hrs}`);
+    if (pflCovers) seg('pay','pfl','Family leave pay', x.d, e, 'PFL from the state for this day');
+    P.days.push({d:x.d, h:x.h, protected:prot});
+  }
+  P.daysHours = +used.toFixed(2); P.daysWeeks = +(used/weekly).toFixed(2);
+  if (el.cfra.ok){ P.laws.push('CFRA'); if (P.days.some(x=>!x.protected)) P.warnings.push({bad:true, t:`These days add up to ${plural(+P.daysWeeks.toFixed(1),'week')} of leave, but only ${plural(el.cfra.remaining,'week')} of CFRA remain. Later days are not CFRA protected.`}); }
+  else P.warnings.push({bad:true, t: reason==='own_health' ? 'Not eligible for CFRA. If the condition is a disability, time off may still be required as a reasonable accommodation under FEHA. Start the interactive process before denying.' : 'Not eligible for CFRA, so these days are not job protected under state law. PFL can still pay. Send the eligibility notice with the reason.'});
+  if (el.fmla.ok && fmlaCovers) P.laws.push('FMLA');
+  if (skipped) P.warnings.push({t:`${plural(skipped,'date')} fell on a weekend or company holiday and ${skipped===1?'was':'were'} left out.`});
+  P.facts.push({t:`Separate days off: only the hours actually taken count against the 12 weeks. So far planned: ${plural(P.days.length,'day')}, ${+P.daysHours.toFixed(1)} hours (about ${plural(+P.daysWeeks.toFixed(1),'week')}).`, c:RULES.cfra.cite});
+  P.facts.push({t:'Leave can be taken in separate days or part days when it is medically necessary, such as for treatment or care. The certification should say how often and for how long.', c:RULES.cfra.cite});
+  if (reason==='own_health'){ P.pays.sdi = false; P.facts.push({t:'State disability pay (SDI) usually does not pay scattered days: it starts after 7 days in a row of being unable to work. Sick leave can cover these days.', c:'UI Code § 2627'}); }
+  else if (pflCovers){ P.pays.pfl = true; P.facts.push({t:'Paid Family Leave can pay for separate days of care. The employee files once, then reports the days on each claim.', c:'UI Code § 3301'}); }
+  else P.facts.push({t:'PFL starts covering a designated individual on July 1, 2028. Until then CFRA protects these days but PFL does not pay.', c:'SB 590'});
+  if (el.cfra.ok || (el.fmla.ok && fmlaCovers)) P.facts.push({t:'Keep group health coverage on the same terms during CFRA leave.', c:RULES.cfra.cite});
+  P.end = days.length ? addDays(days[days.length-1].d, 1) : addDays(start, 1);
+  P.back = null;
+  return P;
+}
 export function planFor(c, D){ return c.reason==='unknown' ? null : buildPlan(D.employees.find(e=>e.id===c.empId), D.company, c.reason, c.opts); }
 export function caseDates(c, D){
   if (c.reason==='unknown') return {start:c.requested, end:null};
@@ -350,6 +403,10 @@ export function caseDates(c, D){
 export function caseStatus(c, D, today){
   if (c.reason==='unknown') return {t:'Needs intake', cls:'warn'};
   const {start,end} = caseDates(c, D);
+  if (isDays(c.reason, c.opts)){
+    if (today >= end || (c.returnedOn && today >= c.returnedOn)) return {t:'Done', cls:'ok'};
+    return outOn(c, D, today) ? {t:'Out today', cls:'poppy'} : {t: today < start ? 'Upcoming' : 'Days off ahead', cls:'acc'};
+  }
   if (today < start) return {t:'Upcoming', cls:'acc'};
   if (c.returnedOn && today >= c.returnedOn) return {t:'Returned', cls:'ok'};
   if (today < end) return {t:'On leave', cls:'poppy'};
