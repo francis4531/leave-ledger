@@ -3,7 +3,7 @@
 > A living strategy built across 6 weekly sessions, using the Product School AI product strategy template. Each week adds one module. By week 6, this folder is the strategy: version-controlled and ready for a board.
 
 **The bet:** California leave of absence management for employers with 5 to 200 employees.
-**Last updated:** Nov 17, 2026 (Week 5)
+**Last updated:** Nov 24, 2026 (Week 6)
 **Customer interviews:** 0 of 10 (kill criteria check on Nov 23, 2026)
 **Partner challenges done:** 0 of 6
 
@@ -18,7 +18,7 @@
 | **The Margin** | M3 | Nov 4 | [x] Draft, needs partner challenge | `03-the-margin/` |
 | **The Contract** | M4 | Nov 11 | [x] Draft, needs partner challenge | `04-the-contract/` |
 | **The Guardrails** | M5 | Nov 18 | [x] Draft, needs partner challenge | `05-the-guardrails/` |
-| **The Pitch** | M6 | Nov 25 | [ ] | `06-the-pitch/` |
+| **The Pitch** | M6 | Nov 25 | [x] Draft, needs partner challenge | `06-the-pitch/` |
 
 ---
 
@@ -34,6 +34,7 @@
 - **Prototype:** Netlify test site, 10 test accounts (link in `01-the-bet/prototype.md`)
 - **Kill criterion 4 (Clerk 90% on leave type):** Passed on Nov 3, 100% of 50 cases, on a test set we wrote ourselves. Real phrasings still owed (see M4).
 - **Kill Criteria:** Under 3 of 10 interviewees feel the pain, or under 2 of 10 would pay $2 per employee per month (our price), by Nov 23; or a payroll platform ships California leave stacking before we have 5 paying employers.
+- **Kill criteria check (Nov 23):** the date passed with 0 of 10 interviews recorded, so criteria 1 and 2 are unproven, not passed. New date or verdict is Week 6 decision 1.
 - **Changed by Nov 2 product decisions:** first segment narrowed to 5 to 49 employees (state leaves only, no FMLA), owner is the buyer, price set at $3 per employee per month (free for 1 to 4), lowered to $2 on Nov 4. Kill criterion 2 follows the price we will charge: $4, then $3 (Nov 3), now $2 (Nov 4).
 
 → Details: [`01-the-bet/`](01-the-bet/)
@@ -103,22 +104,22 @@
 
 **How you get this funded, shipped, and adopted.**
 
-- **Horizon 1 (Now):**
-- **Horizon 2 (Next):**
-- **Horizon 3 (Bet):**
-- **Board Narrative:** [1-sentence thesis]
-- **Key Metric:**
+- **Horizon 1 (Now):** Dec 2026 to Feb 2027. 10 recorded interviews (kill criteria 1 and 2), the design partner checklist from 4 of 9 to 9 of 9 plus the two owed Week 4 builds, 3 design partners live, the first 50 real intakes, golden set to 80 rows with 15 real, and the Gusto partner application. Proof, not features.
+- **Horizon 2 (Next):** Mar to Aug 2027. 5 paying employers at $2 with annual bank transfer prepay (billing not built), Gusto two-way sync and listing (no leave app in Gusto's embedded partner category on Nov 24), Clerk answers for employees in English and Spanish after a second AI provider is scored, never-build line and code review gate before SB 947 (July 1, 2027).
+- **Horizon 3 (Bet):** Sept 2027 to May 2028. The dispute-ready record with Clerk-drafted notices HR signs, opt-in California benchmarks after 25 companies, a bookkeeper, PEO and lawyer referral channel, rules ready for PFL for a designated person (July 2028).
+- **Board Narrative:** California's 328,201 employers with 5 to 49 employees owe state leave rules that FMLA-shaped tools and payroll add-ons do not handle; Leave Ledger turns "I need time off" into the right leaves, pay and on-time notices for $2 per employee per month, with Clerk doing the paperwork and a person making every decision. The ask is not money yet: 10 interview introductions, a lawyer review budget (no quote yet) and agreed stop lines for the next 90 days.
+- **Key Metric:** Paying employers who ran a real leave with every required notice on time. Today 0. Target 5 by Aug 2027 (the kill criterion 3 line). Size check (estimate): 100% of the segment at $2 and 20 employees each is about $158 million a year; 100 companies is about $48,000 a year. Draft, for partner challenge.
 
 → Details: [`06-the-pitch/`](06-the-pitch/)
 
 ---
 
-## Open decisions (Week 5)
+## Open decisions (Week 6)
 
-1. **Owed Week 4 builds.** Jury duty and voting categories and four-year intake records were decided Nov 11 but are not built (the intake log still keeps the last 300 entries per workspace). Build both before any design partner goes live, build the four-year records first and leave jury duty and voting for later, or change either decision?
-2. **Review gate for AI-written code.** AI coding sessions wrote 35 of the last 50 commits, and Netlify deploys every push to main once tests pass. Require your approval (a pull request) only for changes to the protected rules (role views, the manager note filter, Clerk's output checks, the real-data switch, eligibility rules), require it for every change, or keep direct pushes with tests as the gate?
-3. **Never-build line.** SB 947 (in force July 1, 2027) bars using automated systems to predict or act against workers for exercising legal rights. Commit in writing that Leave Ledger will never score, rank or predict employees by leave use and never feed discipline or performance decisions, commit with exceptions, or leave it open?
-4. **Interviews before Nov 23.** The kill criteria check is in 6 days and 0 of 10 interviews are recorded. Hold the date and judge on however many are done, move the check to a later date, or record the ones already held in `strategy/` (count, payroll provider, felt the pain, would pay $2)?
+1. **Kill criteria after Nov 23.** The check date passed with 0 of 10 interviews recorded (carried from Week 5). Record any interviews already held in `strategy/` (count, payroll provider, felt the pain, would pay $2), set a new check date (proposed Jan 31, 2027) with the same bars, or treat criteria 1 and 2 as failed and move to an add-on inside a payroll platform?
+2. **Before the first design partner.** Four-year intake records and jury duty and voting categories (decided Nov 11) are still not built, and AI coding sessions wrote 37 of the last 50 commits with no review gate (carried from Week 5). Build both owed items and require your approval by pull request for the protected rules before any real data, build them but keep direct pushes, or change either decision?
+3. **Never-build line in the pitch.** Carried from Week 5. Commit in writing, on the site and in the pitch, that Leave Ledger will never score, rank or predict employees by leave use and never feed discipline or performance decisions (SB 947 applies July 1, 2027), commit with exceptions, or leave it out of the pitch?
+4. **Key metric and the ask.** The M6 draft proposes one key metric (paying employers who ran a real leave with every notice on time, 5 by Aug 2027) and an ask of introductions, a lawyer review budget and agreed stop lines, not money. Accept both, change the metric (for example interviews or real intakes for Horizon 1), or ask for money now?
 
 ## Changelog
 
@@ -131,3 +132,4 @@
 | 3 | Nov 3, 2026 | M3 drafted: cost model (Clerk about $0.0003 an intake, gross margin about 76% at 20 employees, 14% at 5), no-model-first cascade, pricing on the Nov 2 decisions, stress tests incl. Tilt at $2.50, break-even. M1 and M2 summaries note the Nov 2 decisions and Tilt's new price |
 | 4 | Nov 10, 2026 | M4 drafted: golden set audit (50 rows, 10 adversarial, gaps), per-field confidence UX and calibration check, reliability contract with alert lines, four-checkpoint HITL design, self red-team. M1 notes kill criterion 4 passed on our own set; M3 notes the Nov 3 and 4 price and prepay decisions |
 | 5 | Nov 17, 2026 | M5 drafted: 7 feedback loops (corrections idle, decisions to code leaking), governance policy with protected rules and a never-build line, agent topology incl. AI coding sessions, shadow AI audit (6 found, 6 triaged), California regulatory map (CRD ADS rules, CPPA ADMT, SB 947, confidentiality). M4 notes the Nov 11 decisions and the two not yet built |
+| 6 | Nov 24, 2026 | M6 drafted: three-horizon roadmap (proof first: interviews, design partner bar, 3 partners, first 50 real intakes), board pitch with thesis, honest moat and economics, $158 million ceiling estimate, ask without money, M1 vs now. M1 notes the Nov 23 check passed with 0 interviews recorded. All 4 Week 5 questions carried into Week 6 |
