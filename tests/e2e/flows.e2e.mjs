@@ -183,7 +183,7 @@ describe("test site", { skip }, () => {
     await p.fill("#lg-pw", "test-pass-123");
     await p.click('[data-pick="priya@mesaverde.example"]');
     await p.click('[data-tab="guide"]');
-    assert.equal((await p.$$(".lcard")).length, 7, "seven leave cards");
+    assert.equal((await p.$$(".lcard")).length, 9, "nine leave cards, including jury duty and voting");
     await p.click("[data-wiz-start]");
     await p.click('[data-wiz-need="family_care"]');
     await p.selectOption("#wz-rel", "parent");
@@ -201,6 +201,33 @@ describe("test site", { skip }, () => {
     await box.check();
     await p.waitForSelector("text=One step closer to getting paid");
     assert.ok(await p.locator('[data-edd$="|pfl-account"]').first().isChecked(), "stays ticked after saving");
+    assert.deepEqual(errors, []);
+  });
+
+  test("employee asks for jury duty through the guide; HR sees it with the summons step", async () => {
+    const { p, errors } = await page();
+    await p.goto(S.base);
+    await p.fill("#lg-pw", "test-pass-123");
+    await p.click('[data-pick="marcus@mesaverde.example"]');
+    await p.click('[data-tab="guide"]');
+    await p.click("[data-wiz-start]");
+    await p.click('[data-wiz-need="jury"]');
+    assert.equal(await p.inputValue("#wz-dy"), "1", "jury duty starts as one day");
+    await p.fill("#wz-dy", "3");
+    await p.click("[data-wiz-next]");
+    await p.waitForSelector("[data-wiz-use]");
+    assert.match(await p.textContent("main"), /any company size/);
+    await p.click("[data-wiz-use]");
+    await p.waitForSelector('[data-form="req"]');
+    assert.equal(await p.inputValue("#rq-reason"), "jury");
+    await p.selectOption("#rq-reason", "vote");
+    assert.equal(await p.inputValue("#rq-hr"), "2", "voting starts as two hours");
+    await p.selectOption("#rq-reason", "jury");
+    await p.fill("#rq-dy", "3");
+    await p.click("[data-submitreq]");
+    await p.waitForSelector(".status-banner.sent, .status-banner.wait", { timeout: 5000 }).catch(() => null);
+    assert.ok(await p.$(".status-banner.sent, .status-banner.wait"));
+    assert.doesNotMatch(await p.textContent("main"), /[\u2013\u2014]/, "no dashes in the jury duty copy");
     assert.deepEqual(errors, []);
   });
 

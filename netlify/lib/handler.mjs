@@ -134,7 +134,7 @@ function validOpts(reason, o) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(o.start || "") || !realDate(o.start)) return "Pick the first day off.";
   if (o.relation != null && (typeof o.relation !== "string" || o.relation.length > 20)) return "Unknown family member";
   const n = (v, lo, hi) => Number.isFinite(+v) && +v >= lo && +v <= hi;
-  if (!n(o.weeks ?? 1, 1, 52) || !n(o.disWeeks ?? 1, 1, 30) || !n(o.bondWeeks ?? 0, 0, 12) || !n(o.days ?? 1, 1, 20) || !n(o.hours ?? 1, 1, 80)) return "Length is out of range";
+  if (!n(o.weeks ?? 1, 1, 52) || !n(o.disWeeks ?? 1, 1, 30) || !n(o.bondWeeks ?? 0, 0, 12) || !n(o.days ?? 1, 1, reason === "jury" ? 60 : 20) || !n(o.hours ?? 1, 1, reason === "vote" ? 8 : 80)) return "Length is out of range";
   return null;
 }
 const cleanOpts = (o) => {
@@ -145,6 +145,15 @@ const cleanOpts = (o) => {
 };
 
 // Keeps what Clerk read next to what the user finally sent. This is the correction signal.
+// Intake records (what was asked, what Clerk suggested, what HR decided) are kept for four years, as California's
+// rules on automated decision systems in employment ask (2 CCR § 11013(c), in force Oct 1, 2025).
+// Older entries are dropped; a very high cap keeps one workspace's data from growing without bound.
+export const INTAKE_KEEP_DAYS = 4 * 365 + 1, INTAKE_MAX = 20000;
+export function keepFourYears(log, now = Date.now()) {
+  const cut = new Date(now - INTAKE_KEEP_DAYS * 864e5).toISOString();
+  return (log || []).filter((x) => x && String(x.at || "") >= cut).slice(0, INTAKE_MAX);
+}
+
 function attachIntake(D, c, a, today, source) {
   if (!a.intake || typeof a.intake !== "object" || !a.intake.text) return;
   const ai = validateDraft(a.intake.ai, today);
@@ -154,7 +163,8 @@ function attachIntake(D, c, a, today, source) {
   D.intakeLog = [{ at: c.intake.at, source, caseId: c.id, text: c.intake.text,
     ai: ai ? { reason: ai.reason, relation: ai.relation, start: ai.start, length: lenOf(ai), confidence: ai.confidence, flag: ai.flag } : null,
     final: { reason: c.reason, relation: c.opts.relation, start: c.opts.start, length: lenOf({ ...c.opts, weeks: ["own_health", "family_care", "bonding"].includes(c.reason) ? c.opts.weeks : null, days: ["bereavement", "repro"].includes(c.reason) ? c.opts.days : null, hours: c.reason === "sick" ? c.opts.hours : null, disWeeks: c.reason === "pregnancy_bonding" ? c.opts.disWeeks : null }) },
-    changed }, ...(D.intakeLog || [])].slice(0, 300);
+    changed }, ...(D.intakeLog || [])];
+  D.intakeLog = keepFourYears(D.intakeLog);
 }
 
 // Returns an error string, or null after mutating D.

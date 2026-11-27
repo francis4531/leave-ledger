@@ -417,17 +417,19 @@
    "id": "x22",
    "text": "I got a jury duty summons for Nov 16. How do I request the time?",
    "expect": {
-    "reason": "unclear"
+    "reason": "jury",
+    "start": "2026-11-16"
    },
-   "note": "Jury duty is outside the supported reasons."
+   "note": "Jury duty is its own reason, with the summons date as the start."
   },
   {
    "id": "x23",
    "text": "need like 2 hrs off on election day to go vote",
    "expect": {
-    "reason": "unclear"
+    "reason": "vote",
+    "hours": 2
    },
-   "note": "Voting time is outside the supported reasons."
+   "note": "Voting time is its own reason, 2 hours."
   },
   {
    "id": "x24",

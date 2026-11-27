@@ -53,6 +53,8 @@ export function exportBundle(meta, D, today) {
     exportedOn: today, format: "leave-ledger-export-1",
     workspace: { id: meta.id, name: meta.name, created: meta.created, ownerEmail: meta.ownerEmail, designPartner: !!meta.realData, users: meta.members.map(({ sub, ...m }) => m) },
     company: D.company, employees: D.employees, leaves: D.cases, activityLog: D.log || [],
+    // Kept four years: what was asked, what Clerk suggested, what HR decided.
+    requestRecords: D.intakeLog || [],
   };
 }
 

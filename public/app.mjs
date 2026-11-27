@@ -149,7 +149,7 @@ const fmlaCovered = () => D().company.headcount >= 50;
 
 /* ---------- Leave types: one color and icon each, so a leave is easy to spot. Never shown to managers, since the type
    would give away the reason. ---------- */
-const KIND = { bonding: "baby", pregnancy_bonding: "preg", family_care: "care", own_health: "health", sick: "sick", bereavement: "loss", repro: "loss", unknown: "none" };
+const KIND = { bonding: "baby", pregnancy_bonding: "preg", family_care: "care", own_health: "health", sick: "sick", bereavement: "loss", repro: "loss", jury: "civic", vote: "civic", unknown: "none" };
 const SVG = (d, w = 14) => `<svg width="${w}" height="${w}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const ICONS = {
   baby: '<circle cx="12" cy="8" r="4"/><path d="M6 21c0-3.3 2.7-6 6-6s6 2.7 6 6"/>',
@@ -160,6 +160,7 @@ const ICONS = {
   loss: '<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.5 19 2c1 2 2 4.2 1 8-1.4 5.3-5.6 10-9 10z"/><path d="M2 21c0-3 1.9-5.4 5.1-6"/>',
   none: '<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.5"/>',
   pay: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/>',
+  civic: '<path d="M3 21h18M5 21V10M19 21V10M9 21V10M15 21V10"/><path d="M2 10l10-6 10 6z"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   home: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
@@ -257,8 +258,8 @@ function lengthFields(prefix, f) {
   if (u === "weeks" && DAYS_REASONS.includes(f.reason)) return patternField(prefix, f) + (daysForm(f) ? daysEditor(prefix, f) : `<div class="field"><label for="${prefix}wk">How many weeks?</label><input id="${prefix}wk" type="number" min="1" max="52" step="1" value="${f.weeks}" data-bind="weeks" data-num></div>`);
   if (u === "two") return `<div class="row"><div class="field"><label for="${prefix}dis">Weeks unable to work</label><input id="${prefix}dis" type="number" min="1" max="30" step="1" value="${f.disWeeks}" data-bind="disWeeks" data-num><span class="hint">Before and after the birth, as the doctor advises</span></div><div class="field"><label for="${prefix}bond">Bonding weeks after</label><input id="${prefix}bond" type="number" min="0" max="12" step="1" value="${f.bondWeeks}" data-bind="bondWeeks" data-num><span class="hint">Up to 12</span></div></div>`;
   if (u === "weeks") return `<div class="field"><label for="${prefix}wk">How many weeks?</label><input id="${prefix}wk" type="number" min="1" max="52" step="1" value="${f.weeks}" data-bind="weeks" data-num></div>`;
-  if (u === "days") return `<div class="field"><label for="${prefix}dy">How many workdays?</label><input id="${prefix}dy" type="number" min="1" max="20" step="1" value="${f.days}" data-bind="days" data-num><span class="hint">They do not have to be in a row</span></div>`;
-  if (u === "hours") return `<div class="field"><label for="${prefix}hr">How many hours?</label><input id="${prefix}hr" type="number" min="1" max="80" step="1" value="${f.hours}" data-bind="hours" data-num></div>`;
+  if (u === "days") return `<div class="field"><label for="${prefix}dy">How many workdays?</label><input id="${prefix}dy" type="number" min="1" max="${f.reason === "jury" ? 60 : 20}" step="1" value="${f.days}" data-bind="days" data-num><span class="hint">${f.reason === "jury" ? "Court dates can change. HR can update the days later." : "They do not have to be in a row"}</span></div>`;
+  if (u === "hours") return `<div class="field"><label for="${prefix}hr">How many hours?</label><input id="${prefix}hr" type="number" min="1" max="${f.reason === "vote" ? 8 : 80}" step="1" value="${f.hours}" data-bind="hours" data-num>${f.reason === "vote" ? `<span class="hint">Up to 2 hours are paid, at the start or end of the shift.</span>` : ""}</div>`;
   return "";
 }
 const optsFrom = (f) => {
@@ -467,7 +468,9 @@ const NEEDS = [
   ["bereavement", "A death in the family", ""],
   ["repro", "A pregnancy loss", "Miscarriage, stillbirth, or a failed adoption, surrogacy or IVF"],
   ["sick", "A sick day or appointment", "For me or a family member"],
-  ["other", "Something else", "Vacation, jury duty, moving, a personal day"],
+  ["jury", "Jury duty or a court date", "A jury summons, or a subpoena to be a witness"],
+  ["vote", "Time to vote", "Up to 2 paid hours on election day"],
+  ["other", "Something else", "Vacation, moving, a personal day"],
 ];
 function guideView() {
   const hr = S.me.role === "hr", W = UI.wiz;
@@ -509,7 +512,7 @@ function wizardView() {
   const back = `<button class="btn sm" data-wiz-back>Back</button>`;
   const head = (n, t) => `<div class="head"><div><button class="linkish" data-wiz-close>← Guide</button><h2 style="margin-top:8px">${esc(t)}</h2><p>Step ${n} of 3</p></div></div>`;
   if (W.step === 1) return `${head(1, "What is going on?")}<section class="panel"><div class="choices">${NEEDS.map(([k, t, d]) => `<button class="choice" data-wiz-need="${k}"><b>${esc(t)}</b>${d ? `<span class="small muted">${esc(d)}</span>` : ""}</button>`).join("")}</div></section>`;
-  if (W.need === "other") return `${head(2, "That is usually not a protected leave")}<section class="panel"><p>Vacation, jury duty, voting and personal days are not covered by these California leave laws. Jury duty and voting time have their own rules, and vacation follows your company's policy.</p><p class="muted">Ask HR about it directly, or use sick leave if you or a family member are ill.</p><div class="btns">${back}<button class="btn" data-wiz-close>Back to the guide</button></div></section>`;
+  if (W.need === "other") return `${head(2, "That is usually not a protected leave")}<section class="panel"><p>Vacation, moving and personal days are not covered by California leave laws. They follow your company's policy.</p><p class="muted">Ask HR about it directly, or use sick leave if you or a family member are ill.</p><div class="btns">${back}<button class="btn" data-wiz-close>Back to the guide</button></div></section>`;
   const R = REASONS[W.need];
   if (W.step === 2) return `${head(2, "A few details")}<section class="panel" data-form="wiz">
     ${R.rel ? relSelect("wz-rel", R.rel, W.relation) : ""}
@@ -522,11 +525,13 @@ function wizardView() {
   const fake = { reason: W.need, opts: o, edd: {} }, wba = weeklyBenefit(me, co);
   const E3 = eddSteps(fake, p);
   return `${head(3, "Here is what you would get")}<section class="panel"><div class="panel-h"><h3>${esc(R.emp)}</h3></div>${timelineHTML(p)}
-    <ul class="plain">${p.days ? `<li>${plural(p.days.length, "day")} off, ${+p.daysHours.toFixed(1)} hours in all. ${prot.length === p.days.length ? "Your job is protected on every one of these days." : prot.length ? `Your job is protected on ${plural(prot.length, "day")} of them.` : "These days are not job protected by state law. HR will go over your options."}</li>${p.pays.pfl ? "<li>Paid Family Leave can pay for each of these days. You file once, then report the days.</li>" : "<li>Sick leave can cover these days.</li>"}` : prot.length ? `<li>Your job is protected from <b>${fmtS(prot[0].start)}</b> to <b>${fmtS(addDays(prot[prot.length - 1].end, -1))}</b>.</li>` : `<li>This time is not job protected by state law. Ask HR about company policy.</li>`}
+    <ul class="plain">${p.days ? `<li>${plural(p.days.length, "day")} off, ${+p.daysHours.toFixed(1)} hours in all. ${prot.length === p.days.length ? "Your job is protected on every one of these days." : prot.length ? `Your job is protected on ${plural(prot.length, "day")} of them.` : "These days are not job protected by state law. HR will go over your options."}</li>${p.pays.pfl ? "<li>Paid Family Leave can pay for each of these days. You file once, then report the days.</li>" : "<li>Sick leave can cover these days.</li>"}` : prot.length ? `<li>${(() => { const a = prot[0].start, z = addDays(prot[prot.length - 1].end, -1); return z <= a ? `Your job is protected on <b>${fmtS(a)}</b>.` : `Your job is protected from <b>${fmtS(a)}</b> to <b>${fmtS(z)}</b>.`; })()}</li>` : `<li>This time is not job protected by state law. Ask HR about company policy.</li>`}
       ${wba && (p.pays.sdi || p.pays.pfl) ? `<li>The state may pay you about <b>${money(wba.amount)} a week</b>${p.pays.sdi ? ", after a 7-day wait" : ""}. EDD decides the final amount.</li>` : ""}
       ${["own_health", "family_care", "bonding"].includes(W.need) && !p.el.cfra.ok ? `<li>You may not qualify for job-protected family leave yet. It needs 12 months here and 1,250 hours worked in the last year. HR will confirm, and state pay can still apply.</li>` : ""}
       ${W.need === "pregnancy_bonding" && W.bond && !p.el.cfra.ok ? `<li>Your pregnancy leave is protected from day one. Bonding time after it may not be job protected yet, because that needs 12 months and 1,250 hours. State pay can still apply.</li>` : ""}
-      ${W.need === "sick" ? `<li>You have about <b>${plural(Math.floor(sickUsable(me, co)), "hour")}</b> of sick leave you can use now.</li>` : ""}</ul>
+      ${W.need === "sick" ? `<li>You have about <b>${plural(Math.floor(sickUsable(me, co)), "hour")}</b> of sick leave you can use now.</li>` : ""}
+      ${W.need === "jury" ? `<li>Your job is protected while you serve on a jury or appear as a witness, at any company size, as long as you tell HR ahead of time.</li><li>The time is unpaid unless your company pays it, but you can use vacation, personal leave or comp time. HR may ask for a copy of the summons.</li>` : ""}
+      ${W.need === "vote" ? `<li>If you do not have enough time outside work to vote, up to <b>2 hours</b> are paid, at the start or end of your shift.</li><li>Tell HR at least 2 working days before the election if you can.</li>` : ""}</ul>
     ${E3 ? `<p class="small muted">After you send it, your leave page will walk you through filing with EDD: ${E3.claims.map((x) => `${esc(x.title)}, between ${fmtS(x.window.from)} and ${fmtS(x.window.to)}`).join("; ")}.</p>` : ""}
     <p class="small muted">Nothing is sent yet. On the next screen you can check the request, then send it to HR. Your manager only ever sees the dates.</p>
     <div class="btns">${back}<button class="btn primary" data-wiz-use>Use this for my request</button></div></section>`;
@@ -885,7 +890,7 @@ function dataPanel() {
       <p class="small muted" style="margin:0">Leave Ledger copies this workspace every day and keeps the last ${B.keep || 14} days. To go back to an earlier day, contact the site admin.</p>
       <p class="small">${B.loaded ? (B.days && B.days.length ? `Last backup: <b>${fmt(B.days[0])}</b> · ${plural(B.days.length, "day")} kept` : "No backup yet. The first one runs tonight.") : "Checking backups"}</p>
       <h4 style="margin:18px 0 4px;color:var(--bad)">Delete this workspace</h4>
-      <p class="small muted" style="margin:0 0 8px">Deletes every employee, leave, letter, user and backup in ${esc(name)}, for good. Download everything first if you want a copy.</p>
+      <p class="small muted" style="margin:0 0 8px">Deletes every employee, leave, letter, user and backup in ${esc(name)}, for good. Download everything first: California asks employers to keep leave request records for four years, and the download includes them.</p>
       ${del.open ? `<div class="field"><label for="del-name">Type <b>${esc(name)}</b> to confirm</label><input type="text" id="del-name" autocomplete="off" value="${esc(del.text)}"></div>
         ${del.error ? `<p class="err">${esc(del.error)}</p>` : ""}<div class="btns"><button class="btn" data-del-cancel>Cancel</button><button class="btn danger" data-del-go>Delete for good</button></div>`
         : `<div class="btns"><button class="btn danger" data-del-open>Delete this workspace</button></div>`}` : ""}
@@ -1639,6 +1644,8 @@ document.addEventListener("click", async (ev) => {
     // A loss or a sick day usually starts now, not weeks away, and the law gives 5 days for a loss.
     if (["bereavement", "repro", "sick"].includes(W.need) && !W.startTouched) W.start = nextWorkday(TODAY, D().company.holidays || []);
     if (["bereavement", "repro"].includes(W.need) && !W.daysTouched) W.days = 5;
+    if (W.need === "jury" && !W.daysTouched) W.days = 1;
+    if (W.need === "vote") { W.hours = 2; if (!W.startTouched) W.start = nextWorkday(TODAY, D().company.holidays || []); }
     render(); window.scrollTo(0, 0); return;
   }
   if (b.hasAttribute("data-wiz-back")) { UI.wiz.step = Math.max(1, UI.wiz.step - 1); render(); return; }
@@ -1898,6 +1905,9 @@ function bind(el) {
   if (el.type === "date" && !v) return;
   target[el.dataset.bind] = v;
   if (el.dataset.bind === "reason" && REASONS[v].rel === "bereave" && !REL.bereave.some((r) => r[0] === target.relation)) target.relation = "parent";
+  // Voting is usually 2 hours and jury duty starts as 1 day; HR or the employee can change either.
+  if (el.dataset.bind === "reason" && v === "vote") target.hours = 2;
+  if (el.dataset.bind === "reason" && v === "jury") target.days = 1;
   if (!["flag", "wiz"].includes(form.dataset.form) || el.dataset.bind === "pattern") render(); // re-rendering on blur would swallow the next click
 }
 

@@ -4515,5 +4515,157 @@
     ]
    }
   }
+ },
+ {
+  "id": "jury-small-co",
+  "area": "civic",
+  "desc": "Jury duty is job protected at any company size, from day one, for the workdays served.",
+  "source": "Lab. Code 230(a), (b); 29 CFR 541.602(b)(3); https://www.dir.ca.gov/dlse/Jury_Duty.htm",
+  "input": {
+   "employee": {
+    "hire": "2026-11-01",
+    "hours12": 100
+   },
+   "company": {
+    "headcount": 3
+   },
+   "today": "2026-12-01",
+   "reason": "jury",
+   "opts": {
+    "start": "2026-12-07",
+    "days": 3
+   },
+   "requested": "2026-12-01"
+  },
+  "expect": {
+   "plan": {
+    "lawsInclude": [
+     "Jury duty"
+    ],
+    "lawsExclude": [
+     "CFRA",
+     "FMLA"
+    ],
+    "jobProtectedUntil": "2026-12-10",
+    "end": "2026-12-10",
+    "paysSDI": false,
+    "paysPFL": false,
+    "factsMention": [
+     "any company size",
+     "vacation, personal leave or comp time"
+    ]
+   }
+  }
+ },
+ {
+  "id": "jury-exempt-salary",
+  "area": "civic",
+  "desc": "Jury duty notes that an exempt employee who works part of a week keeps the full weekly salary.",
+  "source": "Lab. Code 230(a), (b); 29 CFR 541.602(b)(3); https://www.dir.ca.gov/dlse/Jury_Duty.htm",
+  "input": {
+   "today": "2026-12-01",
+   "reason": "jury",
+   "opts": {
+    "start": "2026-12-07",
+    "days": 1
+   },
+   "requested": "2026-12-01"
+  },
+  "expect": {
+   "plan": {
+    "factsMention": [
+     "full salary"
+    ]
+   }
+  }
+ },
+ {
+  "id": "jury-no-case-details",
+  "area": "civic",
+  "desc": "HR may ask for the summons but should not ask about the case.",
+  "source": "Lab. Code 230(a), (b); 29 CFR 541.602(b)(3); https://www.dir.ca.gov/dlse/Jury_Duty.htm",
+  "input": {
+   "today": "2026-12-01",
+   "reason": "jury",
+   "opts": {
+    "start": "2026-12-07",
+    "days": 2
+   },
+   "requested": "2026-12-01"
+  },
+  "expect": {
+   "plan": {
+    "factsMention": [
+     "copy of the summons",
+     "Do not ask what the case is about"
+    ]
+   },
+   "tasks": {
+    "confirm": "2026-12-03"
+   }
+  }
+ },
+ {
+  "id": "vote-two-paid",
+  "area": "civic",
+  "desc": "Up to 2 hours of voting time are paid, at the start or end of the shift.",
+  "source": "Elec. Code 14000, 14001; https://www.sos.ca.gov/elections/time-off-vote",
+  "input": {
+   "employee": {
+    "hire": "2026-11-01",
+    "hours12": 100
+   },
+   "company": {
+    "headcount": 3
+   },
+   "today": "2026-10-28",
+   "reason": "vote",
+   "opts": {
+    "start": "2026-11-03",
+    "hours": 2
+   },
+   "requested": "2026-10-28"
+  },
+  "expect": {
+   "plan": {
+    "lawsInclude": [
+     "Voting time"
+    ],
+    "lawsExclude": [
+     "CFRA",
+     "FMLA"
+    ],
+    "factsMention": [
+     "up to 2 hours with pay",
+     "start or end of the shift"
+    ]
+   },
+   "tasks": {
+    "schedule": "2026-11-02"
+   }
+  }
+ },
+ {
+  "id": "vote-notice",
+  "area": "civic",
+  "desc": "Voting time notes the 2 working day request and the 10 day posting rule.",
+  "source": "Elec. Code 14000, 14001; https://www.sos.ca.gov/elections/time-off-vote",
+  "input": {
+   "today": "2026-10-28",
+   "reason": "vote",
+   "opts": {
+    "start": "2026-11-03",
+    "hours": 1
+   },
+   "requested": "2026-10-28"
+  },
+  "expect": {
+   "plan": {
+    "factsMention": [
+     "2 working days",
+     "10 days before every statewide election"
+    ]
+   }
+  }
  }
 ]

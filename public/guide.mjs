@@ -30,6 +30,10 @@ export const LEAVES = [
     who: "After 30 days on the job, at a company with 5 or more employees", more: "Covers miscarriage, stillbirth, and a failed adoption, surrogacy or IVF transfer. Nobody may ask for proof, and it stays confidential." },
   { key: "sick", title: "Sick days", law: "Paid sick leave", time: "At least 40 hours or 5 days a year, whichever is more", pay: "Paid at your regular rate",
     who: "Everyone. You earn 1 hour for every 30 worked and can use it from your 90th day", more: "For you or a family member, including appointments. You do not need a doctor's note to use it." },
+  { key: "jury", title: "Jury duty or a court date", law: "Jury and witness duty", time: "As long as the court needs you, with reasonable notice to your employer", pay: "Unpaid, but you can use vacation, personal leave or comp time",
+    who: "Everyone, from your first day, at any company size", more: "Also covers appearing as a witness under a subpoena. Your employer may ask for a copy of the summons." },
+  { key: "vote", title: "Time to vote", law: "Time off to vote", time: "Up to 2 hours, at the start or end of your shift", pay: "Paid, for up to 2 hours",
+    who: "Anyone who does not have enough time outside work to vote", more: "Tell your employer at least 2 working days before the election if you know you will need it." },
 ];
 
 export const RIGHTS = [

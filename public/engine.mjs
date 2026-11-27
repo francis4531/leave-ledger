@@ -26,6 +26,9 @@ export const RULES = {
   bereave:{days:5, tenure:30, minCo:5, cite:'Gov. Code § 12945.7'},
   repro:{days:5, cap:20, tenure:30, minCo:5, cite:'Gov. Code § 12945.6'},
   sick:{use:40, accrualCap:80, perHours:30, useAfter:90, cite:'Lab. Code § 246'},
+  // Civic duties: no size, tenure or hours test. HR handles them; there is no eligibility math.
+  jury:{cite:'Lab. Code § 230(a), (b)'},
+  vote:{paidHours:2, noticeDays:2, postDays:10, cite:'Elec. Code §§ 14000, 14001'},
   sdi:{wait:7, maxWeeks:52, fileWithin:49, cite:'UI Code § 2601 et seq.'},
   pfl:{maxWeeks:8, fileWithin:41, cite:'UI Code § 3300 et seq.'},
   cert:{calDays:15, cite:'2 CCR § 11091'},
@@ -39,6 +42,8 @@ export const REASONS = {
   bereavement:{hr:'Bereavement', emp:'Death of a family member', unit:'days', rel:'bereave'},
   repro:{hr:'Reproductive loss', emp:'Reproductive loss', unit:'days'},
   sick:{hr:'Paid sick leave', emp:'Sick day or caring for a sick family member', unit:'hours'},
+  jury:{hr:'Jury or witness duty', emp:'Jury duty or a court summons', unit:'days'},
+  vote:{hr:'Time off to vote', emp:'Time off to vote', unit:'hours'},
   unknown:{hr:'Needs intake', emp:'Time off', unit:'none'}
 };
 export const REL = {
@@ -268,6 +273,30 @@ export function buildPlan(emp, co, reason, o){
     P.facts.push({t:'Pay at the regular rate by the next regular payday, and show the balance on the pay stub.', c:'Lab. Code §§ 246(i), 246(l)'});
     P.end = sp.end;
   }
+  else if (reason==='jury'){
+    // Jury duty, or appearing as a witness under a subpoena. Protected at any company size, from the first day.
+    const sp = bizSpan(o.start, Math.max(1, o.days||1), hol);
+    seg('protect','short','Jury or witness duty', sp.start, sp.end, `${plural(Math.max(1,o.days||1),'workday')} · job protected`);
+    seg('pay','unpaid','Unpaid unless policy pays', sp.start, sp.end, 'Employee may use vacation, personal leave or comp time');
+    P.facts.push({t:'You cannot fire, discipline or treat an employee worse for serving on a jury or appearing as a witness under a subpoena, as long as they gave reasonable notice. This applies at any company size.', c:RULES.jury.cite});
+    P.facts.push({t:'You do not have to pay for this time, but the employee may use vacation, personal leave or comp time. An exempt employee who works any part of a week gets the full salary for that week (you may subtract the jury fees they receive).', c:'Lab. Code § 230 · 29 CFR § 541.602(b)(3)'});
+    P.facts.push({t:'You may ask for a copy of the summons. Do not ask what the case is about.', c:RULES.jury.cite});
+    P.laws.push('Jury duty');
+    P.end = sp.end;
+  }
+  else if (reason==='vote'){
+    // Up to 2 paid hours to vote, at the start or end of the shift, when the employee cannot vote outside work hours.
+    const hrs = Math.max(0.5, +o.hours || 2), paid = Math.min(hrs, RULES.vote.paidHours);
+    const e = addDays(o.start, 1);
+    seg('protect','short','Time off to vote', o.start, e, `${+hrs.toFixed(2)} ${hrs===1?'hour':'hours'}`);
+    seg('pay','sick','Paid by the employer', o.start, e, `${+paid.toFixed(2)} of ${+hrs.toFixed(2)} hours paid`);
+    if (hrs > RULES.vote.paidHours) P.warnings.push({t:`Only ${RULES.vote.paidHours} hours must be paid. Any more is unpaid unless company policy pays.`});
+    P.facts.push({t:'If the employee does not have enough time outside work to vote, give up to 2 hours with pay, at the start or end of the shift unless you agree otherwise.', c:'Elec. Code § 14000'});
+    P.facts.push({t:'Ask for notice at least 2 working days before the election when the employee knows ahead of time.', c:'Elec. Code § 14000(b)'});
+    P.facts.push({t:'Post the voting time notice where employees can see it, at least 10 days before every statewide election.', c:'Elec. Code § 14001'});
+    P.laws.push('Voting time');
+    P.end = e;
+  }
   P.wba = wba;
   P.back = nextWorkday(P.end, hol || []);
   return P;
@@ -303,6 +332,10 @@ export function makeTasks(reason, req, plan, co){
     t.push({key:'confirm', label:'Confirm leave dates with employee', hint:'No documentation may be requested. Keep it confidential.', due:bd(2), legal:false});
   } else if (reason==='sick'){
     t.push({key:'record', label:'Record sick hours used', hint:'Show the updated balance on the next pay stub.', due:bd(3), legal:true});
+  } else if (reason==='jury'){
+    t.push({key:'confirm', label:'Confirm the dates and plan cover', hint:'Ask for a copy of the summons if you need one. Do not ask what the case is about.', due:bd(2), legal:false});
+  } else if (reason==='vote'){
+    t.push({key:'schedule', label:'Schedule the voting time', hint:'Up to 2 paid hours at the start or end of the shift.', due: plan.start && plan.start > req ? addDays(plan.start, -1) : req, legal:false});
   } else if (reason==='unknown'){
     t.push({key:'intake', label:'Contact employee and identify the leave type', hint:'The 5 business day clock started when the manager learned of it.', due:bd(2), legal:false});
     t.push({key:'notice', label:'Send eligibility and rights notice if leave may qualify', hint:'Within 5 business days of the employer learning of the need.', due:bd(5), legal:true});

@@ -912,3 +912,48 @@ describe("feedback with a follow-up email", () => {
     assert.equal(withEmail.contact, "pat@example.com"); assert.equal(withEmail.sandbox, true); assert.equal(withEmail.test, false);
   });
 });
+
+describe("request records", () => {
+  test("intake records are kept four years, not cut at 300, and older ones drop off", async () => {
+    const { keepFourYears, INTAKE_KEEP_DAYS } = await import("../netlify/lib/handler.mjs");
+    const now = Date.parse("2026-11-25T12:00:00Z"), day = 864e5;
+    const log = Array.from({ length: 900 }, (_, i) => ({ at: new Date(now - i * 2 * day).toISOString(), text: "x" + i }));
+    const kept = keepFourYears(log, now);
+    assert.ok(kept.length > 300, "more than 300 kept");
+    assert.ok(kept.every((x) => now - Date.parse(x.at) <= INTAKE_KEEP_DAYS * day));
+    assert.equal(kept.length, Math.floor(INTAKE_KEEP_DAYS / 2) + 1);
+    assert.deepEqual(keepFourYears([{ at: new Date(now - 5 * 365 * day).toISOString() }, null, {}], now), []);
+  });
+  test("the workspace export includes the request records", async () => {
+    const { exportBundle } = await import("../netlify/lib/backup.mjs");
+    const b = exportBundle({ id: "o1", name: "X", created: "", ownerEmail: "", members: [] }, { company: {}, employees: [], cases: [], intakeLog: [{ at: "2026-11-01", text: "hi" }] }, "2026-11-25");
+    assert.equal(b.requestRecords.length, 1);
+  });
+});
+
+describe("jury duty and voting time", () => {
+  test("HR can record jury duty and voting time, and the lengths are checked", async () => {
+    const s = testSite();
+    const hr = await signedIn(s, "grace@mesaverde.example");
+    for (const bad of [
+      { reason: "jury", opts: { start: "2027-01-11", days: 61 } },
+      { reason: "vote", opts: { start: "2026-11-03", hours: 9 } },
+    ]) assert.equal((await hr.post("/api/action", { type: "createCase", empId: "e8", ...bad })).status, 400, JSON.stringify(bad));
+    let r = await hr.post("/api/action", { type: "createCase", empId: "e8", reason: "jury", opts: { start: "2027-01-11", days: 30 } });
+    assert.equal(r.status, 200);
+    const jury = r.body.data.cases.find((x) => x.empId === "e8" && x.reason === "jury");
+    assert.equal(jury.opts.days, 30);
+    assert.ok(jury.tasks.some((t) => t.key === "confirm"));
+    r = await hr.post("/api/action", { type: "createCase", empId: "e8", reason: "vote", opts: { start: "2027-01-12", hours: 2 } });
+    assert.equal(r.status, 200);
+    const vote = r.body.data.cases.find((x) => x.empId === "e8" && x.reason === "vote");
+    assert.ok(vote.tasks.some((t) => t.key === "schedule"));
+  });
+  test("Clerk can name jury duty and voting, with safe defaults", async () => {
+    const { validate } = await import("../netlify/lib/intake.mjs");
+    const j = validate({ reason: "jury", start: "2026-11-16" }, "2026-10-27");
+    assert.equal(j.reason, "jury"); assert.equal(j.days, 1); assert.equal(j.hours, null);
+    const v = validate({ reason: "vote", hours: 12 }, "2026-10-27");
+    assert.equal(v.reason, "vote"); assert.equal(v.hours, 2);
+  });
+});

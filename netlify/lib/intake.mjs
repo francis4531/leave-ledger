@@ -3,7 +3,7 @@
 // Model output is treated as untrusted: every field is validated and anything off is dropped.
 
 export const DEFAULT_MODEL = "claude-haiku-5-5";
-export const REASON_KEYS = ["pregnancy_bonding", "own_health", "family_care", "bonding", "bereavement", "repro", "sick"];
+export const REASON_KEYS = ["pregnancy_bonding", "own_health", "family_care", "bonding", "bereavement", "repro", "sick", "jury", "vote"];
 export const RELATIONS = ["spouse", "partner", "child", "parent", "inlaw", "grandparent", "grandchild", "sibling", "designated"];
 const LEVELS = ["high", "medium", "low"];
 
@@ -26,6 +26,8 @@ Pick exactly one reason:
 - "bereavement": death of a family member.
 - "repro": miscarriage, stillbirth, failed adoption, failed surrogacy, or unsuccessful IVF or other assisted reproduction.
 - "sick": a short absence of a few hours or days for the employee's own or a family member's illness, a doctor visit, or similar.
+- "jury": jury duty, a jury summons, or appearing in court as a witness under a subpoena.
+- "vote": time off to vote in an election.
 - "unclear": you cannot tell, or the message is not about time off.
 
 Relation (only for family_care and bereavement, else null): spouse, partner (registered domestic partner), child, parent, inlaw (parent-in-law), grandparent, grandchild, sibling, designated (someone else the employee names, such as a close friend or an aunt). Step-parents and step-children count as parent and child.
@@ -35,6 +37,8 @@ Length: give exactly one of these, matching the reason, or null if not stated:
 - own_health, family_care, bonding: "weeks" (whole number, 1 to 52). "A few weeks" means 3, low confidence. A date range becomes the number of weeks, rounded up.
 - bereavement, repro: "days" (workdays, 1 to 20). Default 5, low confidence.
 - sick: "hours" (1 to 80). A day is 8 hours.
+- jury: "days" (workdays, 1 to 60). Default 1, low confidence.
+- vote: "hours" (1 to 8). Default 2, low confidence.
 
 Confidence for each of reason, relation, start and length: "high" if stated plainly, "medium" if strongly implied, "low" if guessed or defaulted.
 
@@ -104,6 +108,8 @@ export function validate(raw, today) {
   else if (["own_health", "family_care", "bonding"].includes(reason)) out.weeks = num(raw.weeks, 1, 52);
   else if (reason === "bereavement" || reason === "repro") out.days = num(raw.days, 1, 20) ?? 5;
   else if (reason === "sick") out.hours = num(raw.hours, 1, 80) ?? 8;
+  else if (reason === "jury") out.days = num(raw.days, 1, 60) ?? 1;
+  else if (reason === "vote") out.hours = num(raw.hours, 1, 8) ?? 2;
   const lengthSet = out.weeks || out.days || out.hours || out.disWeeks;
   if (!lengthSet && reason !== "unclear") out.confidence.length = "low";
   return out;
@@ -152,7 +158,7 @@ export function changedFields(ai, reason, opts) {
   if (ai.reason !== reason) ch.push("reason");
   if ((reason === "family_care" || reason === "bereavement") && ai.relation !== opts.relation) ch.push("relation");
   if (ai.start !== opts.start) ch.push("start");
-  const len = { pregnancy_bonding: ["disWeeks", "bondWeeks"], own_health: ["weeks"], family_care: ["weeks"], bonding: ["weeks"], bereavement: ["days"], repro: ["days"], sick: ["hours"] }[reason] || [];
+  const len = { pregnancy_bonding: ["disWeeks", "bondWeeks"], own_health: ["weeks"], family_care: ["weeks"], bonding: ["weeks"], bereavement: ["days"], repro: ["days"], sick: ["hours"], jury: ["days"], vote: ["hours"] }[reason] || [];
   if (ai.reason === reason && len.some((k) => +ai[k] !== +opts[k])) ch.push("length");
   return ch;
 }
